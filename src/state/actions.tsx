@@ -30,6 +30,20 @@ export function useAction(options: { itemName?: string | null; onArchiveForLimit
     }
   }, []);
 
+  /** The same, for writes that first do async work (e.g. storing attachment files). */
+  const runAsync = useCallback(async <T,>(write: () => Promise<T>): Promise<T | undefined> => {
+    setMessage(null);
+    try {
+      return await write();
+    } catch (e) {
+      if (e instanceof LimitReachedError) setLimit(e.kind);
+      else if (e instanceof AmountError) setMessage(strings.add.errors[e.code]);
+      else setMessage(errorMessage(e instanceof DataError ? e.code : undefined));
+      if (!(e instanceof DataError) && !(e instanceof AmountError)) console.error(e);
+      return undefined;
+    }
+  }, []);
+
   const ui: ReactNode = (
     <>
       {message ? <ErrorBanner message={message} /> : null}
@@ -49,7 +63,7 @@ export function useAction(options: { itemName?: string | null; onArchiveForLimit
     </>
   );
 
-  return { run, ui, error: message, clearError: () => setMessage(null) };
+  return { run, runAsync, ui, error: message, clearError: () => setMessage(null) };
 }
 
 function ErrorBanner({ message }: { message: string }) {

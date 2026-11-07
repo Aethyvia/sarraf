@@ -5,6 +5,7 @@ import type { AppDb } from '@/db/types';
 import { today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { Decimal, dec, isDecimalString, toDecimalString, type DecimalString } from '@/lib/money';
+import { applyAttachmentChanges, type StoredFile } from './attachments';
 import { DataError } from './errors';
 
 /** How much a goal holds: the sum of its allocation rows. */
@@ -26,7 +27,7 @@ export function stillToGo(target: DecimalString, held: DecimalString, adding: De
  */
 export function addToGoal(
   db: AppDb,
-  input: { goalId: string; accountId: string; amount: DecimalString; date?: string; notes?: string | null },
+  input: { goalId: string; accountId: string; amount: DecimalString; date?: string; notes?: string | null; attachments?: StoredFile[] },
 ): string {
   if (!isDecimalString(input.amount) || dec(input.amount).lte(0)) throw new DataError('invalid_amount', 'Enter an amount above zero');
   const id = newId();
@@ -49,6 +50,7 @@ export function addToGoal(
         notes: input.notes?.trim() || null,
       })
       .run();
+    applyAttachmentChanges(tx, { goalAllocationId: id }, { add: input.attachments });
   });
   return id;
 }

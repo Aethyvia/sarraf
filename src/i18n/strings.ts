@@ -351,6 +351,18 @@ export const strings = {
     add: 'Add charge',
     save: 'Save charge',
   },
+  attach: {
+    title: 'Attach',
+    takePhoto: 'Take photo',
+    gallery: 'Choose from gallery',
+    file: 'Choose file (PDF, etc.)',
+    attached: (n: number) => `ATTACHED (${n})`,
+    shrunk: (size: string, from: string) => `${size} · shrunk from ${from}`,
+    hint: 'Photos are shrunk automatically to save space on your phone and in your backup. Files of any size can be attached.',
+    done: 'Done',
+    remove: 'Remove',
+    failed: 'That file couldn’t be attached.',
+  },
   notesSheet: {
     title: 'Notes',
     done: 'Done',

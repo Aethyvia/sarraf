@@ -10,6 +10,7 @@ import { Keypad } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { AddChargeSheet } from '@/components/sheets/AddChargeSheet';
+import { AttachSheet } from '@/components/sheets/AttachSheet';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import {
@@ -23,6 +24,7 @@ import {
 } from '@/components/sheets/pickers';
 import { BottomSheet, Button, Field, Header, IconButton, Segmented, ToggleRow } from '@/components/ui';
 import { computeAmounts, vsMarketPercent, type AmountResult } from '@/data/amounts';
+import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
 import { marketRate } from '@/data/rates';
@@ -35,6 +37,7 @@ import { expressionValue, hasOperator } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
 import { add, dec, formatAmount, formatTyped, getCurrency, isDecimalString, parseTypedAmount, toTypedText } from '@/lib/money';
+import { deleteStoredFiles, storeFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
@@ -52,6 +55,7 @@ type Sheet =
   | 'expectedBack'
   | 'ledger'
   | 'notes'
+  | 'attach'
   | 'currency'
   | 'rate'
   | 'goal'
@@ -151,23 +155,47 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   };
 
   const canSave = isSavings ? !!(goal && goalAccount && amount && dec(amount).gt(0)) : !!amount && dec(amount).gt(0);
-  const save = () => {
-    if (!canSave || !amount) return;
-    const ok = action.run(() => {
-      if (isSavings) {
-        addToGoal(db, { goalId: goal!.id, accountId: goalAccount!.id, amount, date: form.date, notes: form.notes });
-        return true;
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!canSave || !amount || saving) return;
+    setSaving(true);
+    const picked = form.attachments.picked;
+    const ok = await action.runAsync(async () => {
+      // Files go into the app's folder first; if the save then fails, they're removed again.
+      const stored = await storeFiles(picked);
+      const add = stored.map((filePath, i) => ({ filePath, mimeType: picked[i].mimeType, sizeBytes: picked[i].sizeBytes }));
+      try {
+        if (isSavings) {
+          addToGoal(db, { goalId: goal!.id, accountId: goalAccount!.id, amount, date: form.date, notes: form.notes, attachments: add });
+        } else {
+          const draft = draftFromForm(form, { amount, knownAmount: known, rate, mainCurrency });
+          const result = saveTransaction(db, draft, {
+            id: editId,
+            marketRate: converts ? market : null,
+            attachments: { add, removeIds: form.attachments.removeIds },
+          });
+          deleteStoredFiles(result.removedAttachmentPaths);
+        }
+      } catch (e) {
+        deleteStoredFiles(stored);
+        throw e;
       }
-      const draft = draftFromForm(form, { amount, knownAmount: known, rate, mainCurrency });
-      saveTransaction(db, draft, { id: editId, marketRate: converts ? market : null });
       return true;
     });
+    setSaving(false);
     if (!ok) return;
     if (!isSavings && form.date > today) {
       toast({ message: s.savedUpcoming(formatShortDate(form.date)), action: { label: 'View', onPress: () => router.push('/review') } });
     }
     router.back();
   };
+
+  // ── Attachments ──
+  const savedAttachments = useLive(
+    (d) => (editId ? attachmentsOf(d, { transactionId: editId }).filter((a) => !form.attachments.removeIds.includes(a.id)) : []),
+    [editId, form.attachments.removeIds],
+  );
+  const attachmentCount = savedAttachments.length + form.attachments.picked.length;
 
   // ── Charges receipt ──
   const charges = form.charges;
@@ -479,7 +507,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           title={editId ? s.editTitle : s.title}
           onBack={() => router.back()}
           backIcon="close"
-          actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave} />}
+          actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave || saving} />}
         />
         {!editId ? (
           <Segmented
@@ -521,7 +549,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         />
         <View style={styles.utilRow}>
           <UtilityButton icon="notes" label={s.notes} dot={!!form.notes.trim()} onPress={() => setSheet('notes')} />
-          <UtilityButton icon="clip" label={s.attach} onPress={() => toast({ message: 'Attachments arrive in the next update.' })} />
+          <UtilityButton icon="clip" label={attachmentCount ? s.files(attachmentCount) : s.attach} onPress={() => setSheet('attach')} />
         </View>
         {!isSavings ? (
           <View style={styles.utilRow}>
@@ -636,6 +664,21 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         value={form.rateText}
         market={market?.rate ?? null}
         onDone={(v) => set({ rateText: v, rateMode: 'rate_known' })}
+        onClose={() => setSheet(null)}
+      />
+      <AttachSheet
+        visible={sheet === 'attach'}
+        saved={savedAttachments}
+        picked={form.attachments.picked}
+        onChange={(c) =>
+          setForm((f) => ({
+            ...f,
+            attachments: {
+              picked: [...f.attachments.picked.filter((_, i) => i !== c.removePicked), ...(c.add ?? [])],
+              removeIds: c.removeSaved ? [...f.attachments.removeIds, c.removeSaved] : f.attachments.removeIds,
+            },
+          }))
+        }
         onClose={() => setSheet(null)}
       />
       <NotesSheet visible={sheet === 'notes'} value={form.notes} onDone={(v) => set({ notes: v })} onClose={() => setSheet(null)} />

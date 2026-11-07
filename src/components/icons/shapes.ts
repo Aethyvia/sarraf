@@ -93,6 +93,7 @@ export const ICON_SHAPES = {
   "layers":[["path",{"d":"M12 3l9 5-9 5-9-5 9-5z"}],["path",{"d":"M3 13l9 5 9-5"}]],
   "clip":[["path",{"d":"M21 12.5L12.5 21a5 5 0 01-7-7L14 5.5a3.5 3.5 0 015 5L10.5 19a2 2 0 01-3-3L15 8.5"}]],
   "notes":[["path",{"d":"M4 4h16v16H4z"}],["path",{"d":"M8 9h8M8 13h5"}]],
+  "image":[["rect",{"x":"3","y":"4","width":"18","height":"16","rx":"2"}],["circle",{"cx":"8.5","cy":"9.5","r":"1.5"}],["path",{"d":"M21 16l-5-5-9 9"}]],
   "nav-home":[["path",{"d":"M12 3l9 8h-2v9h-5v-6H10v6H5v-9H3z"}]],
   "nav-transactions":[["rect",{"x":"4","y":"4","width":"16","height":"16","rx":"2"}],["path",{"d":"M8 9h8M8 13h5"}]]} satisfies Record<string, IconElement[]>;
 

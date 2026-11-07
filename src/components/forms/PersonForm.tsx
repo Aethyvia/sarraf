@@ -14,6 +14,7 @@ import {
 } from '@/data/people';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
+import { deleteStoredFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 
@@ -79,7 +80,11 @@ export function PersonForm({ person }: { person?: Person }) {
           }
           onDelete={() => {
             setDeleting(false);
-            if (action.run(() => deletePerson(db, person.id))) router.back();
+            const result = action.run(() => deletePerson(db, person.id));
+            if (result) {
+              deleteStoredFiles(result.attachmentPaths);
+              router.back();
+            }
           }}
           onClose={() => setDeleting(false)}
         />

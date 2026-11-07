@@ -3,7 +3,7 @@ import { applyKey, draftFromForm, initialForm, switchKind } from '../transaction
 const base = () => initialForm({ date: '2026-09-28', ledgerId: 'personal', accountId: 'alfalah' });
 
 describe('switching kind', () => {
-  it('carries over only ledger, charges and notes, across any number of switches', () => {
+  it('carries over only ledger, charges, notes and attachments, across any number of switches', () => {
     const filled = {
       ...base(),
       expression: '1563.50',
@@ -13,6 +13,7 @@ describe('switching kind', () => {
       reimbursable: true,
       ledgerId: 'business',
       notes: 'monthly',
+      attachments: { picked: [{ uri: 'file://r.jpg', name: 'r.jpg', mimeType: 'image/jpeg', sizeBytes: 1 }], removeIds: [] },
       charges: [{ type: 'bank_charge' as const, amount: '130', currency: 'PKR', deduction: 'charged_separately' as const, accountId: 'alfalah' }],
     };
     const defaults = { date: '2026-09-30', accountId: 'payoneer' };
@@ -22,6 +23,7 @@ describe('switching kind', () => {
       kind: 'income',
       ledgerId: 'business',
       notes: 'monthly',
+      attachments: { picked: [{ uri: 'file://r.jpg', name: 'r.jpg', mimeType: 'image/jpeg', sizeBytes: 1 }], removeIds: [] },
       charges: filled.charges,
       expression: '',
       categoryId: null,

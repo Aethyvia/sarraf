@@ -32,6 +32,7 @@ import {
 import { db } from '@/db/client';
 import { categories, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
+import { deleteStoredFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { fonts, useTheme } from '@/theme';
@@ -215,7 +216,11 @@ export function CategoryForm({
           }}
           onDelete={() => {
             setSheet(null);
-            if (action.run(() => deleteCategory(db, category.id, { mode: 'delete_with_transactions' }))) router.back();
+            const result = action.run(() => deleteCategory(db, category.id, { mode: 'delete_with_transactions' }));
+            if (result) {
+              deleteStoredFiles(result.attachmentPaths);
+              router.back();
+            }
           }}
           onClose={() => setSheet(null)}
         />

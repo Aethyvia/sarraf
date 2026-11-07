@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { personEntries, transactionCharges, transactions } from '@/db/schema';
 import { accountBalances } from '../balances';
 import { cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsReview } from '../review';
+import { attachmentsOf } from '../attachments';
 import { draftFromTransaction, saveTransaction, type TransactionDraft } from '../transactions';
 import { setup } from '@/test/factories';
 
@@ -17,7 +18,7 @@ async function world() {
   const consulting = s.category('Consulting income', 'income');
   const john = s.person('John');
   const save = (draft: Partial<TransactionDraft>, opts: Parameters<typeof saveTransaction>[2] = {}) =>
-    saveTransaction(s.db, { kind: 'expense', date: '2026-09-28', status: 'cleared', amount: '10', currency: 'USD', ...draft } as TransactionDraft, { today: TODAY, ...opts });
+    saveTransaction(s.db, { kind: 'expense', date: '2026-09-28', status: 'cleared', amount: '10', currency: 'USD', ...draft } as TransactionDraft, { today: TODAY, ...opts }).id;
   const bal = (id: string) => accountBalances(s.db, TODAY).get(id);
   const row = (id: string) => s.db.select().from(transactions).where(eq(transactions.id, id)).get()!;
   return { ...s, usd, pkr, cash, groceries, consulting, john, save, bal, row };
@@ -206,5 +207,23 @@ describe('the confirm button', () => {
     expect(t('expense')).toBe('received');
     expect(t('income', { autoAdded: true })).toBe('received');
     expect(t('transfer')).toBe('received');
+  });
+});
+
+describe('attachments', () => {
+  it('are added and removed with the transaction’s save, and go when it is deleted', async () => {
+    const w = await world();
+    const file = (n: number) => ({ filePath: `attachments/${n}.jpg`, mimeType: 'image/jpeg', sizeBytes: 1000 * n });
+    const id = w.save({ accountId: w.usd }, { attachments: { add: [file(1), file(2)] } });
+    const rows = attachmentsOf(w.db, { transactionId: id });
+    expect(rows.map((r) => r.filePath)).toEqual(['attachments/1.jpg', 'attachments/2.jpg']);
+
+    const { removedAttachmentPaths } = saveTransaction(w.db, draftFromTransaction(w.db, id), {
+      id,
+      today: TODAY,
+      attachments: { add: [file(3)], removeIds: [rows[0].id] },
+    });
+    expect(removedAttachmentPaths).toEqual(['attachments/1.jpg']);
+    expect(attachmentsOf(w.db, { transactionId: id }).map((r) => r.filePath).sort()).toEqual(['attachments/2.jpg', 'attachments/3.jpg']);
   });
 });

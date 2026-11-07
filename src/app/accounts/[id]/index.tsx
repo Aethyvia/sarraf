@@ -19,6 +19,7 @@ import { db } from '@/db/client';
 import { accounts } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { add } from '@/lib/money';
+import { deleteStoredFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { usePlan } from '@/state/plan';
@@ -116,7 +117,11 @@ export default function AccountDetailScreen() {
           }
           onDelete={() => {
             setDeleting(false);
-            if (action.run(() => deleteAccount(db, id))) router.back();
+            const result = action.run(() => deleteAccount(db, id));
+            if (result) {
+              deleteStoredFiles(result.attachmentPaths);
+              router.back();
+            }
           }}
           onClose={() => setDeleting(false)}
         />

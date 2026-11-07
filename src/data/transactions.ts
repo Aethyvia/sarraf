@@ -6,6 +6,7 @@ import { nowIso, today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalString } from '@/lib/money';
 import { computeAmounts, type AmountResult, type RateMode } from './amounts';
+import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
 
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -183,12 +184,19 @@ export function prepareTransaction(db: AppDb, draft: TransactionDraft): AmountRe
  * - A date after today makes it Upcoming (scheduled): it waits in Needs review
  *   and counts nowhere until confirmed.
  * - Cross-currency rows keep the market rate at entry, when one is known.
+ * - Attachment rows are added and removed in the same save; the caller removes
+ *   the files of removed ones afterwards.
  */
 export function saveTransaction(
   db: AppDb,
   draft: TransactionDraft,
-  options: { id?: string; today?: string; marketRate?: { rate: DecimalString; fetchedAt: string } | null } = {},
-): string {
+  options: {
+    id?: string;
+    today?: string;
+    marketRate?: { rate: DecimalString; fetchedAt: string } | null;
+    attachments?: AttachmentChanges;
+  } = {},
+): { id: string; removedAttachmentPaths: string[] } {
   const today = options.today ?? todayDate();
   const id = options.id ?? newId();
 
@@ -269,7 +277,8 @@ export function saveTransaction(
     if (draft.kind === 'transfer' && draft.fromPersonId) entry(draft.fromPersonId, toDecimalString(dec(amount).negated()), 'transfer');
     if (draft.kind === 'expense' && draft.fromPersonId) entry(draft.fromPersonId, toDecimalString(dec(amount).negated()), 'paid_by_person');
 
-    return id;
+    const { removedPaths } = applyAttachmentChanges(tx, { transactionId: id }, options.attachments);
+    return { id, removedAttachmentPaths: removedPaths };
   });
 }
 

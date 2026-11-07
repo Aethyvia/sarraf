@@ -18,6 +18,7 @@ import {
 import { db } from '@/db/client';
 import { ledgers } from '@/db/schema';
 import { strings } from '@/i18n/strings';
+import { deleteStoredFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { usePlan } from '@/state/plan';
@@ -120,7 +121,11 @@ export function LedgerForm({ ledger }: { ledger?: Ledger }) {
           }}
           onDelete={() => {
             setDeleting(false);
-            if (action.run(() => deleteLedger(db, ledger.id, { mode: 'delete_with_transactions' }))) router.back();
+            const result = action.run(() => deleteLedger(db, ledger.id, { mode: 'delete_with_transactions' }));
+            if (result) {
+              deleteStoredFiles(result.attachmentPaths);
+              router.back();
+            }
           }}
           onClose={() => setDeleting(false)}
         />

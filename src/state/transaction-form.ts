@@ -1,6 +1,7 @@
 import type { RateMode } from '@/data/amounts';
 import type { ChargeDraft, TransactionDraft } from '@/data/transactions';
 import { pressKey, type CalcKey } from '@/lib/calc';
+import type { PickedFile } from '@/services/attachments';
 
 export type FormKind = 'expense' | 'income' | 'transfer' | 'savings';
 export type Side = { type: 'account' | 'person'; id: string } | null;
@@ -32,6 +33,8 @@ export interface FormState {
   rateText: string;
   charges: ChargeDraft[];
   notes: string;
+  /** New files to attach on save, and saved attachments to remove. */
+  attachments: { picked: PickedFile[]; removeIds: string[] };
   /** Savings: the goal and the account it's set aside from. */
   goalId: string | null;
   goalAccountId: string | null;
@@ -58,6 +61,7 @@ export function initialForm(defaults: { date: string; ledgerId: string | null; a
     rateText: '',
     charges: [],
     notes: '',
+    attachments: { picked: [], removeIds: [] },
     goalId: null,
     goalAccountId: null,
   };
@@ -76,6 +80,7 @@ export function switchKind(state: FormState, kind: FormKind, defaults: { date: s
     ledgerId: state.ledgerId,
     charges: state.charges,
     notes: state.notes,
+    attachments: state.attachments,
   };
 }
 
@@ -109,6 +114,7 @@ export function formFromDraft(d: TransactionDraft): FormState {
     rateText: d.rate ?? '',
     charges: d.charges ?? [],
     notes: d.notes ?? '',
+    attachments: { picked: [], removeIds: [] },
     goalId: null,
     goalAccountId: null,
   };
