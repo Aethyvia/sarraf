@@ -1,0 +1,30 @@
+# Decisions log
+
+Record every decision made during the build that isn't already in SPEC.md, newest first, so the spec can be updated.
+
+| Date | Decision | Who | Spec section |
+|---|---|---|---|
+| 2026-11-07 | Deleting a person who is in a split: only their share goes; the expense stays. In a split you paid, their share is added to yours (the split becomes Amounts mode); in a split someone else paid, their untracked row is just removed. | owner | §15b, §9c |
+| 2026-11-07 | Unarchiving an account or ledger counts like adding one: the free-plan limit sheet applies. | owner | §15b, §16 |
+| 2026-11-07 | Archived ledgers don't count toward the 2-ledger free limit (same as accounts). | owner | §16 |
+| 2026-11-07 | Deleting a ledger: its budgets are always deleted with it, including when its transactions are moved to another ledger. Its recurring items move with the transactions, or are deleted with them. | owner | §15 Ledgers |
+| 2026-11-07 | "Delete it and its N transactions" is a permanent (hard) delete, not the soft delete used for bulk-delete Undo; the schema doc's "soft-deletes every transaction" conflicts with ON DELETE RESTRICT and with "can't be undone". Linked refunds/reimbursements go with their original. | developer | §15b, Schema: Deleting something in use |
+| 2026-11-07 | Deleting an account also deletes its goal allocations and the recurring items that use it. Deleting a category moves (or deletes) its budgets and recurring items with its transactions; a moved budget that clashes with one the target already has (same ledger and currency) is dropped. | developer | §15b |
+| 2026-11-07 | A category with subcategories can't be deleted until they are moved or deleted. A category with subcategories stays top-level. Switching a category's kind takes its subcategories along and is blocked if any of them is used. | developer | §15 Categories |
+| 2026-11-07 | The default ledger can't be archived or deleted (choose another default first). The first ledger created becomes the default. | developer | §15 Ledgers |
+| 2026-11-07 | Fees & charges can be renamed and restyled, but not deleted, archived, nested under another category or switched to income. | developer | §15 |
+| 2026-11-07 | Default look for a new account: "Cash" in the name → cash icon, gold; an institution → wallet icon, orange; otherwise bank icon, teal. A zero "Current balance" creates no opening-balance row. | developer | §15 Accounts |
+| 2026-11-07 | Sign in with Apple dropped for v1 (Android only). Sign-in is Google, GitHub and email code. | owner | §2, First run |
+| 2026-11-07 | Android package name: `com.aethyvia.sarraf` (permanent once on Google Play) | owner | §2 |
+| 2026-11-07 | Refund/reimbursement links: the schema doc's Nov 7 `transaction_links` table is folded into the refund row itself (`parent_id`, `link_type`, plus new `counts_as_amount`, `counts_as_rate`). Each refund links to exactly one expense, so a separate table only duplicated `parent_id`. | developer | Schema: transactions, transaction_links |
+| 2026-11-07 | Schema naming conflicts resolved to the Nov 7 names: `reimbursement_status` (not `reimbursement_state`), table `recurring_items` (the doc also says `recurring_rules`), `show_on_home_days` in {0,1,3,7}. `exchange_margin` dropped from the charge type list (custom only). | developer | Schema |
+| 2026-11-07 | New columns not in the schema doc: `transactions.recurring_due_date` (with `recurring_id`, the unique key that stops a recurring item being added twice), `settings.device_id` (this phone's id for backup ownership). `settings.backup_auto` dropped: `backup_frequency = manual` covers it. | developer | Schema: transactions, settings, §15 |
+| 2026-11-07 | Rate worked out from two amounts ("I know what was charged") is kept to 10 decimal places, half-to-even. The amounts are what get stored and summed. | developer | §11, §7 |
+| 2026-11-07 | Currency display: symbol only where one symbol clearly means one currency (USD $, EUR €, GBP £, PKR ₨, INR ₹, JPY ¥, …); every other currency shows its code, as the screens show AED and SAR. Minus sign is U+2212, before the symbol. Amounts show at least the currency's minor units and never round away extra stored digits. | developer | §7 |
+| 2026-11-07 | PKR keeps "," grouping and "." decimals in every number format, not only lakh grouping ("Doesn't touch PKR"). Compact numbers are on by default and use the chosen decimal separator ("€1,98M"). | developer | §7 |
+| 2026-11-07 | Hide amounts shows "••••"; tapping one amount reveals that amount only. | developer | §15 Settings |
+| 2026-11-07 | Dark-theme icon backgrounds for the category palette were derived from the dark style guide's colours (the board gives the foreground colours only). | developer | Style guide (dark) |
+| 2026-11-07 | Platform: Android only for v1 | owner | §2 |
+| 2026-11-07 | Tech stack: Expo SDK 57 + Expo Router (TypeScript); local database expo-sqlite + Drizzle ORM with versioned migrations; money arithmetic with decimal.js (ROUND_HALF_EVEN) | owner | §2, §20 |
+| | Sarraf Plus price: _open (placeholder $2.99/mo, $24.99/yr)_ | owner | §16 |
+| | Rate API provider: _developer's choice_ | | §6, §20 |
