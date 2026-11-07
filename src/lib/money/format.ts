@@ -132,3 +132,17 @@ export function formatExact(
 ): string {
   return formatAmount(value, currency, { ...options, compact: false }).text;
 }
+
+/**
+ * Formats a number while it's being typed: groups the whole part in the chosen
+ * format (lakh for PKR) but keeps the decimals exactly as typed, including a
+ * trailing point ("1,563." → still typing). Operators get thin spaces around them.
+ */
+export function formatTyped(expression: string, currency: string, numberFormat: NumberFormat = '1,000.00'): string {
+  const seps = separatorsFor(currency, numberFormat);
+  return expression.replace(/[0-9]+(\.[0-9]*)?|\.[0-9]+/g, (n) => {
+    const [int, frac] = n.split('.');
+    const grouped = groupDigits(int || '0', seps.group, seps.lakh);
+    return frac === undefined ? grouped : `${grouped}${seps.decimal}${frac}`;
+  }).replace(/([+−×÷])/g, (op, _m, offset: number) => (offset === 0 ? op : ` ${op} `));
+}

@@ -56,6 +56,8 @@ export default function DevPreview() {
           <Toggle label={`Compact: ${s.compactNumbers ? 'on' : 'off'}`} onPress={() => update({ compactNumbers: !s.compactNumbers })} />
           <Toggle label={`Format: ${s.numberFormat}`} onPress={() => update({ numberFormat: nextFormat })} />
           <Toggle label={`Theme: ${s.theme}`} onPress={() => update({ theme: nextTheme })} />
+          <Toggle label="Add transaction →" onPress={() => router.push('/transaction/new')} />
+          <Toggle label="Needs review →" onPress={() => router.push('/review')} />
           <Toggle label="Settings →" onPress={() => router.push('/settings')} />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
         </View>

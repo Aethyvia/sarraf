@@ -27,7 +27,7 @@ import { fonts, radius, useTheme } from '@/theme';
 /**
  * Account detail: balance and the currency goals line. Usable is per currency
  * and lives on Home only. Add transaction, Fix balance, the trend line and the
- * transaction list arrive with build layers 3–4.
+ * transaction list arrive with build layer 4.
  */
 export default function AccountDetailScreen() {
   const s = strings.accounts;
@@ -80,6 +80,9 @@ export default function AccountDetailScreen() {
       ) : null}
 
       <View style={styles.buttons}>
+        {!account.archivedAt ? (
+          <Button label={strings.add.title} onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: id } })} style={{ flex: 1.4 }} />
+        ) : null}
         <Button kind="secondary" label={strings.common.edit} onPress={() => router.push(`/accounts/${id}/edit`)} style={{ flex: 1 }} />
       </View>
 

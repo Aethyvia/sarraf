@@ -6,6 +6,7 @@
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
     "@expo-google-fonts/manrope": "^0.4.3",
+    "@react-native-community/datetimepicker": "9.1.0",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.4",
     "expo": "~57.0.32",

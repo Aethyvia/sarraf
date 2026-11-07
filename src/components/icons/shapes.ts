@@ -90,6 +90,9 @@ export const ICON_SHAPES = {
   "search":[["circle",{"cx":"11","cy":"11","r":"7"}],["path",{"d":"M20 20l-3.5-3.5"}]],
   "grip":[["path",{"d":"M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"}]],
   "piggy":[["path",{"d":"M19 9c0-1.1-.5-2-1.3-2.6L18 5h-3l-.5 1.2C11 5 6 5.8 4.5 9.5 3.8 11 4 12.5 5 14v4h3v-2h6v2h3v-3.2c.8-.5 1.4-1.2 1.7-2.1H21v-3h-1.3c-.2-.7-.5-1.3-1-1.9z"}]],
+  "layers":[["path",{"d":"M12 3l9 5-9 5-9-5 9-5z"}],["path",{"d":"M3 13l9 5 9-5"}]],
+  "clip":[["path",{"d":"M21 12.5L12.5 21a5 5 0 01-7-7L14 5.5a3.5 3.5 0 015 5L10.5 19a2 2 0 01-3-3L15 8.5"}]],
+  "notes":[["path",{"d":"M4 4h16v16H4z"}],["path",{"d":"M8 9h8M8 13h5"}]],
   "nav-home":[["path",{"d":"M12 3l9 8h-2v9h-5v-6H10v6H5v-9H3z"}]],
   "nav-transactions":[["rect",{"x":"4","y":"4","width":"16","height":"16","rx":"2"}],["path",{"d":"M8 9h8M8 13h5"}]]} satisfies Record<string, IconElement[]>;
 

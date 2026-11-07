@@ -4,7 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { LimitSheet } from '@/components/sheets/LimitSheet';
 import { DataError } from '@/data/errors';
 import { LimitReachedError, type LimitedKind } from '@/data/limits';
-import { errorMessage } from '@/i18n/strings';
+import { AmountError } from '@/data/amounts';
+import { errorMessage, strings } from '@/i18n/strings';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -22,8 +23,9 @@ export function useAction(options: { itemName?: string | null; onArchiveForLimit
       return write();
     } catch (e) {
       if (e instanceof LimitReachedError) setLimit(e.kind);
+      else if (e instanceof AmountError) setMessage(strings.add.errors[e.code]);
       else setMessage(errorMessage(e instanceof DataError ? e.code : undefined));
-      if (!(e instanceof DataError)) console.error(e);
+      if (!(e instanceof DataError) && !(e instanceof AmountError)) console.error(e);
       return undefined;
     }
   }, []);

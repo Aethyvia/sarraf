@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { personEntries, transactionCharges, transactions } from '@/db/schema';
 import { accountBalances } from '../balances';
-import { cancelTransaction, confirmTransaction, markInTransit, needsReview } from '../review';
+import { cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsReview } from '../review';
 import { draftFromTransaction, saveTransaction, type TransactionDraft } from '../transactions';
 import { setup } from '@/test/factories';
 
@@ -194,5 +194,17 @@ describe('editing', () => {
     expect(w.row(id).amount).toBe('200');
     expect(w.db.select().from(transactionCharges).all()).toHaveLength(0);
     expect(w.db.select({ a: personEntries.amount }).from(personEntries).all()).toEqual([{ a: '200' }]);
+  });
+});
+
+describe('the confirm button', () => {
+  const t = (kind: 'expense' | 'income' | 'transfer', extra: Partial<{ recurringId: string; autoAdded: boolean; scheduled: boolean }> = {}) =>
+    confirmLabel({ kind, recurringId: null, autoAdded: false, scheduled: false, ...extra });
+  it('is Paid for recurring and upcoming expenses, Received for everything else', () => {
+    expect(t('expense', { autoAdded: true, recurringId: 'r' })).toBe('paid');
+    expect(t('expense', { scheduled: true })).toBe('paid');
+    expect(t('expense')).toBe('received');
+    expect(t('income', { autoAdded: true })).toBe('received');
+    expect(t('transfer')).toBe('received');
   });
 });

@@ -1,4 +1,4 @@
-import { parseTypedAmount } from '..';
+import { parseTypedAmount, toTypedText } from '..';
 
 describe('parseTypedAmount', () => {
   it('reads plain and grouped amounts exactly', () => {
@@ -23,5 +23,14 @@ describe('parseTypedAmount', () => {
 
   it('returns null for anything that is not an amount', () => {
     for (const bad of ['', 'abc', '1.2.3', '--5', '1e5', '-']) expect(parseTypedAmount(bad)).toBeNull();
+  });
+});
+
+describe('toTypedText', () => {
+  it('round-trips through parseTypedAmount in every format', () => {
+    for (const f of ['1,000.00', '1.000,00', '1 000,00', '1 000.00', "1'000.00"] as const) {
+      expect(parseTypedAmount(toTypedText('276.4565', f), f)).toBe('276.4565');
+      expect(parseTypedAmount(toTypedText('1000', f), f)).toBe('1000');
+    }
   });
 });

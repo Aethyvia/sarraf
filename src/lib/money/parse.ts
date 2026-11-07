@@ -21,3 +21,9 @@ export function parseTypedAmount(text: string, numberFormat: NumberFormat = '1,0
   if (!isDecimalString(s)) return null;
   return toDecimalString(dec(s));
 }
+
+/** A stored decimal shown in a text field in the user's format, so parseTypedAmount reads it back unchanged. */
+export function toTypedText(value: DecimalString | null | undefined, numberFormat: NumberFormat = '1,000.00'): string {
+  if (!value) return '';
+  return numberFormat.endsWith(',00') ? value.replace('.', ',') : value;
+}

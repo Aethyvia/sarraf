@@ -4,6 +4,10 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 
 | Date | Decision | Who | Spec section |
 |---|---|---|---|
+| 2026-11-07 | Needs review button: Paid only for recurring (auto-added) expenses, and for an Upcoming expense once its date arrives (§9d); Received for everything else, including a plain Pending expense, as §10 states. | developer | §10, §9d |
+| 2026-11-07 | Rates show to 2 decimals from 10 up ("278.10"), 4 from 1 up, 6 below 1, half-to-even; "Market · tap to use" fills in the rate as shown. The market rate saved on the transaction keeps full precision. | developer | §6, §11 |
+| 2026-11-07 | Typing on the keypad groups digits in the chosen number format as you type; a worked-out result (after an operator) shows at the currency's minor units. The rate, the "this charge" amount and a typed balance use the phone keyboard (decimal pad) rather than the calculator keypad, which is for the main amount and the charged/received amount. | developer | §11, Style guide |
+| 2026-11-07 | Dates are picked with Android's own date picker for now; the design's date-range bottom sheet arrives with Transactions filters. | developer | §11 |
 | 2026-11-07 | Rate API provider: ExchangeRate-API's open endpoint (open.er-api.com, no key, daily mid-market rates, includes PKR/AED/SAR). Rates are stored as quotes against USD; any pair is worked out from two quotes to 10 decimal places. Only currency codes are sent. Attribution "Rates by ExchangeRate-API" shown where rates appear. | developer | §6, §20 |
 | 2026-11-07 | A transfer's amount is always in the From account's currency. A transfer with a person is never converted: lending is in the From account's currency, being paid back is in the To account's currency. | developer | §11, §9e |
 | 2026-11-07 | Cancelling an auto-added recurring item keeps it as a Cancelled row (in history, out of balances) rather than removing it, so its (recurring item, due date) key stays and it is never added again. | developer | §10, §12 |

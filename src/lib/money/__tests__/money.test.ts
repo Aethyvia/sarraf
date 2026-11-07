@@ -5,6 +5,7 @@ import {
   dec,
   formatAmount,
   formatExact,
+  formatTyped,
   getCurrency,
   isDecimalString,
   MINUS,
@@ -164,5 +165,16 @@ describe('compact numbers (M / B / T)', () => {
 
   it('gives the exact form for tap-to-reveal', () => {
     expect(formatExact('1250340000', 'USD', { sign: 'always' })).toBe('+$1,250,340,000.00');
+  });
+});
+
+describe('formatting a number while it is typed', () => {
+  it('groups the whole part and keeps typed decimals', () => {
+    expect(formatTyped('1563.50', 'USD')).toBe('1,563.50');
+    expect(formatTyped('1563.', 'USD')).toBe('1,563.');
+    expect(formatTyped('104231.7', 'PKR')).toBe('1,04,231.7');
+    expect(formatTyped('1663.50−100', 'USD')).toBe('1,663.50 − 100');
+    expect(formatTyped('−5', 'USD')).toBe('−5');
+    expect(formatTyped('1234.5', 'EUR', '1.000,00')).toBe('1.234,5');
   });
 });

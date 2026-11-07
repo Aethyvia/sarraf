@@ -21,6 +21,8 @@ import { db } from '@/db/client';
 import { seedSampleData } from '@/db/seed';
 import { strings } from '@/i18n/strings';
 import { SettingsProvider } from '@/state/settings';
+import { ToastProvider } from '@/state/toast';
+import { refreshRatesIfStale } from '@/services/rates';
 import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -57,6 +59,11 @@ export default function RootLayout() {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
 
+  // Market rates refresh on app open when older than 6 hours; offline keeps the last ones.
+  useEffect(() => {
+    if (data.ready) refreshRatesIfStale();
+  }, [data.ready]);
+
   if (error) {
     return (
       <View style={styles.error}>
@@ -69,7 +76,9 @@ export default function RootLayout() {
 
   return (
     <SettingsProvider>
-      <ThemedStack />
+      <ToastProvider>
+        <ThemedStack />
+      </ToastProvider>
     </SettingsProvider>
   );
 }
