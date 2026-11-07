@@ -4,6 +4,11 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 
 | Date | Decision | Who | Spec section |
 |---|---|---|---|
+| 2026-11-07 | Rate API provider: ExchangeRate-API's open endpoint (open.er-api.com, no key, daily mid-market rates, includes PKR/AED/SAR). Rates are stored as quotes against USD; any pair is worked out from two quotes to 10 decimal places. Only currency codes are sent. Attribution "Rates by ExchangeRate-API" shown where rates appear. | developer | §6, §20 |
+| 2026-11-07 | A transfer's amount is always in the From account's currency. A transfer with a person is never converted: lending is in the From account's currency, being paid back is in the To account's currency. | developer | §11, §9e |
+| 2026-11-07 | Cancelling an auto-added recurring item keeps it as a Cancelled row (in history, out of balances) rather than removing it, so its (recurring item, due date) key stays and it is never added again. | developer | §10, §12 |
+| 2026-11-07 | Calculator: a division that doesn't come out even is rounded half-to-even to the currency's minor units; typed amounts can't have more decimals than the currency has. | developer | §11 |
+| 2026-11-07 | Home's Needs review badge counts recurring, Pending and In transit items plus Upcoming items whose date has arrived. A Pending/In transit item can be confirmed on today or an earlier date, never a future one. | developer | §10 |
 | 2026-11-07 | Deleting a person who is in a split: only their share goes; the expense stays. In a split you paid, their share is added to yours (the split becomes Amounts mode); in a split someone else paid, their untracked row is just removed. | owner | §15b, §9c |
 | 2026-11-07 | Unarchiving an account or ledger counts like adding one: the free-plan limit sheet applies. | owner | §15b, §16 |
 | 2026-11-07 | Archived ledgers don't count toward the 2-ledger free limit (same as accounts). | owner | §16 |
@@ -27,4 +32,3 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 | 2026-11-07 | Platform: Android only for v1 | owner | §2 |
 | 2026-11-07 | Tech stack: Expo SDK 57 + Expo Router (TypeScript); local database expo-sqlite + Drizzle ORM with versioned migrations; money arithmetic with decimal.js (ROUND_HALF_EVEN) | owner | §2, §20 |
 | | Sarraf Plus price: _open (placeholder $2.99/mo, $24.99/yr)_ | owner | §16 |
-| | Rate API provider: _developer's choice_ | | §6, §20 |
