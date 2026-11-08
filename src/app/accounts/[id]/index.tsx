@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { and, eq, isNull, min, or } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -93,7 +94,7 @@ export default function AccountDetailScreen() {
 
   return (
     <Screen>
-      <Header title={account.name} subtitle={account.currency} onBack={() => router.back()} />
+      <Header title={account.name} subtitle={account.currency} onBack={goBack} />
       {action.ui}
 
       <Card style={styles.balanceCard}>

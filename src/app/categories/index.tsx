@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -49,7 +50,7 @@ export default function CategoriesScreen() {
       <Header
         title={s.title}
         subtitle={s.sortedBy}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={<IconButton icon="plus" filled label={s.add} onPress={() => router.push('/categories/new')} />}
       />
       {section('expense')}

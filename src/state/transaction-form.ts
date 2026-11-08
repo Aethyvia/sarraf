@@ -41,6 +41,9 @@ export interface FormState {
   goalAccountId: string | null;
   /** Expense: split with people. Who paid follows `from` (an account = you; a person = they did). */
   split: SplitDraft | null;
+  /** Pay / Add from a recurring item: which item and due date this handles. */
+  recurringId: string | null;
+  recurringDueDate: string | null;
 }
 
 export function initialForm(defaults: { date: string; ledgerId: string | null; accountId: string | null; kind?: FormKind }): FormState {
@@ -68,6 +71,8 @@ export function initialForm(defaults: { date: string; ledgerId: string | null; a
     goalId: null,
     goalAccountId: null,
     split: null,
+    recurringId: null,
+    recurringDueDate: null,
   };
 }
 
@@ -122,6 +127,8 @@ export function formFromDraft(d: TransactionDraft): FormState {
     goalId: null,
     goalAccountId: null,
     split: d.split ?? null,
+    recurringId: d.recurringId ?? null,
+    recurringDueDate: d.recurringDueDate ?? null,
   };
 }
 
@@ -169,5 +176,7 @@ export function draftFromForm(
     expectedFromPersonId: s.kind === 'expense' && s.reimbursable ? s.expectedFromPersonId : null,
     notes: s.notes,
     split: s.kind === 'expense' ? s.split : null,
+    recurringId: s.recurringId,
+    recurringDueDate: s.recurringDueDate,
   };
 }

@@ -5,9 +5,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencyTileCard as Tile } from '@/components/CurrencyTile';
 import { Money } from '@/components/Money';
+import { RecurringRow } from '@/components/RecurringRow';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
 import { Card, IconButton, LinkButton, SectionLabel } from '@/components/ui';
 import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
+import { recurringOnHome } from '@/data/recurring';
 import { needsReview } from '@/data/review';
 import { recentTransactions } from '@/data/transaction-list';
 import { strings } from '@/i18n/strings';
@@ -37,10 +39,15 @@ export default function HomeScreen() {
       estimate: estimatedTotal(db, defaultCurrency, today),
       review: needsReview(db, today),
       recent: recentTransactions(db, 6, today),
+      recurring: recurringOnHome(db, today),
     };
   }, [defaultCurrency]);
 
-  const { tiles, estimate, review, recent } = data;
+  const { tiles, estimate, review, recent, recurring } = data;
+  const fixed = recurring.filter((r) => r.item.amountType === 'same');
+  const bills = recurring.filter((r) => r.item.amountType === 'varies');
+  // Added automatically and waiting in Needs review: shown here too, with an Auto tag (Spec §8).
+  const autoAdded = review.recurring;
   const ratesAge = estimate.ratesFrom ? Math.floor((Date.parse(`${data.today}T12:00:00`) - Date.parse(estimate.ratesFrom)) / 86400000) : 0;
 
   return (
@@ -94,6 +101,38 @@ export default function HomeScreen() {
           </Pressable>
         ) : null}
 
+        {recurring.length || autoAdded.length ? (
+          <>
+            <View style={styles.sectionHead}>
+              <SectionLabel>{strings.recurring.title.toUpperCase()}</SectionLabel>
+              <LinkButton label={strings.recurring.seeAll} onPress={() => router.push('/recurring')} />
+            </View>
+            <Card>
+              {fixed.length || autoAdded.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted }]}>{strings.recurring.homeFixed}</Text> : null}
+              {fixed.map((r, i) => (
+                <RecurringRow key={r.item.id} item={r.item} variant="home" last={i === fixed.length - 1 && !autoAdded.length && !bills.length} />
+              ))}
+              {autoAdded.map((t, i) => (
+                <Pressable key={t.id} onPress={() => router.push('/review')} style={[styles.autoRow, (i < autoAdded.length - 1 || bills.length > 0) && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.confirmTitle, { color: colors.ink }]} numberOfLines={1}>
+                      {t.notes?.split('\n')[0] ?? strings.recurring.title}
+                    </Text>
+                    <Text style={[styles.confirmDetail, { color: colors.inkMuted }]} numberOfLines={1}>
+                      <Money value={t.amount} currency={t.currency} style={[styles.confirmDetail, { fontFamily: fonts.mono }]} /> · {strings.recurring.addedAuto(formatShortDate(t.date))}
+                    </Text>
+                  </View>
+                  <Text style={[styles.autoTag, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{strings.recurring.auto}</Text>
+                </Pressable>
+              ))}
+              {bills.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted }]}>{strings.recurring.homeBills}</Text> : null}
+              {bills.map((r, i) => (
+                <RecurringRow key={r.item.id} item={r.item} variant="home" last={i === bills.length - 1} />
+              ))}
+            </Card>
+          </>
+        ) : null}
+
         <View style={styles.sectionHead}>
           <SectionLabel>{s.recent.toUpperCase()}</SectionLabel>
           {recent.length ? <LinkButton label={s.seeAllShort} onPress={() => router.push('/transactions')} /> : null}
@@ -132,6 +171,9 @@ const styles = StyleSheet.create({
   confirmCount: { fontFamily: fonts.monoSemiBold, fontSize: 14 },
   confirmTitle: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   confirmDetail: { fontFamily: fonts.sans, fontSize: 12 },
+  groupLabel: { fontFamily: fonts.sansExtraBold, fontSize: 10.5, letterSpacing: 0.6, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2 },
+  autoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  autoTag: { fontFamily: fonts.sansBold, fontSize: 10.5, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: -6 },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 22, paddingHorizontal: 16 },
   emptyTitle: { fontFamily: fonts.sansSemiBold, fontSize: 13.5 },

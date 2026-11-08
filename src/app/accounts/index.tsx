@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -82,7 +83,7 @@ export default function AccountsScreen() {
       <Header
         title={currency ? `${s.title} · ${currency}` : s.title}
         subtitle={s.sortedBy(sortLabels[sort])}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={
           <>
             <IconButton icon="sort" label={strings.sort.title(s.title.toLowerCase())} onPress={() => setSorting(true)} />

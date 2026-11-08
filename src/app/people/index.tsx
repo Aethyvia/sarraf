@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { max, or, eq } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
@@ -40,7 +41,7 @@ export default function PeopleScreen() {
     <Screen>
       <Header
         title={s.title}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={<IconButton icon="plus" filled label={s.add} onPress={() => router.push('/people/new')} />}
       />
       {rows.length === 0 ? (

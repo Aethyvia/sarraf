@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { and, eq, isNull } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -93,7 +94,7 @@ export default function PersonScreen() {
     <Screen>
       <Header
         title={person.name}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={
           <>
             {balances.length ? <IconButton icon="share" label={s.share} onPress={() => setSharing(true)} /> : null}

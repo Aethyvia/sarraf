@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { isNull } from 'drizzle-orm';
 import { router } from 'expo-router';
@@ -536,7 +537,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       <View style={styles.top}>
         <Header
           title={editId ? s.editTitle : s.title}
-          onBack={() => router.back()}
+          onBack={goBack}
           backIcon="close"
           actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave || saving} />}
         />

@@ -8,7 +8,7 @@ import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalStri
 import { computeAmounts, type AmountResult, type RateMode } from './amounts';
 import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
-import { noteRecurringHandled } from './recurring';
+import { noteRecurringHandled } from './recurring-schedule';
 import { checkSplit, splitOf, type SplitDraft } from './splits';
 
 export type TransactionRow = typeof transactions.$inferSelect;

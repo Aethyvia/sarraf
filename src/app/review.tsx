@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -5,9 +6,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
 import { GotItSheet } from '@/components/transaction/GotItSheet';
+import { RecurringRow } from '@/components/RecurringRow';
 import { Money } from '@/components/Money';
 import { BottomSheet, Button, Card, Header, Screen, SectionLabel, SheetOption } from '@/components/ui';
 import { cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsDetailsToConfirm, needsReview } from '@/data/review';
+import { skipRecurring } from '@/data/recurring';
 import type { TransactionRow } from '@/data/transactions';
 import { db } from '@/db/client';
 import { accounts, categories, people } from '@/db/schema';
@@ -107,14 +110,24 @@ export default function ReviewScreen() {
     ) : null;
 
   const where = (t: TransactionRow) => (t.accountId ? names.account(t.accountId) : t.paidByPersonId ? `Paid by ${names.person(t.paidByPersonId)}` : names.account(t.toAccountId));
-  const empty = !data.recurring.length && !data.pending.length && !data.inTransit.length && !data.waitingBack.length && !data.upcoming.length;
+  const empty = !data.recurring.length && !data.reminders.length && !data.pending.length && !data.inTransit.length && !data.waitingBack.length && !data.upcoming.length;
 
   return (
     <Screen>
-      <Header title={s.title} subtitle={empty ? undefined : s.summary(data.toConfirm, data.upcomingCount, data.waitingBack.length)} onBack={() => router.back()} />
+      <Header title={s.title} subtitle={empty ? undefined : s.summary(data.toConfirm, data.upcomingCount, data.waitingBack.length)} onBack={goBack} />
       {action.ui}
       {empty ? <Text style={[styles.empty, { color: colors.inkSecondary }]}>{s.empty}</Text> : null}
       {section(s.recurring, data.recurring, (t) => [s.addedAuto(formatShortDate(t.date)), where(t)].join(' · '), () => 'confirm')}
+      {data.reminders.length ? (
+        <View style={{ gap: 8 }}>
+          {!data.recurring.length ? <SectionLabel>{s.recurring}</SectionLabel> : null}
+          <Card>
+            {data.reminders.map((r, i) => (
+              <RecurringRow key={r.id} item={r} variant="home" last={i === data.reminders.length - 1} onSkip={() => action.run(() => skipRecurring(db, r.id))} />
+            ))}
+          </Card>
+        </View>
+      ) : null}
       {section(s.pending, data.pending, (t) => [t.expectedDate ? s.expectedOn(formatShortDate(t.expectedDate)) : formatShortDate(t.date), where(t)].join(' · '), () => 'confirm')}
       {section(s.inTransit, data.inTransit, (t) => s.sentOn(formatShortDate(t.date)), () => 'confirm')}
       {section(

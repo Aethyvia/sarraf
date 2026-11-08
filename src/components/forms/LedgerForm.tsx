@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { and, count, eq, isNull, ne } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -63,7 +64,7 @@ export function LedgerForm({ ledger }: { ledger?: Ledger }) {
     <Screen>
       <Header
         title={ledger ? s.edit : s.add}
-        onBack={() => router.back()}
+        onBack={goBack}
         backIcon="close"
         actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave} />}
       />

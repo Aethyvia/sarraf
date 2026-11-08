@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +23,7 @@ export default function ReorderCurrenciesScreen() {
     <Screen>
       <Header
         title={s.reorder}
-        onBack={() => router.back()}
+        onBack={goBack}
         backIcon="close"
         actions={<IconButton icon="tick" filled label={strings.common.save} onPress={() => router.back()} />}
       />

@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { router } from 'expo-router';
 import { useState } from 'react';
 
@@ -42,7 +43,7 @@ export function PersonForm({ person }: { person?: Person }) {
     <Screen>
       <Header
         title={person ? person.name : s.add}
-        onBack={() => router.back()}
+        onBack={goBack}
         backIcon={person ? 'back' : 'close'}
         actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave} />}
       />

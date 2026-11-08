@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { count, eq } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { View } from 'react-native';
@@ -24,7 +25,7 @@ export default function LedgersScreen() {
       <Header
         title={s.title}
         subtitle={s.subtitle}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={<IconButton icon="plus" filled label={s.add} onPress={() => router.push('/ledgers/new')} />}
       />
       {rows.map(({ ledger, budgetCount }) => (

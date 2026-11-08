@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { eq } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, type ReactNode } from 'react';
@@ -138,7 +139,7 @@ export default function TransactionDetailScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={() => router.back()} />
+      <Header title={s.title} onBack={goBack} />
       {action.ui}
 
       <Card style={styles.hero}>

@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { asc, isNotNull } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -57,7 +58,7 @@ export function AccountForm({ account }: { account?: Account }) {
     <Screen>
       <Header
         title={account ? s.edit : s.add}
-        onBack={() => router.back()}
+        onBack={goBack}
         backIcon="close"
         actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave} />}
       />

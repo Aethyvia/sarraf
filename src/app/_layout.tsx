@@ -20,6 +20,11 @@ import { ensureBaseData } from '@/db/base-data';
 import { db } from '@/db/client';
 import { seedSampleData } from '@/db/seed';
 import { purgeSoftDeleted } from '@/data/transaction-ops';
+import { backfillRecurring } from '@/data/recurring';
+import type { TransactionRow } from '@/data/transactions';
+import { AwaySheet } from '@/components/sheets/AwaySheet';
+import { accounts } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { loadSampleClock } from '@/dev/sample-clock';
 import { nowIso } from '@/lib/dates';
 import { deleteStoredFiles } from '@/services/attachments';
@@ -45,8 +50,8 @@ export default function RootLayout() {
   });
   const migration = useMigrations(db, migrations);
   // Runs once the schema is ready. Both steps are idempotent, so a repeat run is harmless.
-  const data = useMemo<{ ready: boolean; error: Error | null }>(() => {
-    if (!migration.success) return { ready: false, error: null };
+  const data = useMemo<{ ready: boolean; error: Error | null; added: TransactionRow[] }>(() => {
+    if (!migration.success) return { ready: false, error: null, added: [] };
     try {
       ensureBaseData(db);
       if (__DEV__) {
@@ -55,9 +60,11 @@ export default function RootLayout() {
       }
       // Deleted rows kept for Undo are removed for good on the next app open.
       deleteStoredFiles(purgeSoftDeleted(db, nowIso()).attachmentPaths);
-      return { ready: true, error: null };
+      // Recurring auto-adds missed while the app was closed: one per due date, never twice.
+      const added = backfillRecurring(db);
+      return { ready: true, error: null, added };
     } catch (e) {
-      return { ready: false, error: e as Error };
+      return { ready: false, error: e as Error, added: [] };
     }
   }, [migration.success]);
 
@@ -86,18 +93,20 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <ToastProvider>
-        <ThemedStack />
+        <ThemedStack added={data.added} />
       </ToastProvider>
     </SettingsProvider>
   );
 }
 
-function ThemedStack() {
+function ThemedStack({ added }: { added: TransactionRow[] }) {
   const { scheme, colors } = useTheme();
+  const accountName = (id: string | null) => (id ? (db.select({ name: accounts.name }).from(accounts).where(eq(accounts.id, id)).get()?.name ?? '') : '');
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+      <AwaySheet added={added} accountName={accountName} />
     </>
   );
 }

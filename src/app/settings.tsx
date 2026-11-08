@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { eq } from 'drizzle-orm';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
@@ -28,14 +29,15 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={() => router.back()} />
+      <Header title={s.title} onBack={goBack} />
 
       <SectionLabel style={styles.section}>{s.organize}</SectionLabel>
       <View>
         <Row icon="accounts" title={s.accounts} onPress={() => go('/accounts')} />
         <Row icon="list" title={s.categories} onPress={() => go('/categories')} />
         <Row icon="ledger" title={s.ledgers} onPress={() => go('/ledgers')} />
-        <Row icon="people" title={s.people} onPress={() => go('/people')} last />
+        <Row icon="people" title={s.people} onPress={() => go('/people')} />
+        <Row icon="cycle" title={strings.recurring.title} onPress={() => go('/recurring')} last />
       </View>
 
       <SectionLabel style={styles.section}>{s.preferences}</SectionLabel>

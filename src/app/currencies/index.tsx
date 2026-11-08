@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -23,7 +24,7 @@ export default function AllCurrenciesScreen() {
     <Screen>
       <Header
         title={strings.currencies.title}
-        onBack={() => router.back()}
+        onBack={goBack}
         actions={<IconButton icon="sort" label={strings.currencies.reorder} onPress={() => router.push('/currencies/reorder')} />}
       />
       <Text style={[styles.hint, { color: colors.inkMuted }]}>{strings.currencies.hint(monthName)}</Text>

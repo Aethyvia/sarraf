@@ -1,3 +1,4 @@
+import { goBack } from '@/state/nav';
 import { eq } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
@@ -29,7 +30,7 @@ export default function AddRefundScreen() {
   if (!data) return null;
   return (
     <Screen>
-      <Header title={s.refundTitle} onBack={() => router.back()} backIcon="close" />
+      <Header title={s.refundTitle} onBack={goBack} backIcon="close" />
       <View>
         <Text style={{ fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 6, color: colors.inkMuted }}>{s.beingRefunded}</Text>
         <Card>
