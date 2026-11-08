@@ -1,10 +1,11 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
-import { accounts, recurringItems, settings, transactions } from '@/db/schema';
+import { accounts, budgets, categories, ledgers, recurringItems, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { strings } from '@/i18n/strings';
 import { addDays } from '@/lib/dates';
-import { formatExact, type NumberFormat } from '@/lib/money';
+import { dec, formatExact, type NumberFormat } from '@/lib/money';
+import { budgetPeriod, budgetStatuses } from './budgets';
 import { hasEnded, showFrom } from './recurring-schedule';
 
 /** A phone notification to schedule. `at` is local time, "YYYY-MM-DDTHH:MM". */
@@ -97,4 +98,51 @@ export function planNotifications(db: AppDb, now: { date: string; time: string }
   }
 
   return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/** A budget alert to show now, and the mark that stops it repeating this period. */
+export interface BudgetAlert {
+  budgetId: string;
+  mark: string;
+  title: string;
+  body: string;
+  route: string;
+}
+
+/**
+ * Budget alerts due now (Spec §15, Notifications): once per budget per period
+ * at 80% and again at 100%, each switchable in Settings and on the budget.
+ * Jumping straight past 100% sends only the 100% one. Every ledger counts.
+ */
+export function budgetAlertsDue(db: AppDb, asOf: string): BudgetAlert[] {
+  const s = strings.notifications;
+  const set = db.select().from(settings).where(eq(settings.id, 1)).get();
+  if (!set || (!set.notifyBudget80 && !set.notifyBudget100)) return [];
+  const cats = new Map(db.select({ id: categories.id, name: categories.name }).from(categories).all().map((c) => [c.id, c.name]));
+  const money = (value: string, currency: string) => (set.hideAmounts ? null : formatExact(value, currency, { numberFormat: set.numberFormat as NumberFormat }));
+  const out: BudgetAlert[] = [];
+  for (const ledger of db.select().from(ledgers).all()) {
+    for (const st of budgetStatuses(db, ledger.id, asOf)) {
+      const b = st.budget;
+      const level = st.percent >= 100 && set.notifyBudget100 && b.notify100 ? 100 : st.percent >= 80 && set.notifyBudget80 && b.notify80 ? 80 : null;
+      if (!level) continue;
+      const start = budgetPeriod(b.period, asOf).from;
+      const [doneStart, doneLevel] = (b.alerted ?? '').split(':');
+      if (doneStart === start && Number(doneLevel) >= level) continue;
+      const name = b.categoryId ? (cats.get(b.categoryId) ?? '') : strings.budgets.allSpending;
+      out.push({
+        budgetId: b.id,
+        mark: `${start}:${level}`,
+        title: level === 100 ? s.budgetUsedUp(name) : s.budgetNearly(name),
+        body: s.budgetBody(ledger.name, money(st.spent, b.currency), money(b.amount, b.currency), money(dec(st.left).abs().toString(), b.currency), st.over),
+        route: `/budgets/${b.id}`,
+      });
+    }
+  }
+  return out;
+}
+
+/** Records that a budget's alert went out, so it isn't sent again this period. */
+export function markBudgetAlerted(db: AppDb, budgetId: string, mark: string): void {
+  db.update(budgets).set({ alerted: mark }).where(eq(budgets.id, budgetId)).run();
 }

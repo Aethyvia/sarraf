@@ -2,7 +2,7 @@ import { addDatabaseChangeListener } from 'expo-sqlite';
 import * as Notifications from 'expo-notifications';
 import { router } from 'expo-router';
 
-import { planNotifications } from '@/data/reminders';
+import { budgetAlertsDue, markBudgetAlerted, planNotifications } from '@/data/reminders';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { today } from '@/lib/dates';
@@ -71,6 +71,15 @@ export async function syncNotifications(): Promise<void> {
         content: { title: n.title, body: n.body, data: { route: n.route } },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: CHANNEL },
       });
+    }
+    // Budget alerts go out as soon as a budget crosses 80% or 100%, once per period.
+    for (const a of budgetAlertsDue(db, today())) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `budget:${a.budgetId}:${a.mark}`,
+        content: { title: a.title, body: a.body, data: { route: a.route } },
+        trigger: { channelId: CHANNEL },
+      });
+      markBudgetAlerted(db, a.budgetId, a.mark);
     }
   } catch (e) {
     // Scheduling is best effort; the app works the same without it.

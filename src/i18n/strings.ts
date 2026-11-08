@@ -964,6 +964,10 @@ export const strings = {
     inTransit: 'Transfer still in transit',
     inTransitBody: (from: string, to: string, days: number) => `${from} → ${to} · sent ${days} days ago`,
     channel: 'Reminders',
+    budgetNearly: (name: string) => `${name}: 80% of budget used`,
+    budgetUsedUp: (name: string) => `${name}: budget used up`,
+    budgetBody: (ledger: string, spent: string | null, cap: string | null, left: string | null, over: boolean) =>
+      spent && cap && left ? `${spent} of ${cap} · ${left} ${over ? 'over' : 'left'} · ${ledger}` : `${ledger} ledger · tap to see your budgets`,
   },
   addPeople: {
     title: 'Add people',

@@ -368,6 +368,8 @@ export const budgets = sqliteTable(
     rank: integer('rank').notNull().default(0),
     notify80: bool('notify_80').notNull().default(true),
     notify100: bool('notify_100').notNull().default(true),
+    /** The last alert sent, "<period start>:80" or "<period start>:100", so each goes out once per period. */
+    alerted: text('alerted'),
     ...timestamps,
   },
   (t) => [index('budgets_ledger').on(t.ledgerId)],
