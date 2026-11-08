@@ -1,3 +1,4 @@
+import { pauseLockFor } from '@/state/lock-pause';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -62,6 +63,7 @@ async function shrinkPhoto(asset: { uri: string; width: number; height: number; 
 export async function takePhoto(): Promise<PickedFile | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) return null;
+  pauseLockFor();
   const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
   if (result.canceled || !result.assets[0]) return null;
   return shrinkPhoto(result.assets[0]);
@@ -69,6 +71,7 @@ export async function takePhoto(): Promise<PickedFile | null> {
 
 /** Choose photos from the gallery. */
 export async function choosePhotos(): Promise<PickedFile[]> {
+  pauseLockFor();
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 1 });
   if (result.canceled) return [];
   return Promise.all(result.assets.map(shrinkPhoto));
@@ -76,6 +79,7 @@ export async function choosePhotos(): Promise<PickedFile[]> {
 
 /** Choose any file (PDF, etc.); kept as it is. */
 export async function chooseFiles(): Promise<PickedFile[]> {
+  pauseLockFor();
   const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
   if (result.canceled) return [];
   return result.assets.map((a) => ({

@@ -39,7 +39,9 @@ export default function AppLockScreen() {
   return (
     <Screen>
       <Header title={s.title} onBack={goBack} />
-      <ToggleRow title={s.lockWithPin} detail={s.lockWithPinDetail} value={on} onChange={(v) => (v ? router.push('/lock/set') : turnOffLock(db))} />
+      <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
+        <ToggleRow title={s.lockWithPin} detail={s.lockWithPinDetail} value={on} onChange={(v) => (v ? router.push('/lock/set') : turnOffLock(db))} />
+      </Card>
 
       {on ? (
         <>

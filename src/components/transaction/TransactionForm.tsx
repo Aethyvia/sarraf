@@ -33,6 +33,7 @@ import { NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft } from
 import { budgetWarning } from '@/data/budgets';
 import { accountFree, currencyPositions, spendWarning, upcomingOnAccount } from '@/data/usable';
 import { db } from '@/db/client';
+import { exportedPeriodFor } from '@/data/tax-export';
 import { accounts, categories, ledgers, people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { expressionValue, hasOperator } from '@/lib/calc';
@@ -457,6 +458,13 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onPress={() => setSheet('category')}
       />
     );
+    // Editing a transaction in a year already sent to Tax export (Spec: one-line warning, no change log).
+    const exportedMonth = editId ? exportedPeriodFor(db, form.date) : null;
+    const exportedNote = exportedMonth ? (
+      <RowNote tone="warning" icon="document">
+        {strings.taxExport.exportedWarning(exportedMonth)}
+      </RowNote>
+    ) : null;
     const upcomingNote =
       upcoming && upcoming.count > 0 && fromAccount ? (
         <RowNote icon="calendar">{parts(s.upcoming(upcoming.count, <MoneyInline size={11} value={upcoming.total} currency={fromAccount.currency} />, formatShortDate(upcoming.lastDate!)))}</RowNote>
@@ -474,6 +482,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             onPress={() => setSheet('from')}
           />
           {upcomingNote}
+          {exportedNote}
           {warningNote}
           <FormRow
             label={form.to?.type === 'person' ? s.toPerson : s.to}
@@ -502,6 +511,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           onPress={() => setSheet('from')}
         />
         {upcomingNote}
+        {exportedNote}
         {warningNote}
         {fromPerson && form.kind === 'expense' ? <RowNote>{s.paidByHint(fromPerson.name)}</RowNote> : null}
         {categoryRow}

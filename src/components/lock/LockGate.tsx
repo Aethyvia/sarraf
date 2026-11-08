@@ -11,6 +11,7 @@ import { checkPin, FREE_TRIES, proveWithBackupSecret, setPin, shouldLock, waitLe
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { keyStore } from '@/services/cloud';
+import { consumeLockPause, pauseLockFor } from '@/state/lock-pause';
 import { useSettings } from '@/state/settings';
 import { fonts, useTheme } from '@/theme';
 import { CreatePin } from './CreatePin';
@@ -58,6 +59,10 @@ export function LockGate() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background') background.current = Date.now();
       if (state === 'active') {
+        if (consumeLockPause()) {
+          background.current = null;
+          return;
+        }
         if (shouldLock(set.appLockEnabled && !!set.pinHash, set.lockAfterSeconds, background.current, Date.now())) setLocked(true);
         background.current = null;
       }
@@ -82,6 +87,7 @@ export function LockGate() {
   }, []);
 
   const biometric = useCallback(async () => {
+    pauseLockFor(60 * 1000);
     const r = await LocalAuthentication.authenticateAsync({ promptMessage: s.biometricPrompt, disableDeviceFallback: true, cancelLabel: strings.common.cancel });
     if (r.success) unlock();
   }, [s.biometricPrompt, unlock]);

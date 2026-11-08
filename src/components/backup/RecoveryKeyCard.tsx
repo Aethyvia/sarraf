@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Note } from '@/components/start/StartPage';
 import { Button, Card } from '@/components/ui';
 import { strings } from '@/i18n/strings';
+import { pauseLockFor } from '@/state/lock-pause';
 import { useToast } from '@/state/toast';
 import { fonts, radius, useTheme } from '@/theme';
 
@@ -25,6 +26,7 @@ export function RecoveryKeyCard({ recoveryKey }: { recoveryKey: string }) {
     if (f.exists) f.delete();
     f.create();
     f.write(s.keyFileText(recoveryKey));
+    pauseLockFor();
     await Sharing.shareAsync(f.uri, { mimeType: 'text/plain', dialogTitle: s.saveFile });
   };
   const copy = async () => {
