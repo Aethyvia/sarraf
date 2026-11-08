@@ -15,6 +15,7 @@ import { accounts, categories, people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { today as todayDate } from '@/lib/dates';
 import { parseTypedAmount, toTypedText } from '@/lib/money';
+import { notificationsAllowed } from '@/services/notifications';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
@@ -105,7 +106,11 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
       maxOccurrences: maxTimes,
     };
     const ok = action.run(() => (item ? updateRecurring(db, item.id, input) : createRecurring(db, input), true));
-    if (ok) router.back();
+    if (ok) {
+      // A reminder is only useful if the phone allows notifications: ask now, once.
+      void notificationsAllowed(true);
+      goBack();
+    }
   };
 
   const endsLabel = endsOn ? s.endsOn(formatLongDate(endsOn)) : maxTimes ? s.endsAfter(maxTimes) : s.never;

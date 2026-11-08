@@ -44,7 +44,16 @@ export default function SettingsScreen() {
       <View>
         <Row icon="coin" title={s.defaultCurrency} value={current.defaultCurrency} mono hint={s.defaultCurrencyHint} onPress={() => setSheet('currency')} />
         <Row icon="rows" title={s.numberFormat} value={current.numberFormat} mono hint={s.numberFormatHint} onPress={() => setSheet('format')} />
-        <Row icon="moon" title={s.theme} value={s.themes[current.theme]} onPress={() => setSheet('theme')} last />
+        <Row icon="moon" title={s.theme} value={s.themes[current.theme]} onPress={() => setSheet('theme')} />
+        <Row
+          icon="bell"
+          title={strings.notifications.title}
+          value={strings.notifications.onCount(
+            [current.notifyBudget80, current.notifyBudget100, current.notifyRecurringDue, current.notifyExpectedLate, current.notifyInTransit, current.notifyBackupProblems].filter(Boolean).length,
+          )}
+          onPress={() => go('/notifications')}
+          last
+        />
       </View>
       <ToggleRow title={s.compactNumbers} detail={s.compactNumbersDetail} value={current.compactNumbers} onChange={(v) => save({ compactNumbers: v })} />
 

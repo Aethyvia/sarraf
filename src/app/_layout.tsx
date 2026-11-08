@@ -31,6 +31,7 @@ import { deleteStoredFiles } from '@/services/attachments';
 import { strings } from '@/i18n/strings';
 import { SettingsProvider } from '@/state/settings';
 import { ToastProvider } from '@/state/toast';
+import { startNotifications } from '@/services/notifications';
 import { refreshRatesIfStale } from '@/services/rates';
 import { useTheme } from '@/theme';
 
@@ -79,6 +80,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (data.ready) refreshRatesIfStale();
   }, [data.ready]);
+
+  // Reminders are re-planned on open and whenever data changes.
+  useEffect(() => (data.ready ? startNotifications() : undefined), [data.ready]);
 
   if (error) {
     return (

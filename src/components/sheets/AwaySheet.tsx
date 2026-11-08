@@ -20,7 +20,7 @@ export function AwaySheet({ added, accountName }: { added: TransactionRow[]; acc
   return (
     <BottomSheet visible={open} onClose={close} title={s.awayTitle(added.length)}>
       <View style={{ gap: 12 }}>
-        <Text style={[styles.body, { color: colors.inkSecondary, marginTop: -6 }]}>{s.awayBody}</Text>
+        <Text style={[styles.body, { color: colors.inkSecondary, marginTop: -6 }]}>{s.awayBody(added.length)}</Text>
         <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
           {added.map((t, i) => (
             <View key={t.id} style={[styles.row, i < added.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
@@ -32,9 +32,9 @@ export function AwaySheet({ added, accountName }: { added: TransactionRow[]; acc
             </View>
           ))}
         </Card>
-        <Text style={[styles.small, { color: colors.inkMuted }]}>{s.awayNote}</Text>
+        <Text style={[styles.small, { color: colors.inkMuted }]}>{s.awayNote(added.length)}</Text>
         <Button
-          label={s.review}
+          label={s.review(added.length)}
           onPress={() => {
             close();
             router.push('/review');
