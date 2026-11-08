@@ -7,6 +7,7 @@ import { newId } from '@/lib/id';
 import { Decimal, dec, isDecimalString, toDecimalString, type DecimalString, type DecimalValue } from '@/lib/money';
 import { sortByCurrencyOrder } from './currency-order';
 import { DataError } from './errors';
+import { splitOf } from './splits';
 
 type EntryRow = typeof personEntries.$inferSelect;
 
@@ -165,4 +166,26 @@ export function outstandingOf(db: AppDb, t: typeof transactions.$inferSelect): {
 export function chargedCurrencyOf(db: AppDb, t: Pick<typeof transactions.$inferSelect, 'accountId' | 'currency' | 'accountAmount'>): string {
   if (!t.accountId) return t.currency;
   return db.select({ c: accounts.currency }).from(accounts).where(eq(accounts.id, t.accountId)).get()?.c ?? t.currency;
+}
+
+/**
+ * People in a split you paid who carry a share (not a treat), with their live
+ * balance in the split's currency. A refund leaves their shares alone
+ * (Decided Nov 8), so screens show this next to a refund.
+ */
+export function sharesKeptByRefund(db: AppDb, expenseId: string, today: string = todayDate()): { personId: string; name: string; share: DecimalString; currency: string; balance: DecimalString }[] {
+  const t = db.select().from(transactions).where(eq(transactions.id, expenseId)).get();
+  if (!t || t.kind !== 'expense' || t.paidByPersonId) return [];
+  const split = splitOf(db, expenseId);
+  if (!split) return [];
+  const currency = chargedCurrencyOf(db, t);
+  return split.shares
+    .filter((sh) => sh.personId && !sh.treat && dec(sh.amount).gt(0))
+    .map((sh) => ({
+      personId: sh.personId!,
+      name: db.select({ name: people.name }).from(people).where(eq(people.id, sh.personId!)).get()?.name ?? '',
+      share: sh.amount,
+      currency,
+      balance: personBalances(db, sh.personId!, today).get(currency) ?? '0',
+    }));
 }

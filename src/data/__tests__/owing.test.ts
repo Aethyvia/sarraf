@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { personEntries, splitShares, transactions } from '@/db/schema';
 import { accountBalance } from '../balances';
 import { addMoneyBack, refundableLeft, writeOff } from '../money-back';
-import { expectedBack, markSettled, personBalances, personHistory } from '../owing';
+import { expectedBack, markSettled, personBalances, personHistory, sharesKeptByRefund } from '../owing';
 import { confirmTransaction } from '../review';
 import { equalShares, percentShares, remainingToAssign } from '../splits';
 import { deleteTransaction, restoreTransactions, softDeleteTransactions } from '../transaction-ops';
@@ -246,5 +246,39 @@ describe('Share with a person', () => {
       { date: '2026-09-30', numberFormat: '1,000.00', includeLast: false },
     );
     expect(text).toBe('Hi John, here’s where we stand (Sarraf, Sep 30):\n• You owe me $250.00\n• You owe me €40.00\n• I owe you ₨8,450.00');
+  });
+});
+
+describe('a refund on a split you paid (Decided Nov 8: option a)', () => {
+  const dinner = (w: Awaited<ReturnType<typeof world>>) =>
+    w.save({
+      accountId: w.usd,
+      amount: '90',
+      split: {
+        mode: 'equal',
+        shares: [
+          { personId: null, amount: '30' },
+          { personId: w.john, amount: '30' },
+          { personId: w.sana, amount: '30', treat: true },
+        ],
+      },
+    });
+
+  it('lowers only your spending; what people owe stays as split', async () => {
+    const w = await world();
+    const id = dinner(w);
+    addMoneyBack(w.db, { parentId: id, kind: 'refund', accountId: w.usd, amount: '30', date: '2026-09-25' }, TODAY);
+    expect(w.balance(w.john)).toEqual({ USD: '30' });
+    expect(w.balance(w.sana)).toEqual({});
+    expect(accountBalance(w.db, w.usd, TODAY)).toBe('940');
+    expect(sharesKeptByRefund(w.db, id, TODAY)).toEqual([{ personId: w.john, name: 'John', share: '30', currency: 'USD', balance: '30' }]);
+  });
+
+  it('leaves a repaid share alone too', async () => {
+    const w = await world();
+    const id = dinner(w);
+    w.save({ kind: 'transfer', fromPersonId: w.john, toAccountId: w.usd, amount: '30', date: '2026-09-22' });
+    addMoneyBack(w.db, { parentId: id, kind: 'refund', accountId: w.usd, amount: '30', date: '2026-09-25' }, TODAY);
+    expect(w.balance(w.john)).toEqual({ USD: '0' });
   });
 });

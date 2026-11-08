@@ -690,6 +690,14 @@ export const strings = {
     saveRefund: 'Save refund',
     refundDone: 'Refund saved',
     nothingLeft: 'This expense has been refunded in full.',
+    shareKept: (name: string, share: ReactNode, balance: ReactNode): ReactNode[] => [
+      `${name}’s share stays `,
+      share,
+      ` — a refund only lowers your own spending (${name}’s balance with you: `,
+      balance,
+      '). ',
+    ],
+    editSplit: 'Edit the split',
     uncategorized: 'Uncategorized',
   },
   addPeople: {

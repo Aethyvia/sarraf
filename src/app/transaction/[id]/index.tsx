@@ -7,6 +7,7 @@ import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { MoneyInline, chargeLabel, formatLongDate, trimRate } from '@/components/transaction/parts';
 import { GotItSheet } from '@/components/transaction/GotItSheet';
+import { SharesKeptNote } from '@/components/transaction/SharesKeptNote';
 import { amountSign, rowTitle } from '@/components/transaction/TransactionRow';
 import { BottomSheet, Button, Card, Header, IconChip, LinkButton, Screen } from '@/components/ui';
 import { vsMarketPercent } from '@/data/amounts';
@@ -230,6 +231,11 @@ export default function TransactionDetailScreen() {
               );
             })}
           </Card>
+          {children.some((c) => c.linkType === 'refund') ? (
+            <View style={{ marginTop: 8 }}>
+              <SharesKeptNote expenseId={id} />
+            </View>
+          ) : null}
         </View>
       ) : null}
 

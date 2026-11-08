@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { MoneyBackForm } from '@/components/transaction/MoneyBackForm';
+import { SharesKeptNote } from '@/components/transaction/SharesKeptNote';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
 import { Card, Header, Screen } from '@/components/ui';
 import { refundableLeft } from '@/data/money-back';
@@ -35,6 +36,7 @@ export default function AddRefundScreen() {
           <TransactionRow row={data.row} variant="recent" last />
         </Card>
       </View>
+      <SharesKeptNote expenseId={id} />
       {dec(data.left).gt(0) ? (
         <MoneyBackForm parentId={id} kind="refund" onDone={() => router.back()} />
       ) : (
