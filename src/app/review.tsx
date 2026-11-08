@@ -182,7 +182,7 @@ function ItemOptionsSheet({
     [item.autoAdded ? s.addedOn : s.date, formatShortDate(item.date)],
   ];
   return (
-    <BottomSheet visible onClose={onClose} title={names.category(item.categoryId) ?? strings.add.kinds[item.kind as 'expense' | 'income' | 'transfer']}>
+    <BottomSheet visible onClose={onClose} title={titleOf(item, names)}>
       <View style={[styles.facts, { backgroundColor: colors.filled }]}>
         {facts.map(([label, value]) => (
           <View key={label} style={styles.fact}>
