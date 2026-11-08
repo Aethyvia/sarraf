@@ -21,6 +21,8 @@ export interface Palette {
   accentSoft: string;
   income: string;
   expense: string;
+  /** Soft background behind a destructive icon (bulk Delete). */
+  expenseSoft: string;
   /** "Dips into savings" warning. */
   warning: string;
   warningSoft: string;
@@ -45,6 +47,7 @@ export const light: Palette = {
   accentSoft: '#DCEAE6',
   income: '#1E7A4C',
   expense: '#B3261E',
+  expenseSoft: '#FDF1F0',
   warning: '#8A5A00',
   warningSoft: '#F6EDD6',
   scrim: 'rgba(33,29,23,0.45)',
@@ -67,6 +70,7 @@ export const dark: Palette = {
   accentSoft: '#1D3B35',
   income: '#4CAF7A',
   expense: '#E0655C',
+  expenseSoft: '#3A201D',
   warning: '#D9A73D',
   warningSoft: '#3A2F1A',
   scrim: 'rgba(0,0,0,0.55)',

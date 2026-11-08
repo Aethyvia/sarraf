@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -17,6 +17,8 @@ type Sort = 'custom' | 'nameAsc' | 'nameDesc' | 'balanceDesc' | 'balanceAsc';
 export default function AccountsScreen() {
   const s = strings.accounts;
   const { colors } = useTheme();
+  // Opened from a Home tile: just that currency's accounts.
+  const { currency } = useLocalSearchParams<{ currency?: string }>();
   const [sort, setSort] = useState<Sort>('custom');
   const [sorting, setSorting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -27,7 +29,7 @@ export default function AccountsScreen() {
 
   const groups = useMemo(() => {
     const balance = (id: string) => data.balances.get(id) ?? '0';
-    const sorted = [...data.rows].sort((a, b) => {
+    const sorted = data.rows.filter((a) => !currency || a.currency === currency).sort((a, b) => {
       switch (sort) {
         case 'nameAsc':
           return a.name.localeCompare(b.name);
@@ -52,7 +54,7 @@ export default function AccountsScreen() {
       plain: active.filter((a) => !a.institution),
       archived: sorted.filter((a) => a.archivedAt),
     };
-  }, [data, sort]);
+  }, [data, sort, currency]);
 
   const row = (a: (typeof data.rows)[number], last: boolean, muted = false) => (
     <ListRow
@@ -78,7 +80,7 @@ export default function AccountsScreen() {
   return (
     <Screen>
       <Header
-        title={s.title}
+        title={currency ? `${s.title} · ${currency}` : s.title}
         subtitle={s.sortedBy(sortLabels[sort])}
         onBack={() => router.back()}
         actions={

@@ -1,20 +1,23 @@
 import { eq } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Money } from '@/components/Money';
 import { db } from '@/db/client';
 import { accounts, settings } from '@/db/schema';
+import { SAMPLE_TODAY } from '@/db/sample';
 import { resetSampleData } from '@/db/seed';
+import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
 import { NUMBER_FORMATS } from '@/lib/money';
 import { useSettings } from '@/state/settings';
 import { BUTTON_HEIGHT, fonts, radius, useTheme } from '@/theme';
 
 /**
- * Temporary developer preview for build layer 1 (money formatting, the Money
- * component, theme and seeded data). Home replaces this screen in layer 4.
+ * Developer preview (dev builds only, from Settings): money formatting, display
+ * toggles, the sample clock and sample-data reset.
  */
 const EXAMPLES: { value: string; currency: string; sign?: 'always' }[] = [
   { value: '104231.75', currency: 'PKR' },
@@ -40,13 +43,14 @@ export default function DevPreview() {
   const update = async (values: Partial<typeof settings.$inferInsert>) => {
     await db.update(settings).set(values).where(eq(settings.id, 1));
   };
+  const [pinned, setPinned] = useState(loadSampleClock);
   const nextFormat = NUMBER_FORMATS[(NUMBER_FORMATS.indexOf(s.numberFormat) + 1) % NUMBER_FORMATS.length];
   const nextTheme = ({ system: 'light', light: 'dark', dark: 'system' } as const)[s.theme];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: colors.ink }]}>Sarraf · layer 1</Text>
+        <Text style={[styles.title, { color: colors.ink }]}>Sarraf · dev</Text>
         <Text style={[styles.sub, { color: colors.inkMuted }]}>
           Developer preview. Tap a short amount for the exact one.
         </Text>
@@ -56,10 +60,17 @@ export default function DevPreview() {
           <Toggle label={`Compact: ${s.compactNumbers ? 'on' : 'off'}`} onPress={() => update({ compactNumbers: !s.compactNumbers })} />
           <Toggle label={`Format: ${s.numberFormat}`} onPress={() => update({ numberFormat: nextFormat })} />
           <Toggle label={`Theme: ${s.theme}`} onPress={() => update({ theme: nextTheme })} />
-          <Toggle label="Add transaction →" onPress={() => router.push('/transaction/new')} />
-          <Toggle label="Needs review →" onPress={() => router.push('/review')} />
-          <Toggle label="Settings →" onPress={() => router.push('/settings')} />
+          <Toggle
+            label={`Today: ${pinned ? `${SAMPLE_TODAY} (sample)` : 'real'}`}
+            onPress={() => {
+              setSampleClock(!pinned);
+              setPinned(!pinned);
+              // Touch the database so live screens recompute with the new "today".
+              update({ hideAmounts: s.hideAmounts });
+            }}
+          />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
+          <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
         </View>
 
         <Text style={[styles.label, { color: colors.inkMuted }]}>FORMATTING</Text>

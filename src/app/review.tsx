@@ -37,14 +37,14 @@ function useNames(): Names {
   };
 }
 
-/** A row's title: the category, or for a transfer "From → To", falling back to its notes. */
+/** A row's title, as in lists: the note's first line, else the category; a transfer is "From → To". */
 function titleOf(t: TransactionRow, n: Names): string {
   if (t.kind === 'transfer') {
     const from = t.accountId ? n.account(t.accountId) : n.person(t.transferPersonId);
     const to = t.toAccountId ? n.account(t.toAccountId) : n.person(t.transferPersonId);
     return `${from} → ${to}`;
   }
-  return n.category(t.categoryId) ?? t.notes?.split('\n')[0] ?? strings.add.noCategory;
+  return t.notes?.split('\n')[0] || (n.category(t.categoryId) ?? strings.add.noCategory);
 }
 
 /** Needs review (Spec §10): Recurring, Pending, In transit, Waiting for money back, Upcoming. */
@@ -61,7 +61,7 @@ export default function ReviewScreen() {
 
   const startConfirm = (t: TransactionRow) => {
     if (needsDetailsToConfirm(t)) {
-      router.push({ pathname: '/transaction/[id]', params: { id: t.id, confirm: '1' } });
+      router.push({ pathname: '/transaction/[id]/edit', params: { id: t.id, confirm: '1' } });
       return;
     }
     setConfirming(t);
@@ -132,7 +132,7 @@ export default function ReviewScreen() {
         onClose={() => setOptions(null)}
         onEdit={(t) => {
           setOptions(null);
-          router.push({ pathname: '/transaction/[id]', params: { id: t.id, confirm: '1' } });
+          router.push({ pathname: '/transaction/[id]/edit', params: { id: t.id, confirm: '1' } });
         }}
         onInTransit={(t) => {
           setOptions(null);

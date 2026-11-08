@@ -20,8 +20,8 @@ import { fonts, useTheme } from '@/theme';
 export interface MoneyProps {
   value: DecimalString;
   currency: string;
-  /** 'auto': "−" on negatives. 'always': "+" on positives too. 'never': no sign. */
-  sign?: 'auto' | 'always' | 'never';
+  /** 'auto': "−" on negatives. 'always': "+" on positives too. 'never': no sign. 'minus': "−" always (money out, given as a size). */
+  sign?: 'auto' | 'always' | 'never' | 'minus';
   /**
    * Allow M / B / T when Settings → compact numbers is on. Pass false where an
    * amount must always be exact: typing, transaction details, rate maths.

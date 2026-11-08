@@ -19,6 +19,10 @@ import migrations from '../../drizzle/migrations';
 import { ensureBaseData } from '@/db/base-data';
 import { db } from '@/db/client';
 import { seedSampleData } from '@/db/seed';
+import { purgeSoftDeleted } from '@/data/transaction-ops';
+import { loadSampleClock } from '@/dev/sample-clock';
+import { nowIso } from '@/lib/dates';
+import { deleteStoredFiles } from '@/services/attachments';
 import { strings } from '@/i18n/strings';
 import { SettingsProvider } from '@/state/settings';
 import { ToastProvider } from '@/state/toast';
@@ -45,7 +49,12 @@ export default function RootLayout() {
     if (!migration.success) return { ready: false, error: null };
     try {
       ensureBaseData(db);
-      if (__DEV__) seedSampleData(db);
+      if (__DEV__) {
+        seedSampleData(db);
+        loadSampleClock();
+      }
+      // Deleted rows kept for Undo are removed for good on the next app open.
+      deleteStoredFiles(purgeSoftDeleted(db, nowIso()).attachmentPaths);
       return { ready: true, error: null };
     } catch (e) {
       return { ready: false, error: e as Error };

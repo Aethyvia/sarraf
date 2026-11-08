@@ -34,6 +34,8 @@ export interface ListRow {
   /** The account (or "From → To" for a person transfer). */
   accountName: string | null;
   categoryName: string | null;
+  /** The row's icon: its category's, or one for transfers, money back and adjustments. */
+  icon: { name: string; color: string };
   amount: { value: DecimalString; currency: string; tone: 'expense' | 'income' | 'neutral' };
   /** Transfers between currencies: what was sent, under what arrived. */
   sent: { value: DecimalString; currency: string } | null;
@@ -54,14 +56,16 @@ export interface ListGroup {
 
 interface Lookups {
   accounts: Map<string, { name: string; currency: string }>;
-  categories: Map<string, { name: string; parentId: string | null }>;
+  categories: Map<string, { name: string; parentId: string | null; icon: string; color: string }>;
   people: Map<string, string>;
 }
 
 function lookups(db: AppDb): Lookups {
   return {
     accounts: new Map(db.select({ id: accounts.id, name: accounts.name, currency: accounts.currency }).from(accounts).all().map((a) => [a.id, a])),
-    categories: new Map(db.select({ id: categories.id, name: categories.name, parentId: categories.parentId }).from(categories).all().map((c) => [c.id, c])),
+    categories: new Map(
+      db.select({ id: categories.id, name: categories.name, parentId: categories.parentId, icon: categories.icon, color: categories.color }).from(categories).all().map((c) => [c.id, c]),
+    ),
     people: new Map(db.select({ id: people.id, name: people.name }).from(people).all().map((p) => [p.id, p.name])),
   };
 }
@@ -73,7 +77,8 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
   const account = t.accountId ? l.accounts.get(t.accountId) : undefined;
   const to = t.toAccountId ? l.accounts.get(t.toAccountId) : undefined;
   const person = t.transferPersonId ? l.people.get(t.transferPersonId) : undefined;
-  const category = t.categoryId ? (l.categories.get(t.categoryId)?.name ?? null) : null;
+  const categoryRow = t.categoryId ? l.categories.get(t.categoryId) : undefined;
+  const category = categoryRow?.name ?? null;
   const tagged = t.referencePersonId ? (l.people.get(t.referencePersonId) ?? null) : null;
 
   let title: string | null;
@@ -87,7 +92,8 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
       amount = { value: t.accountAmount ?? t.amount, currency: account?.currency ?? t.currency, tone: 'income' };
       break;
     case 'expense':
-      title = category ?? firstLine(t.notes);
+      // The boards name an expense by its note ("Netflix", "Client travel expense"), else its category.
+      title = firstLine(t.notes) ?? category;
       if (t.linkType) {
         title = firstLine(t.notes);
         amount = { value: t.accountAmount ?? t.amount, currency: account?.currency ?? t.currency, tone: 'income' };
@@ -123,6 +129,17 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
   if (t.reimbursable) tags.push(t.reimbursementStatus === 'reimbursed' ? 'reimbursed' : 'reimbursable');
   if (t.paidByPersonId) tags.push('paid_by');
 
+  const icon =
+    t.kind === 'transfer'
+      ? { name: 'cycle', color: 'teal' }
+      : t.linkType
+        ? { name: 'check', color: 'teal' }
+        : t.kind === 'opening_balance' || t.kind === 'balance_adjustment'
+          ? { name: 'accounts', color: 'neutral' }
+          : categoryRow
+            ? { name: categoryRow.icon, color: categoryRow.color }
+            : { name: t.kind === 'income' ? 'trend' : 'circle', color: 'neutral' };
+
   return {
     id: t.id,
     date: t.date,
@@ -130,6 +147,7 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
     title,
     accountName,
     categoryName: category,
+    icon,
     amount,
     sent,
     tags,
@@ -139,6 +157,11 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
     echoOf: null,
     linkType: t.linkType,
   };
+}
+
+/** One row's display data, looking names up (for a single transaction). */
+export function toListRowFromDb(db: AppDb, t: TransactionRow): ListRow {
+  return toListRow(t, lookups(db));
 }
 
 /** The currencies a row moves, for the Currency filter. */

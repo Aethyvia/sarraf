@@ -35,4 +35,8 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 | 2026-11-07 | Dark-theme icon backgrounds for the category palette were derived from the dark style guide's colours (the board gives the foreground colours only). | developer | Style guide (dark) |
 | 2026-11-07 | Platform: Android only for v1 | owner | §2 |
 | 2026-11-07 | Tech stack: Expo SDK 57 + Expo Router (TypeScript); local database expo-sqlite + Drizzle ORM with versioned migrations; money arithmetic with decimal.js (ROUND_HALF_EVEN) | owner | §2, §20 |
+| 2026-11-07 | List titles: an expense shows its note's first line, else its category; income shows the tagged person, else its category, else the note; a transfer shows its note, else "From → To". | developer | Home, Transactions boards |
+| 2026-11-07 | Account detail's trend is a step line over 30D / 6M / 1Y, starting no earlier than the account's first transaction; it's hidden while Hide amounts is on. | developer | Account detail board |
+| 2026-11-07 | Reorder currencies: tap a rank number, then pick the new position (no drag in v1). | developer | Reorder currencies board |
+| 2026-11-07 | Soft-deleted rows (kept for the Undo toast) are removed for good, with their files, on the next app open. | developer | §9 bulk delete |
 | | Sarraf Plus price: _open (placeholder $2.99/mo, $24.99/yr)_ | owner | §16 |

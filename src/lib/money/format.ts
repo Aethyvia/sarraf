@@ -30,7 +30,7 @@ export interface FormatOptions {
   /** Shorten amounts of 1 million or more to M / B / T (Settings: compact numbers). */
   compact?: boolean;
   /** 'auto': "−" on negatives only. 'always': "+" on positives too (In/Out, person balances). 'never': no sign. */
-  sign?: 'auto' | 'always' | 'never';
+  sign?: 'auto' | 'always' | 'never' | 'minus';
   /** Prefix the symbol or code. Off for bare numbers such as an amount next to a currency badge. */
   showCurrency?: boolean;
 }
@@ -114,7 +114,7 @@ export function formatAmount(
 
   let signText = '';
   if (sign !== 'never') {
-    if (d.isNegative() && !d.isZero()) signText = MINUS;
+    if (sign === 'minus' || (d.isNegative() && !d.isZero())) signText = MINUS;
     else if (sign === 'always') signText = '+';
   }
 

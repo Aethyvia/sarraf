@@ -5,6 +5,7 @@ import { accountBalance, balanceSeries } from '../balances';
 import { cancelTransaction } from '../review';
 import {
   bulkUpdate,
+  undoBulk,
   deleteTransaction,
   deletionSet,
   fixBalance,
@@ -78,13 +79,18 @@ describe('bulk actions', () => {
     const e2 = w.tx({ accountId: w.pkr, accountAmount: '10', currency: 'PKR' });
     const inc = w.tx({ kind: 'income', accountId: w.usd, accountAmount: '50' });
 
-    expect(bulkUpdate(w.db, [e1, e2, inc], { field: 'category', categoryId: travel })).toBe(2);
-    expect(bulkUpdate(w.db, [inc], { field: 'category', categoryId: salary })).toBe(1);
+    expect(bulkUpdate(w.db, [e1, e2, inc], { field: 'category', categoryId: travel }).changed).toBe(2);
+    expect(bulkUpdate(w.db, [inc], { field: 'category', categoryId: salary }).changed).toBe(1);
     // Change account: only rows already in the target's currency.
-    expect(bulkUpdate(w.db, [e1, e2, inc], { field: 'account', accountId: w.wise })).toBe(2);
+    const moved = bulkUpdate(w.db, [e1, e2, inc], { field: 'account', accountId: w.wise });
+    expect(moved.changed).toBe(2);
     const row = (id: string) => w.db.select().from(transactions).where(eq(transactions.id, id)).get()!;
     expect([row(e1).accountId, row(e2).accountId, row(inc).accountId]).toEqual([w.wise, w.pkr, w.wise]);
     expect([row(e1).categoryId, row(inc).categoryId]).toEqual([travel, salary]);
+
+    // Undo puts back exactly what the change replaced.
+    undoBulk(w.db, moved.undo);
+    expect([row(e1).accountId, row(e2).accountId, row(inc).accountId]).toEqual([w.usd, w.pkr, w.usd]);
   });
 });
 

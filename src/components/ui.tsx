@@ -112,7 +112,8 @@ export function Button({
   disabled,
   style,
 }: {
-  label: string;
+  /** Text, or text with an amount inside (see parts()). */
+  label: ReactNode;
   onPress: () => void;
   kind?: ButtonKind;
   disabled?: boolean;

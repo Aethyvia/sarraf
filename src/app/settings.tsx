@@ -48,6 +48,11 @@ export default function SettingsScreen() {
 
       <SectionLabel style={styles.section}>{s.security}</SectionLabel>
       <ToggleRow title={s.hideAmounts} detail={s.hideAmountsDetail} value={current.hideAmounts} onChange={(v) => save({ hideAmounts: v })} />
+      {__DEV__ ? (
+        <View>
+          <Row icon="code" title="Developer preview" onPress={() => go('/dev')} last />
+        </View>
+      ) : null}
 
       <CurrencySheet
         visible={sheet === 'currency'}

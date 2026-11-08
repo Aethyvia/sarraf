@@ -72,7 +72,7 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     expect(groups[0].date).toBe('2026-09-29');
     const echo = groups[0].rows.find((r) => r.echoOf);
     expect(echo).toMatchObject({ title: 'Reimbursed by client', amount: { value: '120', tone: 'income' }, echoOf: { date: '2026-09-26' } });
-    const travel = groups.find((g) => g.date === '2026-09-26')!.rows.find((r) => r.title === 'Travel' && r.children.length)!;
+    const travel = groups.find((g) => g.date === '2026-09-26')!.rows.find((r) => r.title === 'Client travel expense' && r.children.length)!;
     expect(travel.tags).toContain('reimbursed');
     expect(travel.children.map((c) => c.title)).toEqual(['Reimbursed by client']);
     const transfer = groups.find((g) => g.date === '2026-09-26')!.rows.find((r) => r.sent);
@@ -96,7 +96,7 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     const db = await sample();
     const recent = recentTransactions(db, 6, SAMPLE_TODAY);
     expect(recent).toHaveLength(6);
-    expect(recent[0]).toMatchObject({ date: '2026-09-29', title: 'Software & Subscriptions', tags: ['auto_review'] });
+    expect(recent[0]).toMatchObject({ date: '2026-09-29', title: 'Netflix', tags: ['auto_review'] });
     expect(recent.every((r) => !r.echoOf && r.kind !== 'opening_balance')).toBe(true);
   });
 });

@@ -69,29 +69,34 @@ export type BulkChange =
   | { field: 'account'; accountId: string }
   | { field: 'tag'; personId: string | null };
 
+type BulkField = 'categoryId' | 'ledgerId' | 'accountId' | 'referencePersonId';
+/** What a bulk change replaced, so Undo can put it back. */
+export type BulkUndo = { id: string; field: BulkField; value: string | null }[];
+
 /**
  * Bulk actions on selected transactions (Spec §9). Each change applies only
  * where it fits — a category to rows of its kind, an account to rows already
- * in that account's currency — and returns how many rows changed.
+ * in that account's currency. Returns how many rows changed and what to undo.
  */
-export function bulkUpdate(db: AppDb, ids: string[], change: BulkChange): number {
+export function bulkUpdate(db: AppDb, ids: string[], change: BulkChange): { changed: number; undo: BulkUndo } {
   return db.transaction((tx) => {
     const rows = tx.select().from(transactions).where(and(inArray(transactions.id, ids), isNull(transactions.deletedAt))).all();
     const stamp = { updatedAt: nowIso() };
-    let changed = 0;
-    const set = (id: string, values: Partial<typeof transactions.$inferInsert>) => {
-      tx.update(transactions).set({ ...values, ...stamp }).where(eq(transactions.id, id)).run();
-      changed += 1;
+    const undo: BulkUndo = [];
+    const set = (t: (typeof rows)[number], field: BulkField, value: string | null) => {
+      if (t[field] === value) return;
+      undo.push({ id: t.id, field, value: t[field] });
+      tx.update(transactions).set({ [field]: value, ...stamp }).where(eq(transactions.id, t.id)).run();
     };
     switch (change.field) {
       case 'category': {
         const cat = tx.select().from(categories).where(eq(categories.id, change.categoryId)).get();
         if (!cat) throw new DataError('not_found', 'No category');
-        for (const t of rows) if (t.kind === cat.kind && !t.linkType) set(t.id, { categoryId: cat.id });
+        for (const t of rows) if (t.kind === cat.kind && !t.linkType) set(t, 'categoryId', cat.id);
         break;
       }
       case 'ledger':
-        for (const t of rows) if (t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer') set(t.id, { ledgerId: change.ledgerId });
+        for (const t of rows) if (t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer') set(t, 'ledgerId', change.ledgerId);
         break;
       case 'account': {
         // Bulk "change account" lists only accounts in the same currency (Decided Nov 7).
@@ -100,15 +105,22 @@ export function bulkUpdate(db: AppDb, ids: string[], change: BulkChange): number
         const currencyOf = new Map(tx.select({ id: accounts.id, c: accounts.currency }).from(accounts).all().map((a) => [a.id, a.c]));
         for (const t of rows) {
           if (!t.accountId || currencyOf.get(t.accountId) !== target.currency || t.toAccountId === target.id) continue;
-          set(t.id, { accountId: target.id });
+          set(t, 'accountId', target.id);
         }
         break;
       }
       case 'tag':
-        for (const t of rows) if (t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer') set(t.id, { referencePersonId: change.personId });
+        for (const t of rows) if (t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer') set(t, 'referencePersonId', change.personId);
         break;
     }
-    return changed;
+    return { changed: undo.length, undo };
+  });
+}
+
+/** Undo for a bulk change: puts back what it replaced. */
+export function undoBulk(db: AppDb, undo: BulkUndo): void {
+  db.transaction((tx) => {
+    for (const u of undo) tx.update(transactions).set({ [u.field]: u.value, updatedAt: nowIso() }).where(eq(transactions.id, u.id)).run();
   });
 }
 
