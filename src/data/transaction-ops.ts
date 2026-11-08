@@ -7,6 +7,7 @@ import { newId } from '@/lib/id';
 import { dec, isDecimalString, toDecimalString, type DecimalString } from '@/lib/money';
 import { accountBalance } from './balances';
 import { DataError } from './errors';
+import { parentsOf, syncReimbursementStatus } from './money-back';
 import { hardDeleteTransactions, withLinkedChildren } from './transaction-sets';
 import type { TransactionRow } from './transactions';
 
@@ -21,7 +22,14 @@ export function deletionSet(db: AppDb, id: string): TransactionRow[] {
  * entries go together, permanently, after the sheet lists them.
  */
 export function deleteTransaction(db: AppDb, id: string): { attachmentPaths: string[] } {
-  return db.transaction((tx) => hardDeleteTransactions(tx, withLinkedChildren(tx, [id])));
+  return db.transaction((tx) => {
+    const ids = withLinkedChildren(tx, [id]);
+    // Deleting a Got it puts its original back to Awaiting / Partly back.
+    const parents = parentsOf(tx, ids).filter((p) => !ids.includes(p));
+    const result = hardDeleteTransactions(tx, ids);
+    syncReimbursementStatus(tx, parents);
+    return result;
+  });
 }
 
 /**
@@ -32,12 +40,16 @@ export function softDeleteTransactions(db: AppDb, ids: string[]): string[] {
   return db.transaction((tx) => {
     const all = withLinkedChildren(tx, ids);
     tx.update(transactions).set({ deletedAt: nowIso(), updatedAt: nowIso() }).where(inArray(transactions.id, all)).run();
+    syncReimbursementStatus(tx, parentsOf(tx, all).filter((p) => !all.includes(p)));
     return all;
   });
 }
 
 export function restoreTransactions(db: AppDb, ids: string[]): void {
-  db.update(transactions).set({ deletedAt: null, updatedAt: nowIso() }).where(inArray(transactions.id, ids)).run();
+  db.transaction((tx) => {
+    tx.update(transactions).set({ deletedAt: null, updatedAt: nowIso() }).where(inArray(transactions.id, ids)).run();
+    syncReimbursementStatus(tx, parentsOf(tx, ids));
+  });
 }
 
 /** Soft-deleted rows are purged later (on app open), once Undo can no longer bring them back. */

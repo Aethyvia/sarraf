@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { accounts, categories, people, personEntries, transactionCharges, transactions } from '@/db/schema';
+import { accounts, categories, people, personEntries, splitShares, transactionCharges, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { nowIso, today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
@@ -8,6 +8,7 @@ import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalStri
 import { computeAmounts, type AmountResult, type RateMode } from './amounts';
 import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
+import { checkSplit, splitOf, type SplitDraft } from './splits';
 
 export type TransactionRow = typeof transactions.$inferSelect;
 export type TransactionStatus = TransactionRow['status'];
@@ -82,6 +83,8 @@ export interface TransactionDraft {
   recurringId?: string | null;
   recurringDueDate?: string | null;
   autoAdded?: boolean;
+  /** Expense only: split with people (Spec §9c). With fromPersonId set, someone else paid. */
+  split?: SplitDraft | null;
 }
 
 export const NOTES_MAX = 2000;
@@ -203,6 +206,11 @@ export function saveTransaction(
   return db.transaction((tx) => {
     const existing = options.id ? requireRow(tx.select().from(transactions).where(eq(transactions.id, options.id)).get(), 'transaction') : null;
     const a = prepareTransaction(tx, draft);
+    const split = draft.kind === 'expense' && draft.split ? draft.split : null;
+    // Shares are in the currency actually charged: your account's when you paid, the bill's when someone else paid.
+    const splitTotal = draft.fromPersonId ? toDecimalString(dec(draft.amount)) : a.accountAmount;
+    if (split) checkSplit(split, splitTotal, draft.fromPersonId ?? null);
+    const yourShare = split ? split.shares.find((sh) => sh.personId === null)!.amount : null;
     const isPersonTransfer = draft.kind === 'transfer' && (draft.fromPersonId || draft.toPersonId);
 
     const row: typeof transactions.$inferInsert = {
@@ -216,7 +224,8 @@ export function saveTransaction(
       categoryId: draft.kind === 'transfer' ? null : (draft.categoryId ?? null),
       referencePersonId: draft.referencePersonId ?? null,
       accountId: draft.accountId ?? null,
-      amount: toDecimalString(dec(draft.amount)),
+      // Someone else paid a split: the expense is your share only (Decided).
+      amount: split && draft.fromPersonId ? toDecimalString(dec(yourShare!)) : toDecimalString(dec(draft.amount)),
       currency: a.currency,
       rate: a.rate,
       rateMode: a.converts ? (draft.rateMode ?? 'rate_known') : null,
@@ -242,8 +251,10 @@ export function saveTransaction(
       tx.update(transactions).set(row).where(eq(transactions.id, id)).run();
       tx.delete(transactionCharges).where(eq(transactionCharges.transactionId, id)).run();
       tx.delete(personEntries)
-        .where(and(eq(personEntries.transactionId, id), inArray(personEntries.source, ['transfer', 'paid_by_person'])))
+        .where(and(eq(personEntries.transactionId, id), inArray(personEntries.source, ['transfer', 'paid_by_person', 'split'])))
         .run();
+      // Editing a split rewrites its shares; repayments stay as their own transfers (Decided Nov 7).
+      tx.delete(splitShares).where(eq(splitShares.transactionId, id)).run();
     } else {
       tx.insert(transactions).values(row).run();
     }
@@ -267,15 +278,43 @@ export function saveTransaction(
         .run();
     }
 
-    // What a person owes changes only through a transfer with them or an expense they paid.
-    const entry = (personId: string, amount: DecimalString, source: 'transfer' | 'paid_by_person') =>
+    // What a person owes changes only through a transfer with them, a split, or an expense they paid.
+    const entry = (personId: string, amount: DecimalString, source: 'transfer' | 'paid_by_person' | 'split', currency = a.currency) =>
       tx.insert(personEntries)
-        .values({ id: newId(), personId, transactionId: id, source, currency: a.currency, amount, date: draft.date })
+        .values({ id: newId(), personId, transactionId: id, source, currency, amount, date: draft.date })
         .run();
     const amount = toDecimalString(dec(draft.amount));
+    const negate = (v: DecimalString) => toDecimalString(dec(v).negated());
     if (draft.kind === 'transfer' && draft.toPersonId) entry(draft.toPersonId, amount, 'transfer');
-    if (draft.kind === 'transfer' && draft.fromPersonId) entry(draft.fromPersonId, toDecimalString(dec(amount).negated()), 'transfer');
-    if (draft.kind === 'expense' && draft.fromPersonId) entry(draft.fromPersonId, toDecimalString(dec(amount).negated()), 'paid_by_person');
+    if (draft.kind === 'transfer' && draft.fromPersonId) entry(draft.fromPersonId, negate(amount), 'transfer');
+
+    if (split) {
+      const splitCurrency = draft.accountId ? accountCurrency(tx, draft.accountId) : a.currency;
+      for (const sh of split.shares) {
+        tx.insert(splitShares)
+          .values({
+            id: newId(),
+            transactionId: id,
+            personId: sh.personId,
+            shareAmount: toDecimalString(dec(sh.amount)),
+            sharePercent: split.mode === 'percent' ? (sh.percent ?? null) : null,
+            splitMode: split.mode,
+            isTreat: sh.personId !== null && !!sh.treat,
+          })
+          .run();
+      }
+      if (draft.fromPersonId) {
+        // Someone else paid: only your share becomes a debt, to the payer.
+        if (dec(yourShare!).gt(0)) entry(draft.fromPersonId, negate(yourShare!), 'split', splitCurrency);
+      } else {
+        // You paid: everyone else's untreated share is added to what they owe you.
+        for (const sh of split.shares) {
+          if (sh.personId && !sh.treat && dec(sh.amount).gt(0)) entry(sh.personId, toDecimalString(dec(sh.amount)), 'split', splitCurrency);
+        }
+      }
+    } else if (draft.kind === 'expense' && draft.fromPersonId) {
+      entry(draft.fromPersonId, negate(amount), 'paid_by_person');
+    }
 
     const { removedPaths } = applyAttachmentChanges(tx, { transactionId: id }, options.attachments);
     return { id, removedAttachmentPaths: removedPaths };
@@ -289,6 +328,9 @@ export function draftFromTransaction(db: AppDb, id: string): TransactionDraft {
   const charges = db.select().from(transactionCharges).where(eq(transactionCharges.transactionId, id)).all();
   const toPerson = t.kind === 'transfer' && t.transferPersonId && t.accountId ? t.transferPersonId : null;
   const fromPerson = t.paidByPersonId ?? (t.kind === 'transfer' && t.transferPersonId && !t.accountId ? t.transferPersonId : null);
+  const split = t.kind === 'expense' ? splitOf(db, id) : null;
+  // Someone else paid a split: the stored amount is your share; the form edits the whole bill.
+  const amount = split && t.paidByPersonId ? toDecimalString(split.shares.reduce((sum, sh) => sum.plus(dec(sh.amount)), dec('0'))) : t.amount;
   return {
     kind: t.kind,
     date: t.date,
@@ -301,7 +343,7 @@ export function draftFromTransaction(db: AppDb, id: string): TransactionDraft {
     fromPersonId: fromPerson,
     toAccountId: t.toAccountId,
     toPersonId: toPerson,
-    amount: t.amount,
+    amount,
     currency: t.currency,
     rateMode: t.rateMode ?? 'rate_known',
     rate: t.rateMode === 'amount_known' ? null : t.rate,
@@ -323,5 +365,6 @@ export function draftFromTransaction(db: AppDb, id: string): TransactionDraft {
     recurringId: t.recurringId,
     recurringDueDate: t.recurringDueDate,
     autoAdded: t.autoAdded,
+    split,
   };
 }

@@ -39,4 +39,8 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 | 2026-11-07 | Account detail's trend is a step line over 30D / 6M / 1Y, starting no earlier than the account's first transaction; it's hidden while Hide amounts is on. | developer | Account detail board |
 | 2026-11-07 | Reorder currencies: tap a rank number, then pick the new position (no drag in v1). | developer | Reorder currencies board |
 | 2026-11-07 | Soft-deleted rows (kept for the Undo toast) are removed for good, with their files, on the next app open. | developer | §9 bulk delete |
+| 2026-11-08 | Equal splits round each share down to the currency's minor units; leftover cents go one each to the first rows (you first). Percent splits round each share; the last row takes the difference so the total is exact. | developer | §9c |
+| 2026-11-08 | "The original expense's currency" for money back is the currency its account was charged in (the bill's currency when someone else paid). Reimbursement status compares the sum of linked counts-as amounts with that charged amount. | developer | §15 money back; Schema transaction_links |
+| 2026-11-08 | Mark as settled can't exceed the current balance in that currency; it's dated today. A settlement can be removed from the person's history. | developer | §9e |
+| 2026-11-08 | Money back (Got it, Add refund) is dated today or earlier, never in the future. | developer | §15a refunds |
 | | Sarraf Plus price: _open (placeholder $2.99/mo, $24.99/yr)_ | owner | §16 |

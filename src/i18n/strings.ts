@@ -54,6 +54,8 @@ export const strings = {
     system_category: 'Fees & charges can be renamed, but not removed.',
     not_found: 'That was already deleted.',
     limit_reached: 'You’ve reached the Free limit.',
+    invalid_split: 'The shares need to add up to the total.',
+    nothing_owed: 'There’s nothing to settle in that currency.',
     unknown: 'Something went wrong. Nothing was changed.',
   },
   settings: {

@@ -15,7 +15,9 @@ export type DataErrorCode =
   | 'category_kind_mismatch'
   | 'category_kind_locked'
   | 'has_subcategories'
-  | 'system_category';
+  | 'system_category'
+  | 'invalid_split'
+  | 'nothing_owed';
 
 export class DataError extends Error {
   constructor(

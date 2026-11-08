@@ -5,6 +5,7 @@ import { buildSampleData, SAMPLE_TODAY } from '../sample';
 import { accounts, categories, people, personEntries } from '../schema';
 import { accountBalances } from '@/data/balances';
 import { currencyTiles, estimatedTotal } from '@/data/home';
+import { expectedBack, personBalances } from '@/data/owing';
 import { needsReview } from '@/data/review';
 import { listTransactions, recentTransactions } from '@/data/transaction-list';
 import { createTestDb } from '@/test/db';
@@ -58,6 +59,9 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     const entries = db.select().from(personEntries).where(eq(personEntries.personId, john.id)).all();
     const by = (c: string) => add(...entries.filter((e) => e.currency === c).map((e) => e.amount));
     expect([by('USD'), by('EUR'), by('PKR')]).toEqual(['250', '40', '-8450']);
+    // The person page's balance agrees, and the printer cartridge shows as Expected back.
+    expect(Object.fromEntries(personBalances(db, john.id, SAMPLE_TODAY))).toEqual({ USD: '250', EUR: '40', PKR: '-8450' });
+    expect(Object.fromEntries(expectedBack(db, john.id))).toEqual({ USD: '24' });
   });
 
   it('has 3 things to confirm, 2 upcoming and 1 waiting for money back', async () => {
