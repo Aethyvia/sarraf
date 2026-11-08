@@ -3,6 +3,7 @@
 export type IconElement = ['path' | 'circle' | 'rect', Record<string, string>];
 
 export const ICON_SHAPES = {
+  "backspace":[["path",{"d":"M21 6H8l-5 6 5 6h13z"}],["path",{"d":"M12 10l4 4M16 10l-4 4"}]],
   "bank":[["path",{"d":"M4 20h16M6 20V10l6-4 6 4v10"}]],
   "basket":[["path",{"d":"M3 3h18v4H3zM5 7v13a1 1 0 001 1h12a1 1 0 001-1V7M10 11h4"}]],
   "briefcase":[["rect",{"x":"2","y":"7","width":"20","height":"13","rx":"2"}],["path",{"d":"M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"}]],

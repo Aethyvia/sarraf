@@ -623,6 +623,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           onDate={() => pickDate(form.date, (d) => set({ date: d }))}
           converted={convertedLine}
           focused={form.target === 'amount' && converts && form.rateMode === 'amount_known'}
+          onBackspace={() => {
+            if (form.target === 'known' && !(converts && form.rateMode === 'amount_known')) set({ target: 'amount' });
+            onKey('back');
+          }}
+          onClear={() => onKey('clear')}
         />
         <View style={styles.utilRow}>
           <UtilityButton icon="notes" label={s.notes} dot={!!form.notes.trim()} onPress={() => setSheet('notes')} />

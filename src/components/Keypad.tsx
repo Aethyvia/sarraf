@@ -52,8 +52,8 @@ export function Keypad({ onKey }: { onKey: (key: CalcKey) => void }) {
 export function BackspaceButton({ onPress, onLongPress }: { onPress: () => void; onLongPress: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="Delete" style={styles.back}>
-      <Icon name="back" size={18} color={colors.inkMuted} strokeWidth={2.2} />
+    <Pressable onPress={onPress} onLongPress={onLongPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="Delete" accessibilityHint="Hold to clear" style={styles.back}>
+      <Icon name="backspace" size={22} color={colors.inkSecondary} strokeWidth={1.8} />
     </Pressable>
   );
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
+import { BackspaceButton } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { Segmented } from '@/components/ui';
@@ -94,6 +95,8 @@ export function AmountCard({
   onDate,
   converted,
   focused,
+  onBackspace,
+  onClear,
 }: {
   expression: string;
   showExpression: boolean;
@@ -105,6 +108,9 @@ export function AmountCard({
   onDate: () => void;
   converted?: ReactNode;
   focused: boolean;
+  /** Deletes the last typed character; holding it clears the amount. */
+  onBackspace?: () => void;
+  onClear?: () => void;
 }) {
   const { colors } = useTheme();
   const digits = value.replace(/[^0-9]/g, '').length;
@@ -124,6 +130,7 @@ export function AmountCard({
         <Text style={[styles.amount, { fontSize: size, color: value ? colors.ink : colors.inkMuted }]} numberOfLines={2} adjustsFontSizeToFit>
           {value || '0'}
         </Text>
+        {onBackspace && value ? <BackspaceButton onPress={onBackspace} onLongPress={onClear ?? onBackspace} /> : null}
       </View>
       <View style={[styles.cardFoot, converted ? { borderTopWidth: 1, borderTopColor: colors.filled, paddingTop: 8 } : null]}>
         <Pressable onPress={onDate} hitSlop={8} accessibilityRole="button">

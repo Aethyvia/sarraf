@@ -50,7 +50,7 @@ export function PinPad({ onDigit, onDelete, onBiometric, disabled }: { onDigit: 
         )}
         {key('0')}
         <Pressable onPress={onDelete} disabled={disabled} accessibilityRole="button" accessibilityLabel={strings.lock.delete} style={styles.key}>
-          <Icon name="back" size={24} color={colors.ink} strokeWidth={1.8} />
+          <Icon name="backspace" size={24} color={colors.ink} strokeWidth={1.8} />
         </Pressable>
       </View>
     </View>
