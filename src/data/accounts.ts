@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, max, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, max, or } from 'drizzle-orm';
 
 import {
   accounts,
@@ -220,5 +220,15 @@ export function deleteAccount(db: AppDb, id: string): { attachmentPaths: string[
       .run();
     tx.delete(accounts).where(eq(accounts.id, id)).run();
     return result;
+  });
+}
+
+/** Custom order: moves an account to a 0-based position among the active ones; the rest keep their order. */
+export function moveAccount(db: AppDb, accountId: string, position: number): void {
+  const active = db.select({ id: accounts.id }).from(accounts).where(isNull(accounts.archivedAt)).orderBy(accounts.rank).all().map((a) => a.id);
+  const rest = active.filter((id) => id !== accountId);
+  const next = [...rest.slice(0, position), accountId, ...rest.slice(position)];
+  db.transaction((tx) => {
+    next.forEach((id, rank) => tx.update(accounts).set({ rank }).where(eq(accounts.id, id)).run());
   });
 }

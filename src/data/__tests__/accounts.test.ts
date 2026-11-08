@@ -15,6 +15,7 @@ import {
   archiveAccount,
   createAccount,
   deleteAccount,
+  moveAccount,
   setAsideByGoal,
   unarchiveAccount,
   updateAccount,
@@ -217,5 +218,21 @@ describe('deleting an account in use', () => {
     expect(accountDeletionImpact(db, id)).toMatchObject({ count: 0, firstDate: null, otherAccounts: [] });
     deleteAccount(db, id);
     expect(db.select().from(accounts).all()).toHaveLength(0);
+  });
+});
+
+describe('custom order', () => {
+  it('moves an account to a position; the others keep their order', async () => {
+    const { db, account } = await setup();
+    const a = account('A', 'USD');
+    const b = account('B', 'USD');
+    const c = account('C', 'PKR');
+    moveAccount(db, c, 0);
+    const order = () => db.select().from(accounts).orderBy(accounts.rank).all().map((x) => x.name);
+    expect(order()).toEqual(['C', 'A', 'B']);
+    moveAccount(db, c, 2);
+    expect(order()).toEqual(['A', 'B', 'C']);
+    void a;
+    void b;
   });
 });

@@ -169,7 +169,9 @@ export const strings = {
     balanceDesc: 'Balance (highest first)',
     balanceAsc: 'Balance (lowest first)',
     custom: 'Custom order',
-    customDetail: 'Drag to arrange',
+    customDetail: 'Your own order · Rearrange…',
+    rearrange: 'Rearrange accounts',
+    rearrangeHint: 'Tap a number to move an account straight to that position. Pickers and lists follow this order.',
     done: 'Done',
   },
   currencyPicker: {

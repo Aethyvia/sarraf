@@ -122,6 +122,7 @@ export default function AccountsScreen() {
             onPress={() => {
               setSort(key);
               setSorting(false);
+              if (key === 'custom') router.push('/accounts/reorder');
             }}
           />
         ))}
