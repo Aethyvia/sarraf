@@ -22,6 +22,7 @@ import { seedSampleData } from '@/db/seed';
 import { purgeSoftDeleted } from '@/data/transaction-ops';
 import { backfillRecurring } from '@/data/recurring';
 import type { TransactionRow } from '@/data/transactions';
+import { LockGate } from '@/components/lock/LockGate';
 import { AwaySheet } from '@/components/sheets/AwaySheet';
 import { accounts } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -117,6 +118,7 @@ function ThemedStack({ added }: { added: TransactionRow[] }) {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
       <AwaySheet added={added} accountName={accountName} />
+      <LockGate />
     </>
   );
 }

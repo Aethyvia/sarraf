@@ -43,6 +43,12 @@ export interface Cloud {
   uploadAttachment(name: string, file: Uint8Array): Promise<void>;
   downloadAttachment(name: string): Promise<Uint8Array | null>;
   deleteAttachment(name: string): Promise<void>;
+  /** The Sarraf Plus subscription on record (Supabase), or null for Free. */
+  getSubscription(user: CloudUser): Promise<{ plan: 'plus'; renewsAt: string | null } | null>;
+  /** Delete Sarraf account: the backup file and attachments in Drive. */
+  deleteBackup(): Promise<void>;
+  /** Delete Sarraf account: the sign-in, backup record and subscription row. */
+  deleteAccount(user: CloudUser): Promise<void>;
 }
 
 /** No internet: "Signing in needs internet, just this once." */

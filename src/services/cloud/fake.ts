@@ -5,11 +5,17 @@ import { BadCodeError, DriveRefusedError, OfflineError } from './types';
 export interface FakeStore {
   read(name: string): Uint8Array | null;
   write(name: string, data: Uint8Array): void;
+  delete?(name: string): void;
 }
 
 export function memoryStore(): FakeStore {
   const files = new Map<string, Uint8Array>();
-  return { read: (n) => files.get(n) ?? null, write: (n, d) => void files.set(n, d) };
+  return { read: (n) => files.get(n) ?? null, write: (n, d) => void files.set(n, d), delete: (n) => void files.delete(n) };
+}
+
+/** Dev stand-in for the Play Store: buying Plus records a subscription in the fake "cloud". */
+export function grantFakePlus(store: FakeStore, renewsAt: string): void {
+  store.write('subscription.json', enc.encode(JSON.stringify({ plan: 'plus', renewsAt })));
 }
 
 export interface FakeKnobs {
@@ -102,6 +108,24 @@ export function fakeCloud(store: FakeStore, knobs: FakeKnobs = { offline: false,
     async downloadAttachment(name) {
       online();
       return store.read(`${driveFile()}.att.${name}`);
+    },
+    async getSubscription() {
+      online();
+      const raw = store.read('subscription.json');
+      return raw ? (JSON.parse(dec.decode(raw)) as { plan: 'plus'; renewsAt: string | null }) : null;
+    },
+    async deleteBackup() {
+      online();
+      const raw = store.read(`${driveFile()}.attachments`);
+      for (const n of raw ? (JSON.parse(dec.decode(raw)) as string[]) : []) store.write(`${driveFile()}.att.${n}`, new Uint8Array());
+      store.write(`${driveFile()}.attachments`, enc.encode('[]'));
+      store.delete?.(driveFile());
+      store.delete?.(`${driveFile()}.meta`);
+    },
+    async deleteAccount() {
+      online();
+      store.delete?.('record.json');
+      store.delete?.('subscription.json');
     },
     async deleteAttachment(name) {
       online();

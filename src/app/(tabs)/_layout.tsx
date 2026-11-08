@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons/Icon';
 import { Button } from '@/components/ui';
 import { strings } from '@/i18n/strings';
+import { isSignedOut } from '@/data/sarraf-account';
+import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { useSetToastInset } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
@@ -24,7 +26,8 @@ const WITH_ADD_BAR = new Set(['index', 'transactions']);
 export default function TabsLayout() {
   // First run comes before anything else (sign in, then restore or setup).
   const { onboardingCompletedAt } = useSettings();
-  if (!onboardingCompletedAt) return <Redirect href="/start" />;
+  const signedOut = useLive((db) => isSignedOut(db), []);
+  if (!onboardingCompletedAt || signedOut) return <Redirect href="/start" />;
   return (
     <Tabs
       screenOptions={{ headerShown: false }}

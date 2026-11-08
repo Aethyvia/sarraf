@@ -2,10 +2,11 @@ import * as Network from 'expo-network';
 import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 
-import { automaticBackupDue, backupNow, noteBackupFailed } from '@/data/backup-flow';
+import { automaticBackupDue, backupNow, currentUser, noteBackupFailed } from '@/data/backup-flow';
+import { refreshPlan } from '@/data/plan';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
-import { backupDeps } from './cloud';
+import { backupDeps, cloud } from './cloud';
 import { notificationsAllowed } from './notifications';
 import { eq } from 'drizzle-orm';
 import { settings } from '@/db/schema';
@@ -44,6 +45,9 @@ async function tellMoved(device: string): Promise<void> {
 /** Checks on app open and every time Sarraf comes back to the foreground. */
 export function startAutomaticBackup(): () => void {
   void runAutomaticBackup();
+  // The cached plan is refreshed on open (offline keeps the cache, with its 7-day grace).
+  const user = currentUser(db);
+  if (user && cloud.ready) void refreshPlan(db, cloud, user, new Date()).catch(() => {});
   const sub = AppState.addEventListener('change', (s) => {
     if (s === 'active') void runAutomaticBackup();
   });

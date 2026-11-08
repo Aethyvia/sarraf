@@ -130,3 +130,13 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Delete Sarraf account: removes every stored attachment file on this phone. */
+export function deleteAllStoredFiles(): void {
+  try {
+    const dir = new Directory(Paths.document, FOLDER);
+    if (dir.exists) dir.delete();
+  } catch {
+    // Nothing more to do; the rows are gone with the rest of the data.
+  }
+}

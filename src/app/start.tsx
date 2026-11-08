@@ -10,7 +10,7 @@ import { parts } from '@/components/parts';
 import { SignInSheet } from '@/components/start/SignInSheet';
 import { AccountsStep, CurrencyStep } from '@/components/start/SetupSteps';
 import { Note, Spinner, StartPage } from '@/components/start/StartPage';
-import { BottomSheet, Button, Card, Field, LinkButton } from '@/components/ui';
+import { BottomSheet, Button, Card, Field, LinkButton, ToggleRow } from '@/components/ui';
 import { WrongSecretError, isRecoveryKeyShape, normalizeRecoveryKey } from '@/lib/backup-crypto';
 import { applyRestore, backupNow, currentUser, getDeviceState, lookInDrive, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
 import { openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
@@ -22,6 +22,10 @@ import { formatShortDate } from '@/lib/format-date';
 import { isCurrencyCode } from '@/lib/money';
 import { backupDeps, cloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
+import { store } from '@/services/store';
+import { refreshPlan } from '@/data/plan';
+import { clearSignedOut, isSignedOut } from '@/data/sarraf-account';
+import { settings } from '@/db/schema';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
@@ -55,6 +59,7 @@ type Step =
   | { k: 'backup' }
   | { k: 'key' }
   | { k: 'check' }
+  | { k: 'pin' }
   | { k: 'done' };
 
 function regionCurrency(): string {
@@ -109,6 +114,7 @@ export default function StartScreen() {
   const [checkError, setCheckError] = useState(false);
   const [driveEmail, setDriveEmail] = useState<string | null>(() => getDeviceState(db).driveEmail);
   const [accountCount, setAccountCount] = useState(0);
+  const [offerBio, setOfferBio] = useState(true);
 
   // Android back walks back through the steps; nothing to go back to past Welcome.
   useEffect(() => {
@@ -141,6 +147,13 @@ export default function StartScreen() {
     rememberSignIn(db, u);
     setUser(u);
     setSheet(null);
+    void refreshPlan(db, cloud, u, new Date()).catch(() => {});
+    // Signing back in on a phone that still has its data: carry on, no restore or setup.
+    if (isSignedOut(db) && db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o) {
+      clearSignedOut(db);
+      router.replace('/');
+      return;
+    }
     const record = await cloud.getRecord(u);
     if (record) go({ k: 'found', found: { driveEmail: record.driveEmail, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } });
     else go({ k: 'used' });
@@ -229,7 +242,7 @@ export default function StartScreen() {
     );
   };
 
-  const complete = (withBackup: boolean) =>
+  const complete = (withBackup: boolean, thenPin = false) =>
     online(async () => {
       if (withBackup && keysReady.current) await keysReady.current;
       const picked = items.filter((a) => a.ticked);
@@ -242,6 +255,7 @@ export default function StartScreen() {
       if (withBackup) {
         backupNow(backupDeps()).catch(() => toast({ message: s.failed }));
       }
+      if (thenPin) router.push({ pathname: '/lock/set', params: offerBio ? { biometrics: '1' } : {} });
     });
 
   const methodName = s.methods[user?.method ?? 'dev'];
@@ -591,8 +605,16 @@ export default function StartScreen() {
           body={s.overBody(FREE_LIMITS.accounts)}
           footer={
             <>
-              <Button label={s.upgrade} onPress={() => toast({ message: strings.limit.plusSoon })} />
-              <Button label={s.restorePurchase} kind="secondary" onPress={() => toast({ message: strings.limit.plusSoon })} />
+              <Button label={s.upgrade} onPress={() => (replace({ k: 'restored', header: step.header }), router.push('/plans'))} />
+              <Button
+                label={s.restorePurchase}
+                kind="secondary"
+                onPress={async () => {
+                  const plus = await store.restore();
+                  toast({ message: plus ? strings.plans.restored : strings.plans.nothingToRestore });
+                  if (plus) replace({ k: 'restored', header: step.header });
+                }}
+              />
               <LinkButton label={s.continueFree} onPress={() => replace({ k: 'restored', header: step.header })} />
             </>
           }
@@ -621,10 +643,15 @@ export default function StartScreen() {
           icon="check"
           title={s.restoredTitle}
           body={s.restoredBody(s.restoredCounts(c.accounts, c.ledgers, c.transactions), formatShortDate(step.header.createdAt.slice(0, 10)))}
-          footer={<Button label={s.goHome} onPress={() => router.replace('/')} />}
+          footer={
+            <>
+              <Button label={s.setPin} onPress={() => (router.replace('/'), router.push('/lock/set'))} />
+              <Button label={s.goHome} kind="secondary" onPress={() => router.replace('/')} />
+            </>
+          }
         >
           <Note tone="teal" icon="lock">
-            {`${s.pinNudge} ${s.pinLater}`}
+            {s.pinNudge}
           </Note>
         </StartPage>
       );
@@ -722,7 +749,7 @@ export default function StartScreen() {
                 onPress={() => {
                   const ok = check.every((c, i) => normalizeRecoveryKey(c) === groups[checkGroups[i] - 1]);
                   if (!ok) return setCheckError(true);
-                  void complete(true);
+                  go({ k: 'pin' });
                 }}
               />
             </>
@@ -744,6 +771,26 @@ export default function StartScreen() {
             ))}
           </View>
           {checkError ? <Note tone="red">{s.checkWrong}</Note> : null}
+        </StartPage>
+      );
+
+    case 'pin':
+      return (
+        <StartPage
+          icon="lock"
+          title={strings.lock.offerTitle}
+          body={strings.lock.offerBody}
+          footer={
+            <>
+              <Button label={busy ? s.working : strings.lock.setPin} disabled={busy} onPress={() => void complete(true, true)} />
+              <LinkButton label={strings.lock.notNow} onPress={() => void complete(true)} />
+            </>
+          }
+        >
+          <Note tone="teal" icon="tick">
+            {strings.lock.offerNote}
+          </Note>
+          <ToggleRow title={strings.lock.offerBiometrics} value={offerBio} onChange={setOfferBio} />
         </StartPage>
       );
 

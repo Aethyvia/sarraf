@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet, Button, LinkButton } from '@/components/ui';
@@ -46,8 +47,13 @@ export function LimitSheet({
             </View>
           ))}
         </View>
-        <Button label={s.seePlus} disabled onPress={() => {}} />
-        <Text style={[styles.footer, { color: colors.inkMuted, marginTop: -6 }]}>{s.plusSoon}</Text>
+        <Button
+          label={s.seePlus}
+          onPress={() => {
+            onClose();
+            router.push('/plans');
+          }}
+        />
         {onArchive ? <Button kind="secondary" label={s.archive[kind]} onPress={onArchive} /> : null}
         <LinkButton label={s.keep(used[kind])} onPress={onClose} />
         <Text style={[styles.footer, { color: colors.inkMuted }]}>{s.footer}</Text>

@@ -21,6 +21,10 @@ function fileStore(): FakeStore {
       if (!f.exists) f.create();
       f.write(data);
     },
+    delete: (name) => {
+      const f = new File(dir, name);
+      if (f.exists) f.delete();
+    },
   };
 }
 
@@ -29,7 +33,8 @@ const notReady: Cloud = new Proxy({ ready: false } as Cloud, {
   get: (target, prop) => (prop === 'ready' ? false : prop in target ? target[prop as keyof Cloud] : () => Promise.reject(new Error('Sign-in isn’t set up yet'))),
 });
 
-export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = __DEV__ ? fakeCloud(fileStore()) : notReady;
+export const devStore: FakeStore | null = __DEV__ ? fileStore() : null;
+export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = devStore ? fakeCloud(devStore) : notReady;
 
 const KEYS = 'sarraf.backup-keys';
 

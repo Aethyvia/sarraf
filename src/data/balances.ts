@@ -19,17 +19,18 @@ import { Decimal, dec, toDecimalString, type DecimalString, type DecimalValue } 
 export function forEachMovement(
   db: AppDb,
   asOf: string,
-  visit: (accountId: string, date: string, delta: DecimalValue) => void,
+  visit: (accountId: string, date: string, delta: DecimalValue, source: { transactionId: string; charge: boolean }) => void,
 ): void {
-  const move = (accountId: string | null, date: string, amount: string | null, sign: 1 | -1) => {
+  const move = (accountId: string | null, date: string, amount: string | null, sign: 1 | -1, transactionId = '', charge = false) => {
     if (!accountId || amount === null) return;
     const d = dec(amount);
-    visit(accountId, date, sign === 1 ? d : d.negated());
+    visit(accountId, date, sign === 1 ? d : d.negated(), { transactionId, charge });
   };
   const counted = and(isNull(transactions.deletedAt), eq(transactions.scheduled, false), lte(transactions.date, asOf));
 
   for (const t of db
     .select({
+      id: transactions.id,
       kind: transactions.kind,
       date: transactions.date,
       status: transactions.status,
@@ -47,25 +48,25 @@ export function forEachMovement(
       case 'opening_balance':
       case 'balance_adjustment':
       case 'income':
-        if (cleared) move(t.accountId, t.date, t.accountAmount, 1);
+        if (cleared) move(t.accountId, t.date, t.accountAmount, 1, t.id);
         break;
       case 'expense':
-        if (cleared) move(t.accountId, t.date, t.accountAmount, t.linkType ? 1 : -1);
+        if (cleared) move(t.accountId, t.date, t.accountAmount, t.linkType ? 1 : -1, t.id);
         break;
       case 'transfer':
-        if (cleared || t.status === 'in_transit') move(t.accountId, t.date, t.accountAmount, -1);
-        if (cleared) move(t.toAccountId, t.date, t.toAmount, 1);
+        if (cleared || t.status === 'in_transit') move(t.accountId, t.date, t.accountAmount, -1, t.id);
+        if (cleared) move(t.toAccountId, t.date, t.toAmount, 1, t.id);
         break;
     }
   }
 
   for (const c of db
-    .select({ accountId: transactionCharges.accountId, amount: transactionCharges.amount, date: transactions.date })
+    .select({ accountId: transactionCharges.accountId, amount: transactionCharges.amount, date: transactions.date, id: transactions.id })
     .from(transactionCharges)
     .innerJoin(transactions, eq(transactions.id, transactionCharges.transactionId))
     .where(and(counted, eq(transactions.status, 'cleared'), eq(transactionCharges.deduction, 'charged_separately')))
     .all()) {
-    move(c.accountId, c.date, c.amount, -1);
+    move(c.accountId, c.date, c.amount, -1, c.id, true);
   }
 }
 

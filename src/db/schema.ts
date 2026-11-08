@@ -50,6 +50,12 @@ export const deviceState = sqliteTable(
     /** Set when another phone restored this account's backup: this phone stops backing up. */
     backupMovedAt: text('backup_moved_at'),
     backupMovedTo: text('backup_moved_to'),
+    /** Set by Sign out: data stays, but Sarraf asks to sign in again before going on. */
+    signedOutAt: text('signed_out_at'),
+    /** Cached plan (Supabase subscription) for offline limit checks, with a 7-day grace. */
+    plan: text('plan', { enum: ['free', 'plus'] }).notNull().default('free'),
+    planCheckedAt: text('plan_checked_at'),
+    planRenewsAt: text('plan_renews_at'),
   },
   (t) => [check('device_state_single_row', sql`${t.id} = 1`)],
 );

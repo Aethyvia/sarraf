@@ -1,9 +1,8 @@
 import type { Plan } from '@/data/limits';
+import { effectivePlan } from '@/data/plan';
+import { useLive } from './live';
 
-/**
- * The user's plan. Sarraf Plus purchases and the cached Supabase subscription
- * arrive with build layer 9; until then everyone is on Free.
- */
+/** The plan limits are checked against: the cached Sarraf Plus subscription, with a 7-day grace. */
 export function usePlan(): Plan {
-  return 'free';
+  return useLive((db) => effectivePlan(db, new Date()), []);
 }

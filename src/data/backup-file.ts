@@ -18,7 +18,7 @@ export const BACKUP_FORMAT = journal.entries.length;
 const MAGIC = 'SARRAF-BACKUP';
 
 /** Every table, parents before children. */
-const TABLES: SQLiteTable[] = [
+export const TABLES: SQLiteTable[] = [
   schema.settings,
   schema.currencyOrder,
   schema.ledgers,
