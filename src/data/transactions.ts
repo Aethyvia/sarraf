@@ -8,6 +8,7 @@ import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalStri
 import { computeAmounts, type AmountResult, type RateMode } from './amounts';
 import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
+import { shrinkGoalsToFit } from './goals';
 import { noteRecurringHandled } from './recurring-schedule';
 import { checkSplit, splitOf, type SplitDraft } from './splits';
 
@@ -320,6 +321,13 @@ export function saveTransaction(
     // Paid / Added for a recurring item's due date: the item moves on to its next date.
     if (!existing && draft.recurringId && draft.recurringDueDate && !draft.autoAdded) {
       noteRecurringHandled(tx, draft.recurringId, draft.recurringDueDate, toDecimalString(dec(draft.amount)));
+    }
+
+    // Spending that eats into money set aside shrinks the lowest-priority goals first (Decided).
+    if (draft.status === 'cleared' && draft.date <= today) {
+      for (const acct of new Set([draft.accountId, ...(draft.charges ?? []).map((c) => c.accountId)].filter((x): x is string => !!x))) {
+        shrinkGoalsToFit(tx, acct, today);
+      }
     }
 
     const { removedPaths } = applyAttachmentChanges(tx, { transactionId: id }, options.attachments);

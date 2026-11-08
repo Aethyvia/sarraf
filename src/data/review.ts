@@ -4,6 +4,7 @@ import { transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { nowIso, today as todayDate } from '@/lib/dates';
 import { DataError } from './errors';
+import { shrinkGoalsToFit } from './goals';
 import { remindersDue, type RecurringItem } from './recurring';
 import { withLinkedChildren } from './transaction-sets';
 import type { TransactionRow } from './transactions';
@@ -99,6 +100,8 @@ export function confirmTransaction(db: AppDb, id: string, date: string, today: s
       .set({ status: 'cleared', scheduled: false, date, expectedDate: null, updatedAt: nowIso() })
       .where(eq(transactions.id, id))
       .run();
+    // Now that it counts, it may eat into money set aside.
+    if (t.accountId) shrinkGoalsToFit(tx, t.accountId, today);
   });
 }
 

@@ -1,4 +1,4 @@
-import { count, isNull } from 'drizzle-orm';
+import { and, count, isNull } from 'drizzle-orm';
 
 import { accounts, ledgers, savingsGoals } from '@/db/schema';
 import type { AppDb } from '@/db/types';
@@ -22,7 +22,11 @@ export class LimitReachedError extends DataError {
 
 /** How many count toward the limit. Archived rows don't count. */
 export function usage(db: AppDb, kind: LimitedKind): number {
-  const table = { accounts, ledgers, goals: savingsGoals }[kind];
+  if (kind === 'goals') {
+    // A completed goal is done: it doesn't hold a slot.
+    return db.select({ n: count() }).from(savingsGoals).where(and(isNull(savingsGoals.archivedAt), isNull(savingsGoals.completedAt))).get()?.n ?? 0;
+  }
+  const table = { accounts, ledgers }[kind];
   const row = db.select({ n: count() }).from(table).where(isNull(table.archivedAt)).get();
   return row?.n ?? 0;
 }
