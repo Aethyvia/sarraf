@@ -1,8 +1,8 @@
 import { and, eq, gt, isNull } from 'drizzle-orm';
 
-import { deviceState, settings, transactions } from '@/db/schema';
+import { attachments, deviceState, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
-import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, RECOVERY_KDF, unb64, wrapKey } from '@/lib/backup-crypto';
+import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
 import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupHeader } from './backup-file';
 
@@ -20,12 +20,67 @@ export interface KeyStore {
   clear(): Promise<void>;
 }
 
+/** This phone's attachment files, by the relative path stored on each attachment row. */
+export interface LocalFiles {
+  read(path: string): Uint8Array | null;
+  write(path: string, data: Uint8Array): void;
+}
+
 export interface BackupDeps {
   db: AppDb;
   cloud: Cloud;
   keyStore: KeyStore;
   deviceName: string;
+  /** Attachment files; without it, attachments are left out (tests that don't need them). */
+  files?: LocalFiles;
   now?: () => string;
+}
+
+/** The attachment's file in Drive: named by its permanent id, encrypted with the data key (the id bound in). */
+const attachmentName = (id: string) => `${id}.bin`;
+
+/** Uploads attachments Drive doesn't have yet (each once) and removes ones deleted here. Returns how many were uploaded. */
+async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array): Promise<number> {
+  if (!deps.files) return 0;
+  const there = new Set(await deps.cloud.listAttachments());
+  const rows = deps.db.select({ id: attachments.id, path: attachments.filePath }).from(attachments).all();
+  // Attachments deleted on the phone leave Drive too.
+  const wanted = new Set(rows.map((a) => attachmentName(a.id)));
+  for (const name of there) if (!wanted.has(name)) await deps.cloud.deleteAttachment(name);
+  let n = 0;
+  for (const a of rows) {
+    const name = attachmentName(a.id);
+    if (there.has(name)) continue;
+    const bytes = deps.files.read(a.path);
+    if (!bytes) continue;
+    const sealed = seal(dataKey, bytes, new TextEncoder().encode(a.id));
+    const out = new Uint8Array(12 + sealed.data.length);
+    out.set(unb64(sealed.nonce));
+    out.set(sealed.data, 12);
+    await deps.cloud.uploadAttachment(name, out);
+    n += 1;
+  }
+  return n;
+}
+
+/** After a restore: brings each attachment back to its path. Missing ones are skipped (the row stays). */
+async function downloadAttachments(deps: BackupDeps, dataKey: Uint8Array, onProgress?: (done: number, total: number) => void): Promise<void> {
+  if (!deps.files) return;
+  const rows = deps.db.select({ id: attachments.id, path: attachments.filePath }).from(attachments).all();
+  let done = 0;
+  for (const a of rows) {
+    onProgress?.(done, rows.length);
+    const file = await deps.cloud.downloadAttachment(attachmentName(a.id));
+    if (file && file.length > 12) {
+      try {
+        deps.files.write(a.path, open(dataKey, b64(file.subarray(0, 12)), file.subarray(12), new TextEncoder().encode(a.id)));
+      } catch {
+        // A damaged attachment doesn't stop the restore; its row stays and shows as missing.
+      }
+    }
+    done += 1;
+  }
+  onProgress?.(done, rows.length);
 }
 
 export type DeviceState = typeof deviceState.$inferSelect;
@@ -116,6 +171,7 @@ export async function backupNow(deps: BackupDeps): Promise<BackupResult> {
   }
   if (!state.driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
   const file = buildBackup(db, { dataKey: unb64(stored.dataKey), keys: stored.keys, deviceId: me, deviceName: deps.deviceName, createdAt: now });
+  await uploadNewAttachments(deps, unb64(stored.dataKey));
   await cloud.uploadBackup(file);
   await cloud.putRecord(user, {
     driveEmail: getDeviceState(db).driveEmail ?? '',
@@ -139,7 +195,7 @@ export async function backupNow(deps: BackupDeps): Promise<BackupResult> {
 export async function restoreFromDrive(
   deps: BackupDeps,
   secret: string,
-  onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
+  onProgress?: (step: 'download' | 'open' | 'replace' | 'attachments', done: number, total: number) => void,
 ): Promise<BackupHeader> {
   const file = await deps.cloud.downloadBackup((done, total) => onProgress?.('download', done, total));
   return restoreFromFile(deps, file, secret, onProgress);
@@ -150,7 +206,7 @@ export async function restoreFromFile(
   deps: BackupDeps,
   file: Uint8Array,
   secret: string,
-  onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
+  onProgress?: (step: 'download' | 'open' | 'replace' | 'attachments', done: number, total: number) => void,
 ): Promise<BackupHeader> {
   onProgress?.('open', 0, 1);
   const opened = await openBackup(file, secret);
@@ -165,12 +221,13 @@ export async function applyRestore(
   deps: BackupDeps,
   opened: Awaited<ReturnType<typeof openBackup>>,
   sizeBytes: number,
-  onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
+  onProgress?: (step: 'download' | 'open' | 'replace' | 'attachments', done: number, total: number) => void,
 ): Promise<BackupHeader> {
   const { db, cloud } = deps;
   onProgress?.('replace', 0, 1);
   const me = deviceId(db);
   restoreSnapshot(db, opened.data, { deviceId: me });
+  await downloadAttachments(deps, opened.dataKey, (done, total) => onProgress?.('attachments', done, total));
   await deps.keyStore.set({ dataKey: b64(opened.dataKey), keys: opened.header.keys });
   const now = deps.now?.() ?? new Date().toISOString();
   setDeviceState(db, { backupEnabled: true, lastBackupAt: now, backupMovedAt: null, backupMovedTo: null, backupFailingSince: null });

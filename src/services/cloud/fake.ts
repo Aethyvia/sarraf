@@ -86,5 +86,29 @@ export function fakeCloud(store: FakeStore, knobs: FakeKnobs = { offline: false,
       store.write(driveFile(), file);
       store.write(`${driveFile()}.meta`, enc.encode(new Date().toISOString()));
     },
+    async listAttachments() {
+      online();
+      const raw = store.read(`${driveFile()}.attachments`);
+      return raw ? (JSON.parse(dec.decode(raw)) as string[]) : [];
+    },
+    async uploadAttachment(name, file) {
+      online();
+      store.write(`${driveFile()}.att.${name}`, file);
+      const raw = store.read(`${driveFile()}.attachments`);
+      const names = new Set(raw ? (JSON.parse(dec.decode(raw)) as string[]) : []);
+      names.add(name);
+      store.write(`${driveFile()}.attachments`, enc.encode(JSON.stringify([...names])));
+    },
+    async downloadAttachment(name) {
+      online();
+      return store.read(`${driveFile()}.att.${name}`);
+    },
+    async deleteAttachment(name) {
+      online();
+      const raw = store.read(`${driveFile()}.attachments`);
+      const names = (raw ? (JSON.parse(dec.decode(raw)) as string[]) : []).filter((n) => n !== name);
+      store.write(`${driveFile()}.attachments`, enc.encode(JSON.stringify(names)));
+      store.write(`${driveFile()}.att.${name}`, new Uint8Array());
+    },
   };
 }

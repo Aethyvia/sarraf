@@ -87,7 +87,7 @@ export default function StartScreen() {
 
   const [secret, setSecret] = useState('');
   const [tries, setTries] = useState(0);
-  const [progress, setProgress] = useState<{ step: string; pct: number }>({ step: 'download', pct: 0 });
+  const [progress, setProgress] = useState<{ step: string; pct: number; done?: number; total?: number }>({ step: 'download', pct: 0 });
   const file = useRef<Uint8Array | null>(null);
   const downloaded = useRef(0);
 
@@ -189,7 +189,7 @@ export default function StartScreen() {
         const opened = await openBackup(file.current, secret.trim());
         go({ k: 'restoring' });
         const header = await applyRestore(backupDeps(), opened, file.current.length, (st, done, total) =>
-          setProgress({ step: st, pct: total ? Math.round((done / total) * 100) : 0 }),
+          setProgress({ step: st, pct: total ? Math.round((done / total) * 100) : 0, done, total }),
         );
         const over = plan === 'free' && usage(db, 'accounts') > FREE_LIMITS.accounts;
         setHistory([{ k: 'welcome' }, over ? { k: 'over', header } : { k: 'restored', header }]);
@@ -557,9 +557,11 @@ export default function StartScreen() {
         <StartPage centered title={s.restoringTitle}>
           <Spinner icon="cloud" />
           <View style={[styles.bar, { backgroundColor: colors.accentSoft }]}>
-            <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${progress.step === 'download' ? Math.max(5, progress.pct * 0.5) : progress.step === 'open' ? 60 : 90}%` }]} />
+            <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${progress.step === 'download' ? Math.max(5, progress.pct * 0.5) : progress.step === 'open' ? 60 : progress.step === 'attachments' ? 70 + progress.pct * 0.3 : 70}%` }]} />
           </View>
-          <Text style={[styles.small, { color: colors.inkSecondary, textAlign: 'center' }]}>{s.restoringSteps[progress.step]}</Text>
+          <Text style={[styles.small, { color: colors.inkSecondary, textAlign: 'center' }]}>
+            {progress.step === 'attachments' && progress.total ? s.attachmentsOf(progress.done ?? 0, progress.total) : s.restoringSteps[progress.step]}
+          </Text>
           <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center' }]}>{s.restoringNote}</Text>
         </StartPage>
       );

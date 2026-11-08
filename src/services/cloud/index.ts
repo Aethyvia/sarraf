@@ -2,7 +2,7 @@ import * as Device from 'expo-device';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 
-import type { BackupDeps, KeyStore, StoredKeys } from '@/data/backup-flow';
+import type { BackupDeps, KeyStore, LocalFiles, StoredKeys } from '@/data/backup-flow';
 import { db } from '@/db/client';
 import { fakeCloud, type FakeStore } from './fake';
 import type { Cloud } from './types';
@@ -49,6 +49,20 @@ export const keyStore: KeyStore = {
 
 export const deviceName = Device.modelName ?? 'This phone';
 
+/** Attachment files live under the app's document folder, at the relative path on each row. */
+const files: LocalFiles = {
+  read: (path) => {
+    const f = new File(Paths.document, path);
+    return f.exists ? f.bytesSync() : null;
+  },
+  write: (path, data) => {
+    const f = new File(Paths.document, path);
+    f.parentDirectory.create({ intermediates: true, idempotent: true });
+    if (!f.exists) f.create();
+    f.write(data);
+  },
+};
+
 export function backupDeps(): BackupDeps {
-  return { db, cloud, keyStore, deviceName };
+  return { db, cloud, keyStore, deviceName, files };
 }

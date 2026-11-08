@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData } from '@/db/sample';
-import { settings } from '@/db/schema';
+import { attachments, settings } from '@/db/schema';
 import { WrongSecretError } from '@/lib/backup-crypto';
 import { fakeCloud, memoryStore } from '@/services/cloud/fake';
 import { createTestDb } from '@/test/db';
@@ -170,5 +170,41 @@ describe('backup settings', () => {
     expect(addedSince(p.db, '2000-01-01T00:00:00Z')).toBeGreaterThan(0);
     expect(addedSince(p.db, '2999-01-01T00:00:00Z')).toBe(0);
     expect(all).toBeGreaterThan(0);
+  });
+});
+
+describe('attachments in backups', () => {
+  it('upload once, encrypted, and come back on restore', async () => {
+    const store = memoryStore();
+    const cloud = fakeCloud(store);
+    const old = await phone('Pixel 7', cloud, true);
+    const oldFiles = new Map<string, Uint8Array>();
+    const tx = snapshot(old.db).transactions[0].id as string;
+    old.db.insert(attachments).values({ id: 'att-1', transactionId: tx, filePath: 'attachments/receipt.jpg', mimeType: 'image/jpeg', sizeBytes: 5 }).run();
+    oldFiles.set('attachments/receipt.jpg', new TextEncoder().encode('JPEG!'));
+    const deps = { ...old, files: { read: (p: string) => oldFiles.get(p) ?? null, write: (p: string, d: Uint8Array) => void oldFiles.set(p, d) } };
+    await turnOnBackup(deps, 'pw-12345678');
+    await backupNow(deps);
+    expect(await cloud.listAttachments()).toEqual(['att-1.bin']);
+    // Encrypted: the file in Drive isn't the photo.
+    const inDrive = await cloud.downloadAttachment('att-1.bin');
+    expect(new TextDecoder().decode(inDrive!)).not.toContain('JPEG!');
+
+    // Uploaded once: a second backup doesn't send it again.
+    const upload = jest.spyOn(cloud, 'uploadAttachment');
+    await backupNow(deps);
+    expect(upload).not.toHaveBeenCalled();
+
+    const fresh = await phone('Pixel 9', cloud);
+    const newFiles = new Map<string, Uint8Array>();
+    const freshDeps = { ...fresh, files: { read: (p: string) => newFiles.get(p) ?? null, write: (p: string, d: Uint8Array) => void newFiles.set(p, d) } };
+    await lookInDrive(freshDeps);
+    await restoreFromDrive(freshDeps, 'pw-12345678');
+    expect(new TextDecoder().decode(newFiles.get('attachments/receipt.jpg')!)).toBe('JPEG!');
+
+    // Deleted on the phone → gone from Drive with the next backup.
+    fresh.db.delete(attachments).run();
+    await backupNow(freshDeps);
+    expect(await cloud.listAttachments()).toEqual([]);
   });
 });

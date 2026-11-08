@@ -38,6 +38,11 @@ export interface Cloud {
   findBackup(): Promise<{ modifiedAt: string; sizeBytes: number } | null>;
   downloadBackup(onProgress?: (done: number, total: number) => void): Promise<Uint8Array>;
   uploadBackup(file: Uint8Array): Promise<void>;
+  /** Attachments are separate encrypted files in the same app-data folder, uploaded once (Spec, Ideas added Nov 7). */
+  listAttachments(): Promise<string[]>;
+  uploadAttachment(name: string, file: Uint8Array): Promise<void>;
+  downloadAttachment(name: string): Promise<Uint8Array | null>;
+  deleteAttachment(name: string): Promise<void>;
 }
 
 /** No internet: "Signing in needs internet, just this once." */
