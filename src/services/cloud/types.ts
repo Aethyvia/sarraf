@@ -1,0 +1,73 @@
+import type { BackupCounts } from '@/data/backup-file';
+
+export type SignInMethod = 'google' | 'github' | 'email' | 'dev';
+
+export interface CloudUser {
+  id: string;
+  email: string;
+  method: SignInMethod;
+}
+
+/** Supabase's backup_records row (Schema — Decided): where the backup is, counts only, no money data. */
+export interface BackupRecord {
+  driveEmail: string;
+  lastBackupAt: string;
+  deviceId: string;
+  deviceName: string;
+  sizeBytes: number;
+  counts: BackupCounts;
+  format: number;
+}
+
+/**
+ * Everything Sarraf does online: sign-in and the backup record (Supabase) and
+ * the backup file (the user's own Google Drive, app-data folder). Money data
+ * only ever goes to Drive, encrypted.
+ */
+export interface Cloud {
+  /** False until the real services are set up; the UI says sign-in isn't available yet. */
+  readonly ready: boolean;
+  signIn(method: 'google' | 'github'): Promise<CloudUser>;
+  sendEmailCode(email: string): Promise<void>;
+  verifyEmailCode(email: string, code: string): Promise<CloudUser>;
+  signOut(): Promise<void>;
+  getRecord(user: CloudUser): Promise<BackupRecord | null>;
+  putRecord(user: CloudUser, record: BackupRecord): Promise<void>;
+  /** Asks for Drive access (app-data folder only). `another` picks a different Google account. */
+  connectDrive(options?: { another?: boolean }): Promise<{ email: string }>;
+  findBackup(): Promise<{ modifiedAt: string; sizeBytes: number } | null>;
+  downloadBackup(onProgress?: (done: number, total: number) => void): Promise<Uint8Array>;
+  uploadBackup(file: Uint8Array): Promise<void>;
+}
+
+/** No internet: "Signing in needs internet, just this once." */
+export class OfflineError extends Error {
+  constructor() {
+    super('You’re offline');
+    this.name = 'OfflineError';
+  }
+}
+
+/** Google said no to Drive access. */
+export class DriveRefusedError extends Error {
+  constructor() {
+    super('Sarraf can’t see your Drive');
+    this.name = 'DriveRefusedError';
+  }
+}
+
+/** The person closed the sign-in or account picker. */
+export class CancelledError extends Error {
+  constructor() {
+    super('Cancelled');
+    this.name = 'CancelledError';
+  }
+}
+
+/** A wrong or expired email code. */
+export class BadCodeError extends Error {
+  constructor() {
+    super('That code didn’t work');
+    this.name = 'BadCodeError';
+  }
+}

@@ -29,6 +29,31 @@ const timestamps = {
   updatedAt: text('updated_at').notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 };
 
+// ── This phone ──────────────────────────────────────────────────────────────
+
+/**
+ * Single row (id = 1) about this phone, never put in backups: who is signed in
+ * and how backup is going here. Restoring a backup leaves it alone.
+ */
+export const deviceState = sqliteTable(
+  'device_state',
+  {
+    id: integer('id').primaryKey(),
+    userId: text('user_id'),
+    userEmail: text('user_email'),
+    signInMethod: text('sign_in_method', { enum: ['google', 'github', 'email', 'dev'] }),
+    driveEmail: text('drive_email'),
+    backupEnabled: bool('backup_enabled').notNull().default(false),
+    lastBackupAt: text('last_backup_at'),
+    /** Set when the last automatic backup failed; cleared by the next one that works. */
+    backupFailingSince: text('backup_failing_since'),
+    /** Set when another phone restored this account's backup: this phone stops backing up. */
+    backupMovedAt: text('backup_moved_at'),
+    backupMovedTo: text('backup_moved_to'),
+  },
+  (t) => [check('device_state_single_row', sql`${t.id} = 1`)],
+);
+
 // ── Settings ────────────────────────────────────────────────────────────────
 
 /** Single row (id = 1). */

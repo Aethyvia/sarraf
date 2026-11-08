@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { randomUUID } from 'expo-crypto';
 
 import type { AppDb } from './types';
-import { categories, settings } from './schema';
+import { categories, deviceState, settings } from './schema';
 
 /**
  * Rows every install needs, created once after migrations:
@@ -14,6 +14,9 @@ export function ensureBaseData(db: AppDb): void {
   db.transaction((tx) => {
     if (!tx.select({ id: settings.id }).from(settings).where(eq(settings.id, 1)).get()) {
       tx.insert(settings).values({ id: 1, defaultCurrency: 'USD', deviceId: randomUUID() }).run();
+    }
+    if (!tx.select({ id: deviceState.id }).from(deviceState).where(eq(deviceState.id, 1)).get()) {
+      tx.insert(deviceState).values({ id: 1 }).run();
     }
     if (!tx.select({ id: categories.id }).from(categories).where(eq(categories.isSystem, true)).get()) {
       tx.insert(categories)
