@@ -1,4 +1,5 @@
 import type { RateMode } from '@/data/amounts';
+import { equalShares, percentShares, type SplitDraft } from '@/data/splits';
 import type { ChargeDraft, TransactionDraft } from '@/data/transactions';
 import { pressKey, type CalcKey } from '@/lib/calc';
 import type { PickedFile } from '@/services/attachments';
@@ -38,6 +39,8 @@ export interface FormState {
   /** Savings: the goal and the account it's set aside from. */
   goalId: string | null;
   goalAccountId: string | null;
+  /** Expense: split with people. Who paid follows `from` (an account = you; a person = they did). */
+  split: SplitDraft | null;
 }
 
 export function initialForm(defaults: { date: string; ledgerId: string | null; accountId: string | null; kind?: FormKind }): FormState {
@@ -64,6 +67,7 @@ export function initialForm(defaults: { date: string; ledgerId: string | null; a
     attachments: { picked: [], removeIds: [] },
     goalId: null,
     goalAccountId: null,
+    split: null,
   };
 }
 
@@ -117,7 +121,24 @@ export function formFromDraft(d: TransactionDraft): FormState {
     attachments: { picked: [], removeIds: [] },
     goalId: null,
     goalAccountId: null,
+    split: d.split ?? null,
   };
+}
+
+/**
+ * A split re-fitted to the current total: Equal and Percent shares follow the
+ * amount; Amounts stay as typed (and must be fixed if they no longer add up).
+ */
+export function splitForTotal(split: SplitDraft, total: string, currency: string): SplitDraft {
+  if (split.mode === 'equal') {
+    const amounts = equalShares(total, split.shares.length, currency);
+    return { ...split, shares: split.shares.map((sh, i) => ({ ...sh, amount: amounts[i] })) };
+  }
+  if (split.mode === 'percent') {
+    const amounts = percentShares(total, split.shares.map((sh) => sh.percent ?? '0'), currency);
+    return { ...split, shares: split.shares.map((sh, i) => ({ ...sh, amount: amounts[i] })) };
+  }
+  return split;
 }
 
 /** The draft to save, from the form and its worked-out amount. */
@@ -147,5 +168,6 @@ export function draftFromForm(
     reimbursable: s.kind === 'expense' && s.reimbursable,
     expectedFromPersonId: s.kind === 'expense' && s.reimbursable ? s.expectedFromPersonId : null,
     notes: s.notes,
+    split: s.kind === 'expense' ? s.split : null,
   };
 }

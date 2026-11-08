@@ -50,7 +50,13 @@ export function FormRow({
       <View style={{ flex: 1 }}>
         <Text style={[styles.rowLabel, { color: iconColor ?? colors.inkMuted }]}>{label.toUpperCase()}</Text>
         {value ? (
-          typeof value === 'string' ? <Text style={[styles.rowValue, { color: colors.ink }]} numberOfLines={1}>{value}</Text> : value
+          typeof value === 'string' || Array.isArray(value) ? (
+            <Text style={[styles.rowValue, { color: colors.ink }]} numberOfLines={1}>
+              {value}
+            </Text>
+          ) : (
+            value
+          )
         ) : (
           <Text style={[styles.rowPlaceholder, { color: colors.inkMuted }]} numberOfLines={1}>{placeholder}</Text>
         )}

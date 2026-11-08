@@ -42,8 +42,9 @@ import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
-import { applyKey, draftFromForm, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
+import { applyKey, draftFromForm, splitForTotal, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
 import { fonts, useTheme } from '@/theme';
+import { SplitEditor } from './SplitEditor';
 import { AmountCard, ConversionBlock, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
 
 type Sheet =
@@ -53,6 +54,7 @@ type Sheet =
   | 'tag'
   | 'status'
   | 'expectedBack'
+  | 'split'
   | 'ledger'
   | 'notes'
   | 'attach'
@@ -169,6 +171,12 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           addToGoal(db, { goalId: goal!.id, accountId: goalAccount!.id, amount, date: form.date, notes: form.notes, attachments: add });
         } else {
           const draft = draftFromForm(form, { amount, knownAmount: known, rate, mainCurrency });
+          // Equal and Percent shares follow the amount as it is now.
+          if (draft.split) {
+            const total = draft.fromPersonId ? amount : preview.result?.accountAmount;
+            const currency = draft.fromPersonId ? mainCurrency : (fromAccount?.currency ?? mainCurrency);
+            if (total) draft.split = splitForTotal(draft.split, total, currency);
+          }
           const result = saveTransaction(db, draft, {
             id: editId,
             marketRate: converts ? market : null,
@@ -295,6 +303,28 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         {warning.firstGoal ? parts(s.warnSavingsGoal(warning.firstGoal.name, <MoneyInline size={11} value={warning.firstGoal.amount} currency={fromAccount.currency} />)) : null}
       </RowNote>
     ) : null;
+
+  // ── Split ──
+  const splitIPaidTotal = fromAccount && preview.result ? preview.result.accountAmount : null;
+  const yourShare = form.split?.shares.find((sh) => sh.personId === null);
+  const splitNames = form.split?.shares
+    .filter((sh) => sh.personId !== null)
+    .map((sh) => ref.people.get(sh.personId!)?.name ?? '')
+    .join(', ');
+  const splitCurrency = form.from?.type === 'person' ? mainCurrency : (fromAccount?.currency ?? mainCurrency);
+  const splitRow = (
+    <FormRow
+      dashed={!form.split}
+      label={strings.split.row}
+      value={
+        form.split && yourShare && splitNames
+          ? parts(strings.split.rowValue(splitNames, <MoneyInline size={13} value={yourShare.amount} currency={splitCurrency} />))
+          : undefined
+      }
+      placeholder={strings.split.rowPlaceholder}
+      onPress={() => setSheet('split')}
+    />
+  );
 
   const rows = (() => {
     if (isSavings) {
@@ -454,6 +484,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
                 onPress={() => setSheet('expectedBack')}
               />
             ) : null}
+            {splitRow}
           </>
         ) : null}
         {conversion}
@@ -626,6 +657,29 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onClose={() => setSheet(null)}
         newLabel={`+ ${strings.people.add}`}
         onNew={() => router.push('/people/new')}
+      />
+      <SplitEditor
+        visible={sheet === 'split'}
+        initial={form.split}
+        initialPayerId={form.from?.type === 'person' ? form.from.id : null}
+        iPaid={{ total: splitIPaidTotal, currency: fromAccount?.currency ?? mainCurrency, accountName: fromAccount?.name ?? null }}
+        someonePaid={{ total: amount, currency: mainCurrency }}
+        onSave={({ split, payerId }) => {
+          const from: FormState['from'] = payerId
+            ? { type: 'person', id: payerId }
+            : form.from?.type === 'account'
+              ? form.from
+              : ref.firstAccount
+                ? { type: 'account', id: ref.firstAccount }
+                : null;
+          set({ split, from });
+          setSheet(null);
+        }}
+        onRemove={() => {
+          set({ split: null });
+          setSheet(null);
+        }}
+        onClose={() => setSheet(null)}
       />
       <PickerSheet
         visible={sheet === 'status'}
