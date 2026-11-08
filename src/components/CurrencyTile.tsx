@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Money } from '@/components/Money';
 import type { CurrencyTile } from '@/data/home';
 import { strings } from '@/i18n/strings';
-import { dec, formatAmount } from '@/lib/money';
+import { dec, formatAmount, toDecimalString } from '@/lib/money';
+import { parts } from '@/components/parts';
 import { fonts, radius, useTheme } from '@/theme';
 
 /** A currency tile: balance, In / Out, Usable (red below zero), ≈ in the default currency. Opens that currency's accounts. */
@@ -14,6 +15,7 @@ export function CurrencyTileCard({ tile, estimate, defaultCurrency }: { tile: Cu
   // Long balances (lakh-grouped or with a code like "AED ") drop a size so they stay on one line.
   const long = formatAmount(tile.balance, tile.currency).text.length > 10;
   const negative = dec(tile.usable).isNegative();
+  const money = (v: string) => <Money value={v} currency={tile.currency} style={[styles.tileRowLabel, { color: colors.expense, fontFamily: fonts.monoSemiBold }]} />;
   return (
     <Pressable
       style={({ pressed }) => [styles.tile, { backgroundColor: colors.surface }, pressed && { opacity: 0.85 }]}
@@ -37,6 +39,11 @@ export function CurrencyTileCard({ tile, estimate, defaultCurrency }: { tile: Cu
           {s.usable}{' '}
           <Money value={tile.usable} currency={tile.currency} style={[styles.usableValue, { color: negative ? colors.expense : colors.ink }]} />
         </Text>
+        {negative && dec(tile.setAside).gt(0) ? (
+          <Text style={[styles.tileRowLabel, { color: colors.expense, marginTop: 3 }]}>
+            {parts(strings.goals.overBalance(money(toDecimalString(dec(tile.usable).abs())), money(tile.setAside), tile.currency))}
+          </Text>
+        ) : null}
         {tile.currency !== defaultCurrency && estimate ? (
           <Text style={[styles.tileRowLabel, { color: colors.inkMuted, marginTop: 3 }]}>
             ≈ <Money value={estimate} currency={defaultCurrency} style={[styles.tileRowLabel, { color: colors.inkMuted }]} />

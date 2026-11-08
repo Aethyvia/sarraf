@@ -30,14 +30,14 @@ import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
 import { marketRate } from '@/data/rates';
 import { NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft } from '@/data/transactions';
-import { accountFree, spendWarning, upcomingOnAccount } from '@/data/usable';
+import { accountFree, currencyPositions, spendWarning, upcomingOnAccount } from '@/data/usable';
 import { db } from '@/db/client';
 import { accounts, categories, ledgers, people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { expressionValue, hasOperator } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
-import { add, dec, formatAmount, formatTyped, getCurrency, isDecimalString, parseTypedAmount, toTypedText } from '@/lib/money';
+import { add, dec, toDecimalString, formatAmount, formatTyped, getCurrency, isDecimalString, parseTypedAmount, toTypedText } from '@/lib/money';
 import { deleteStoredFiles, storeFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
@@ -138,6 +138,9 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const warning = useLive((d) => (fromAccount && outOfAccount ? spendWarning(d, fromAccount.id, outOfAccount) : null), [fromAccount?.id, outOfAccount]);
   const upcoming = useLive((d) => (fromAccount && !isSavings ? upcomingOnAccount(d, fromAccount.id) : null), [fromAccount?.id, isSavings]);
   const goalFree = useLive((d) => (goalAccount ? accountFree(d, goalAccount.id).free : null), [goalAccount?.id]);
+  // Raising a goal past what the currency has (Decided Nov 7): allowed, with a red warning; Usable goes negative.
+  const currencyUsable = useLive((d) => (isSavings && goal ? (currencyPositions(d).get(goal.currency)?.usable ?? '0') : null), [isSavings, goal?.currency]);
+  const savingsOver = currencyUsable !== null && amount && dec(amount).gt(dec(currencyUsable)) ? toDecimalString(dec(amount).minus(dec(currencyUsable))) : null;
 
   // ── Actions ──
   const onKey = (key: Parameters<typeof applyKey>[1]) =>
@@ -370,6 +373,18 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
                 </Text>
               </RowNote>
             )
+          ) : null}
+          {goal && savingsOver ? (
+            <RowNote tone="danger" icon="bolt">
+              {parts(
+                s.goalOverBalance(
+                  <MoneyInline size={11} value={amount ?? '0'} currency={goal.currency} />,
+                  goal.title,
+                  goal.currency,
+                  <MoneyInline size={11} value={savingsOver} currency={goal.currency} tone="expense" />,
+                ),
+              )}
+            </RowNote>
           ) : null}
         </>
       );

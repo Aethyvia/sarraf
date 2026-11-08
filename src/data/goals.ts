@@ -111,13 +111,20 @@ function takeFromAccounts(db: AppDb, goalId: string, amount: DecimalValue): { ac
  * Take money out (Decided Nov 6): an amount (or all), back to Usable. Nothing
  * moves between accounts.
  */
-export function takeOutOfGoal(db: AppDb, input: { goalId: string; amount: DecimalString | 'all'; notes?: string | null; date?: string }): void {
+export function takeOutOfGoal(
+  db: AppDb,
+  input: { goalId: string; amount: DecimalString | 'all'; accountId?: string | null; notes?: string | null; date?: string },
+): void {
   db.transaction((tx) => {
-    const held = dec(goalTotal(tx, input.goalId));
+    // From one account (the sheet's From account), or across the goal's accounts.
+    const fromAccount = input.accountId ? goalByAccount(tx, input.goalId).find((g) => g.accountId === input.accountId) : null;
+    if (input.accountId && !fromAccount) throw new DataError('invalid_target', 'Nothing in this goal from that account');
+    const held = dec(fromAccount ? fromAccount.amount : goalTotal(tx, input.goalId));
     const amount = input.amount === 'all' ? held : dec(input.amount);
     if (!amount.gt(0)) throw new DataError('invalid_amount', 'Enter an amount above zero');
     if (amount.gt(held)) throw new DataError('invalid_amount', 'That’s more than the goal holds');
-    for (const part of takeFromAccounts(tx, input.goalId, amount)) {
+    const parts = fromAccount ? [{ accountId: fromAccount.accountId, amount }] : takeFromAccounts(tx, input.goalId, amount);
+    for (const part of parts) {
       tx.insert(goalAllocations)
         .values({
           id: newId(),

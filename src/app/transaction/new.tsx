@@ -13,7 +13,7 @@ import { formFromDraft, initialForm, type FormKind } from '@/state/transaction-f
 
 /** Add transaction. Opens on the account it was started from (Account detail), or the first account. */
 export default function AddTransactionScreen() {
-  const { kind, accountId, duplicate, recurring } = useLocalSearchParams<{ kind?: FormKind; accountId?: string; duplicate?: string; recurring?: string }>();
+  const { kind, accountId, duplicate, recurring, goal } = useLocalSearchParams<{ kind?: FormKind; accountId?: string; duplicate?: string; recurring?: string; goal?: string }>();
   const defaults = useLive((db) => ({
     ledgerId: db.select({ id: ledgers.id }).from(ledgers).where(eq(ledgers.isDefault, true)).get()?.id ?? null,
     accountId: accountId ?? db.select({ id: accounts.id }).from(accounts).where(isNull(accounts.archivedAt)).orderBy(accounts.rank).get()?.id ?? null,
@@ -29,7 +29,9 @@ export default function AddTransactionScreen() {
       const form = formFromDraft(recurringDraft(item, today()));
       return item.amountType === 'varies' ? { ...form, expression: '' } : form;
     }
-    return initialForm({ date: today(), ledgerId: defaults.ledgerId, accountId: defaults.accountId, kind });
+    const form = initialForm({ date: today(), ledgerId: defaults.ledgerId, accountId: defaults.accountId, kind });
+    // Add money from a goal page: Savings, on that goal.
+    return goal ? { ...form, kind: 'savings' as const, goalId: goal } : form;
   });
   return <TransactionForm initial={initial} />;
 }

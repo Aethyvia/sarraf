@@ -220,7 +220,8 @@ export function SelectorRow({
   chevron = 'down',
 }: {
   label?: string;
-  value: string;
+  /** Text, or text with an amount inside (see parts()). */
+  value: ReactNode;
   onPress?: () => void;
   locked?: boolean;
   leading?: ReactNode;

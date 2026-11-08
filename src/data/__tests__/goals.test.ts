@@ -39,7 +39,12 @@ describe('savings goals', () => {
     const trip = createGoal(w.db, { name: 'Trip', currency: 'USD', target: '1000' }, 'free');
     addToGoal(w.db, { goalId: trip, accountId: w.usd, amount: '400' });
     addToGoal(w.db, { goalId: trip, accountId: w.wise, amount: '50' });
-    takeOutOfGoal(w.db, { goalId: trip, amount: '70', notes: 'Visa fee' });
+    takeOutOfGoal(w.db, { goalId: trip, amount: '20', accountId: w.usd });
+    expect(goalByAccount(w.db, trip)).toEqual([
+      { accountId: w.usd, amount: '380' },
+      { accountId: w.wise, amount: '50' },
+    ]);
+    takeOutOfGoal(w.db, { goalId: trip, amount: '50', notes: 'Visa fee' });
     expect(goalByAccount(w.db, trip)).toEqual([{ accountId: w.usd, amount: '380' }]);
     expect(() => takeOutOfGoal(w.db, { goalId: trip, amount: '381' })).toThrow(expect.objectContaining({ code: 'invalid_amount' }));
     completeGoal(w.db, trip, TODAY);
