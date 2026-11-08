@@ -61,7 +61,7 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     expect([by('USD'), by('EUR'), by('PKR')]).toEqual(['250', '40', '-8450']);
     // The person page's balance agrees, and the printer cartridge shows as Expected back.
     expect(Object.fromEntries(personBalances(db, john.id, SAMPLE_TODAY))).toEqual({ USD: '250', EUR: '40', PKR: '-8450' });
-    expect(Object.fromEntries(expectedBack(db, john.id))).toEqual({ USD: '24' });
+    expect(Object.fromEntries(expectedBack(db, john.id).totals)).toEqual({ USD: '24' });
   });
 
   it('has 3 things to confirm, 2 upcoming and 1 waiting for money back', async () => {

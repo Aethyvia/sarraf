@@ -5,6 +5,7 @@ import type { AppDb } from '@/db/types';
 import { today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { Decimal, dec, isDecimalString, toDecimalString, type DecimalString, type DecimalValue } from '@/lib/money';
+import { sortByCurrencyOrder } from './currency-order';
 import { DataError } from './errors';
 
 type EntryRow = typeof personEntries.$inferSelect;
@@ -53,7 +54,7 @@ export function personBalances(db: AppDb, personId: string, today: string = toda
     if (!counts) continue;
     sums.set(entry.currency, (sums.get(entry.currency) ?? new Decimal(0)).plus(dec(entry.amount)));
   }
-  return new Map([...sums].map(([c, v]) => [c, toDecimalString(v)]));
+  return new Map(sortByCurrencyOrder(db, [...sums], ([c]) => c).map(([c, v]) => [c, toDecimalString(v)]));
 }
 
 /** The person page's history, newest first, with running balances per currency. */
@@ -124,7 +125,7 @@ export function deleteSettlement(db: AppDb, entryId: string): void {
  * The grey "Expected back" line on a person page (Decided Nov 7): reimbursable
  * expenses still waiting on this person, per currency. Not part of their balance.
  */
-export function expectedBack(db: AppDb, personId: string): Map<string, DecimalString> {
+export function expectedBack(db: AppDb, personId: string): { totals: Map<string, DecimalString>; count: number } {
   const waiting = db
     .select()
     .from(transactions)
@@ -138,12 +139,14 @@ export function expectedBack(db: AppDb, personId: string): Map<string, DecimalSt
     )
     .all();
   const sums = new Map<string, DecimalValue>();
+  let count = 0;
   for (const t of waiting) {
     const { currency, outstanding } = outstandingOf(db, t);
     if (outstanding.lte(0)) continue;
+    count += 1;
     sums.set(currency, (sums.get(currency) ?? new Decimal(0)).plus(outstanding));
   }
-  return new Map([...sums].map(([c, v]) => [c, toDecimalString(v)]));
+  return { totals: new Map([...sums].map(([c, v]) => [c, toDecimalString(v)])), count };
 }
 
 /** What a reimbursable expense is still owed back, in the currency it was charged in. */

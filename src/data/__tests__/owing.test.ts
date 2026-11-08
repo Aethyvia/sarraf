@@ -2,12 +2,13 @@ import { eq } from 'drizzle-orm';
 
 import { personEntries, splitShares, transactions } from '@/db/schema';
 import { accountBalance } from '../balances';
-import { addMoneyBack, writeOff } from '../money-back';
+import { addMoneyBack, refundableLeft, writeOff } from '../money-back';
 import { expectedBack, markSettled, personBalances, personHistory } from '../owing';
 import { confirmTransaction } from '../review';
 import { equalShares, percentShares, remainingToAssign } from '../splits';
 import { deleteTransaction, restoreTransactions, softDeleteTransactions } from '../transaction-ops';
 import { draftFromTransaction, saveTransaction, type TransactionDraft } from '../transactions';
+import { shareSummaryText } from '../share-summary';
 import { setup } from '@/test/factories';
 
 const TODAY = '2026-09-30';
@@ -177,15 +178,15 @@ describe('money back', () => {
   it('Got it: partly back, then reimbursed; never in what the person owes', async () => {
     const w = await world();
     const exp = w.save({ accountId: w.usd, amount: '24', reimbursable: true, expectedFromPersonId: w.john, date: '2026-09-18' });
-    expect(Object.fromEntries(expectedBack(w.db, w.john))).toEqual({ USD: '24' });
+    expect(Object.fromEntries(expectedBack(w.db, w.john).totals)).toEqual({ USD: '24' });
     addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.usd, amount: '10', date: '2026-09-25' }, TODAY);
     expect(w.row(exp).reimbursementStatus).toBe('partly_back');
-    expect(Object.fromEntries(expectedBack(w.db, w.john))).toEqual({ USD: '14' });
+    expect(Object.fromEntries(expectedBack(w.db, w.john).totals)).toEqual({ USD: '14' });
     const second = addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.usd, amount: '14', date: '2026-09-29' }, TODAY);
     expect(w.row(exp).reimbursementStatus).toBe('reimbursed');
     expect(accountBalance(w.db, w.usd, TODAY)).toBe('1000');
     expect(w.balance(w.john)).toEqual({});
-    expect(Object.fromEntries(expectedBack(w.db, w.john))).toEqual({});
+    expect(Object.fromEntries(expectedBack(w.db, w.john).totals)).toEqual({});
 
     // Deleting a Got it puts the original back to Partly back; Undo of a bulk delete re-syncs too.
     deleteTransaction(w.db, second);
@@ -212,6 +213,10 @@ describe('money back', () => {
     const exp = w.save({ accountId: w.usd, amount: '50' });
     addMoneyBack(w.db, { parentId: exp, kind: 'refund', accountId: w.usd, amount: '20', date: '2026-09-28', notes: 'Refund of Adobe' }, TODAY);
     expect(accountBalance(w.db, w.usd, TODAY)).toBe('970');
+    expect(refundableLeft(w.db, exp)).toEqual({ currency: 'USD', amount: '30' });
+    expect(() => addMoneyBack(w.db, { parentId: exp, kind: 'refund', accountId: w.usd, amount: '31', date: '2026-09-29' }, TODAY)).toThrow(
+      expect.objectContaining({ code: 'invalid_amount' }),
+    );
     expect(() => addMoneyBack(w.db, { parentId: exp, kind: 'refund', accountId: w.usd, amount: '5', date: '2026-10-02' }, TODAY)).toThrow(
       expect.objectContaining({ code: 'invalid_target' }),
     );
@@ -225,5 +230,21 @@ describe('money back', () => {
     expect(w.row(exp).reimbursementStatus).toBe('awaiting');
     restoreTransactions(w.db, hidden);
     expect(w.row(exp).reimbursementStatus).toBe('reimbursed');
+  });
+});
+
+describe('Share with a person', () => {
+  it('is plain text with each currency on its own line', () => {
+    const text = shareSummaryText(
+      'John',
+      [
+        { currency: 'USD', balance: '250' },
+        { currency: 'EUR', balance: '40' },
+        { currency: 'PKR', balance: '-8450' },
+      ],
+      [],
+      { date: '2026-09-30', numberFormat: '1,000.00', includeLast: false },
+    );
+    expect(text).toBe('Hi John, here’s where we stand (Sarraf, Sep 30):\n• You owe me $250.00\n• You owe me €40.00\n• I owe you ₨8,450.00');
   });
 });

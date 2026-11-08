@@ -17,3 +17,9 @@ export function moveCurrency(db: AppDb, ordered: string[], currency: string, pos
   });
   return next;
 }
+
+/** Sorts currency codes into Home's tile order (unranked ones last, A → Z). */
+export function sortByCurrencyOrder<T>(db: AppDb, items: T[], code: (item: T) => string): T[] {
+  const rank = new Map(db.select().from(currencyOrder).all().map((r) => [r.currency, r.rank]));
+  return [...items].sort((a, b) => (rank.get(code(a)) ?? 999) - (rank.get(code(b)) ?? 999) || code(a).localeCompare(code(b)));
+}

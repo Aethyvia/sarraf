@@ -52,6 +52,19 @@ export function addMoneyBack(db: AppDb, draft: MoneyBackDraft, today: string = t
       countsAs = toDecimalString(dec(draft.countsAs));
     }
 
+    // A refund can't be more than what's left of the original (Add refund board).
+    if (draft.kind === 'refund') {
+      const refunded = tx
+        .select({ c: transactions.countsAsAmount })
+        .from(transactions)
+        .where(and(eq(transactions.parentId, parent.id), eq(transactions.linkType, 'refund'), isNull(transactions.deletedAt)))
+        .all()
+        .reduce((sum, r) => sum.plus(dec(r.c ?? '0')), dec('0'));
+      if (dec(countsAs).plus(refunded).gt(dec(parent.accountAmount ?? parent.amount))) {
+        throw new DataError('invalid_amount', 'A refund can’t be more than the original');
+      }
+    }
+
     const id = newId();
     tx.insert(transactions)
       .values({
@@ -121,6 +134,16 @@ export function parentsOf(db: AppDb, ids: string[]): string[] {
     .where(and(inArray(transactions.id, ids), isNotNull(transactions.parentId)))
     .all();
   return [...new Set(rows.map((r) => r.parentId!))];
+}
+
+/** What can still be refunded on an expense, in the currency it was charged in. */
+export function refundableLeft(db: AppDb, parentId: string): { currency: string; amount: DecimalString } {
+  const parent = db.select().from(transactions).where(eq(transactions.id, parentId)).get();
+  if (!parent) throw new DataError('not_found', 'No transaction');
+  const refunded = moneyBackOf(db, parentId)
+    .filter((r) => r.linkType === 'refund')
+    .reduce((sum, r) => sum.plus(dec(r.countsAsAmount ?? '0')), dec('0'));
+  return { currency: chargedCurrencyOf(db, parent), amount: toDecimalString(dec(parent.accountAmount ?? parent.amount).minus(refunded)) };
 }
 
 /** Linked money back on an expense, oldest first. */
