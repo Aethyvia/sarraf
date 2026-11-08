@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 
+import { createBudget } from '@/data/budgets';
 import { addToGoal } from '@/data/goals';
 import { createRecurring, type RecurringInput } from '@/data/recurring';
 import { storeRates } from '@/data/rates';
@@ -177,6 +178,13 @@ export function buildSampleData(db: AppDb): void {
     ])
     .run();
   addToGoal(db, { goalId: emergency, accountId: usd, amount: '400.00', date: '2026-09-01' });
+
+  // Budgets (Personal ledger): All spending $180; Software $50; Travel $100; Office & Utilities $40; Groceries ₨3,100.
+  createBudget(db, { ledgerId: personal, categoryId: null, currency: 'USD', amount: '180' });
+  createBudget(db, { ledgerId: personal, categoryId: cat['Software & Subscriptions'], currency: 'USD', amount: '50' });
+  createBudget(db, { ledgerId: personal, categoryId: cat['Travel'], currency: 'USD', amount: '100' });
+  createBudget(db, { ledgerId: personal, categoryId: cat['Office & Utilities'], currency: 'USD', amount: '40' });
+  createBudget(db, { ledgerId: personal, categoryId: cat['Groceries'], currency: 'PKR', amount: '3100' });
 
   // Market rates as of Sep 30 (≈ total $2,447.69); a live refresh replaces them.
   storeRates(db, { PKR: '278.10', EUR: '0.925926', AED: '3.6731', SAR: '3.75' }, '2026-09-30T06:00:00.000Z');
