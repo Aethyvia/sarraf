@@ -604,6 +604,7 @@ export const strings = {
       into: (account: string) => `into ${account}`,
       yourShare: 'your share',
       theirShare: 'their share',
+      refundedShareKept: 'refunded, share unchanged',
       paidBy: (name: string) => `paid by ${name}`,
       settled: 'Marked as settled',
     },

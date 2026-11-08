@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,7 +14,7 @@ import { BottomSheet, Button, Card, Header, IconButton, IconChip, Screen, Sectio
 import { deleteSettlement, expectedBack, personBalances, personHistory, personSeries } from '@/data/owing';
 import { db } from '@/db/client';
 import { toListRowFromDb } from '@/data/transaction-list';
-import { accounts, people } from '@/db/schema';
+import { accounts, people, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
@@ -41,6 +41,14 @@ export default function PersonScreen() {
       const person = db.select().from(people).where(eq(people.id, id)).get();
       if (!person) return null;
       const today = todayDate();
+      const refunded = new Set(
+        db
+          .select({ parentId: transactions.parentId })
+          .from(transactions)
+          .where(and(eq(transactions.linkType, 'refund'), isNull(transactions.deletedAt)))
+          .all()
+          .map((r) => r.parentId!),
+      );
       const accountNames = new Map(db.select({ id: accounts.id, name: accounts.name }).from(accounts).all().map((a) => [a.id, a.name]));
       const history = personHistory(db, id, today).map((h) => {
         const t = h.transaction;
@@ -50,7 +58,11 @@ export default function PersonScreen() {
           title = rowTitle(toListRowFromDb(db, t));
           if (h.entry.source === 'transfer') detail = t.accountId ? s.lines.lent(accountNames.get(t.accountId) ?? '') : s.lines.into(accountNames.get(t.toAccountId ?? '') ?? '');
           else if (h.entry.source === 'paid_by_person') detail = s.lines.paidBy(person.name);
-          else detail = t.paidByPersonId ? s.lines.yourShare : s.lines.theirShare;
+          else {
+            detail = t.paidByPersonId ? s.lines.yourShare : s.lines.theirShare;
+            // A refund on a split you paid leaves their share as it was (Decided Nov 8): say so where it's read.
+            if (!t.paidByPersonId && refunded.has(t.id)) detail = s.lines.refundedShareKept;
+          }
         }
         const icon = t ? toListRowFromDb(db, t).icon : { name: 'check', color: 'teal' };
         return { ...h, title, icon, detail: [formatShortDate(h.entry.date), detail, h.counts ? null : s.notCounted].filter(Boolean).join(' · ') };
