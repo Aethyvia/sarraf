@@ -22,7 +22,7 @@ export default function AllCurrenciesScreen() {
   const monthName = strings.dates.monthsLong[Number(data.month.split('-')[1]) - 1];
   return (
     <Screen>
-      <Header
+      <Header size={20}
         title={strings.currencies.title}
         onBack={goBack}
         actions={<IconButton icon="sort" label={strings.currencies.reorder} onPress={() => router.push('/currencies/reorder')} />}

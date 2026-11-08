@@ -114,7 +114,7 @@ export default function ReviewScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} subtitle={empty ? undefined : s.summary(data.toConfirm, data.upcomingCount, data.waitingBack.length)} onBack={goBack} />
+      <Header size={20} title={s.title} subtitle={empty ? undefined : s.summary(data.toConfirm, data.upcomingCount, data.waitingBack.length)} onBack={goBack} />
       {action.ui}
       {empty ? <Text style={[styles.empty, { color: colors.inkSecondary }]}>{s.empty}</Text> : null}
       {section(s.recurring, data.recurring, (t) => [s.addedAuto(formatShortDate(t.date)), where(t)].join(' · '), () => 'confirm')}

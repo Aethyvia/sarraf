@@ -59,7 +59,7 @@ export default function ExportScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={goBack} />
+      <Header size={20} title={s.title} onBack={goBack} />
       <Segmented
         options={[
           { value: 'csv', label: s.csv },

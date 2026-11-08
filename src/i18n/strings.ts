@@ -246,6 +246,19 @@ export const strings = {
     archive: 'Archive ledger',
     delete: 'Delete ledger',
     defaultLocked: 'This is the default ledger. Make another one the default to archive or delete it.',
+    isDefault: 'The default ledger — its budgets show on Home',
+    notDefault: "Not the default ledger — its budgets don't show on Home",
+    budgets: 'Budgets',
+    addBudget: '+ Add',
+    wholeLedger: 'WHOLE LEDGER',
+    recent: 'Recent',
+    seeAll: 'See all',
+    noBudgets: 'No budgets yet.',
+    noRecent: 'Nothing in this ledger yet.',
+    footer: (defaultName: string, name: string, isDefault: boolean) =>
+      isDefault
+        ? `Each ledger keeps its own budgets. ${name}'s show on Home since it's the default; others show on their own page.`
+        : `Each ledger keeps its own budgets. ${defaultName}'s show on Home since it's the default; ${name}'s show here, on its own page, since it isn't.`,
   },
   categories: {
     title: 'Categories',
@@ -588,6 +601,7 @@ export const strings = {
     restore: 'Restore',
     cancelledNote: 'Cancelled — it didn’t happen. It stays here, struck through, and counts nowhere.',
     linkedNote: (date: string) => `also shown greyed on ${date}`,
+    gotIt: 'Got it',
     parentOf: 'Original transaction',
     deleteTitle: (name: string) => `Delete "${name}"?`,
     deleteLinked: 'These linked entries will be deleted with it:',

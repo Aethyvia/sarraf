@@ -37,7 +37,7 @@ export default function ConversionCostScreen() {
   const pct = dec(c.moved).gt(0) ? dec(c.total).dividedBy(dec(c.moved)).times(100).toDecimalPlaces(1).toFixed(1) : '0.0';
   return (
     <Screen>
-      <Header title={s.title} subtitle={s.subtitle(`${formatShortDate(data.from)} – ${formatShortDate(data.to)}`, c.currency)} onBack={goBack} />
+      <Header size={20} title={s.title} subtitle={s.subtitle(`${formatShortDate(data.from)} – ${formatShortDate(data.to)}`, c.currency)} onBack={goBack} />
       <SelectorRow label={strings.analytics.range} value={strings.analytics.ranges[range]} onPress={() => setPicking(true)} />
       {c.routes.length === 0 ? (
         <Text style={[styles.note, { color: colors.inkSecondary }]}>{s.nothing}</Text>

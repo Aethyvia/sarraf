@@ -118,7 +118,7 @@ export default function TransactionDetailScreen() {
   const vs = vsMarketPercent(t.rate, t.marketRateAtEntry);
 
   // ── Fields: empty ones hidden ──
-  const fields: [string, ReactNode][] = [];
+  const fields: [string, ReactNode, string?][] = [];
   if (t.categoryId) fields.push([s.category, data.categories.get(t.categoryId)]);
   if (t.referencePersonId) fields.push([s.tagged, data.people.get(t.referencePersonId)]);
   if (t.paidByPersonId) fields.push([s.paidBy, data.people.get(t.paidByPersonId)]);
@@ -126,10 +126,17 @@ export default function TransactionDetailScreen() {
   if (t.kind !== 'opening_balance' && t.kind !== 'balance_adjustment') fields.push([s.status, t.status === 'cancelled' ? strings.review.cancelled : strings.add.statuses[t.status]]);
   if (t.expectedDate) fields.push([s.expected, formatLongDate(t.expectedDate)]);
   if (t.reimbursable && t.reimbursementStatus) {
-    fields.push([s.reimbursable, `${s.reimbursement[t.reimbursementStatus]}${t.expectedFromPersonId ? s.fromPerson(data.people.get(t.expectedFromPersonId) ?? '') : ''}`]);
+    fields.push([
+      s.reimbursable,
+      `${s.reimbursement[t.reimbursementStatus]}${t.expectedFromPersonId ? s.fromPerson(data.people.get(t.expectedFromPersonId) ?? '') : ''}`,
+      t.reimbursementStatus === 'reimbursed' ? colors.income : undefined,
+    ]);
   }
   if (vs) fields.push([s.vsMarket, strings.add.signedPct(vs)]);
-  if (t.notes) fields.push([s.notes, t.notes]);
+  // The first line of the notes is the title when nothing else names it; show only the rest.
+  const noteLines = t.notes?.split('\n') ?? [];
+  const restOfNotes = noteLines[0]?.trim() === title ? noteLines.slice(1).join('\n').trim() : t.notes?.trim();
+  if (restOfNotes) fields.push([s.notes, restOfNotes]);
 
   const editable = t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer';
   // Linked entries are added from here: Got it on a reimbursable expense, Add refund on any cleared expense paid from an account.
@@ -139,7 +146,7 @@ export default function TransactionDetailScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={goBack} />
+      <Header size={18} title={s.title} onBack={goBack} />
       {action.ui}
 
       <Card style={styles.hero}>
@@ -183,8 +190,19 @@ export default function TransactionDetailScreen() {
               <LinkedRow
                 key={c.id}
                 title={rowTitle(c)}
-                detail={parent ? formatLongDate(c.date) : `${formatLongDate(c.date)} · ${s.linkedNote(formatShortDate(c.date))}`}
-                amount={<MoneyInline value={c.amount.tone === 'expense' ? `-${c.amount.value}` : c.amount.value} currency={c.amount.currency} tone={c.amount.tone === 'neutral' ? undefined : c.amount.tone} />}
+                detail={
+                  parent
+                    ? formatLongDate(c.date)
+                    : [formatLongDate(c.date), c.linkType === 'reimbursement' ? s.gotIt : null, s.linkedNote(formatShortDate(c.date))].filter(Boolean).join(' · ')
+                }
+                amount={
+                  <MoneyInline
+                    value={c.amount.tone === 'expense' ? `-${c.amount.value}` : c.amount.value}
+                    currency={c.amount.currency}
+                    tone={c.amount.tone === 'neutral' ? undefined : c.amount.tone}
+                    sign={c.amount.tone === 'income' ? 'always' : undefined}
+                  />
+                }
                 last={i === list.length - 1}
                 onPress={() => router.push(`/transaction/${c.id}`)}
               />
@@ -195,10 +213,10 @@ export default function TransactionDetailScreen() {
 
       {fields.length ? (
         <Card style={styles.fields}>
-          {fields.map(([label, value], i) => (
+          {fields.map(([label, value, tint], i) => (
             <View key={label} style={[styles.field, i < fields.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
               <Text style={[styles.fieldLabel, { color: colors.inkMuted }]}>{label}</Text>
-              <Text style={[styles.fieldValue, { color: colors.ink }]}>{value}</Text>
+              <Text style={[styles.fieldValue, { color: tint ?? colors.ink }]}>{value}</Text>
             </View>
           ))}
         </Card>
@@ -325,7 +343,7 @@ function LinkedRow({ title, detail, amount, last, onPress }: { title: string; de
   const { colors } = useTheme();
   return (
     <View style={[styles.linked, !last && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
-      <IconChip icon="check" color="teal" size={30} />
+      <IconChip icon="tick" color="teal" size={30} />
       <View style={{ flex: 1 }}>
         <Text style={[styles.linkedTitle, { color: colors.ink }]} onPress={onPress}>
           {title}

@@ -30,6 +30,8 @@ export interface Palette {
   warningSoft: string;
   /** Background of a card that's over (an over budget). */
   warningTint: string;
+  /** Outline of warning boxes and the OVER tag. */
+  warningLine: string;
   /** Bar of an over budget. */
   overBar: string;
   scrim: string;
@@ -58,6 +60,7 @@ export const light: Palette = {
   warning: '#8A5A00',
   warningSoft: '#F6EDD6',
   warningTint: '#FFFDF6',
+  warningLine: '#E8D9B0',
   overBar: '#C66510',
   scrim: 'rgba(33,29,23,0.45)',
   tooltip: '#211D17',
@@ -84,6 +87,7 @@ export const dark: Palette = {
   warning: '#D9A73D',
   warningSoft: '#3A2F1A',
   warningTint: '#2A2418',
+  warningLine: '#5A4A26',
   overBar: '#E0913D',
   scrim: 'rgba(0,0,0,0.55)',
   tooltip: '#F5F1E8',

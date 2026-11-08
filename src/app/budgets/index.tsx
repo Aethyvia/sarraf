@@ -52,8 +52,8 @@ export default function BudgetsScreen() {
         actions={<IconButton icon="plus" filled label={s.add} onPress={() => router.push({ pathname: '/budgets/new', params: { ledger: ledger.id } })} />}
       />
       {overlap.map((o) => (
-        <View key={o.currency} style={[styles.warn, { backgroundColor: colors.warningSoft, borderColor: colors.warning + '55' }]}>
-          <Icon name="bolt" size={17} color={colors.warning} strokeWidth={2} />
+        <View key={o.currency} style={[styles.warn, { backgroundColor: colors.warningTint, borderColor: colors.warningLine }]}>
+          <Icon name="alert" size={16} color={colors.warning} strokeWidth={2} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.warnTitle, { color: colors.warning }]}>{s.overlapTitle}</Text>
             <Text style={[styles.warnBody, { color: colors.warning }]}>{parts(s.overlapBody(money(o.categories, o.currency), money(o.over, o.currency), money(o.cap, o.currency), o.currency))}</Text>
@@ -76,10 +76,7 @@ export default function BudgetsScreen() {
         return (
           <View key={c} style={{ gap: 14 }}>
             {whole.map((b) => (
-              <View key={b.budget.id} style={{ gap: 6 }}>
-                <SectionLabel>{s.wholeLedger(c)}</SectionLabel>
-                <BudgetCard status={b} />
-              </View>
+              <BudgetCard key={b.budget.id} status={b} />
             ))}
             {byCat.length ? <SectionLabel>{s.byCategory(c)}</SectionLabel> : null}
             {byCat.map((b) => (

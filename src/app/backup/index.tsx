@@ -72,7 +72,7 @@ export default function BackupScreen() {
     const device = state.backupMovedTo ?? '';
     return (
       <Screen>
-        <Header title={s.title} onBack={goBack} />
+        <Header size={20} title={s.title} onBack={goBack} />
         <View style={[styles.hero, { backgroundColor: colors.warningSoft }]}>
           <Icon name="phone" size={28} color={colors.warning} strokeWidth={1.8} />
         </View>
@@ -112,7 +112,7 @@ export default function BackupScreen() {
   if (!state.backupEnabled) {
     return (
       <Screen>
-        <Header title={s.title} onBack={goBack} />
+        <Header size={20} title={s.title} onBack={goBack} />
         <View style={[styles.hero, { backgroundColor: colors.filled }]}>
           <Icon name="cloud" size={28} color={colors.inkSecondary} strokeWidth={1.8} />
         </View>
@@ -131,7 +131,7 @@ export default function BackupScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={goBack} />
+      <Header size={20} title={s.title} onBack={goBack} />
       <Card style={styles.driveCard}>
         <View style={[styles.driveIcon, { backgroundColor: colors.accentSoft }]}>
           <Icon name="layers" size={17} color={colors.accent} strokeWidth={1.9} />

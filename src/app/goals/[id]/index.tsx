@@ -49,7 +49,7 @@ export default function GoalScreen() {
 
   return (
     <Screen>
-      <Header title={goal.name} subtitle={s.subtitle(goal.currency)} onBack={goBack} />
+      <Header size={20} title={goal.name} subtitle={s.subtitle(goal.currency)} onBack={goBack} />
       {action.ui}
       <Card style={styles.summary}>
         <View style={styles.summaryTop}>

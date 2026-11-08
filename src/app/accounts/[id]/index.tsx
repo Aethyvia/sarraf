@@ -2,7 +2,7 @@ import { goBack } from '@/state/nav';
 import { and, eq, isNull, min, or } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BalanceTrend } from '@/components/account/BalanceTrend';
 import { FixBalanceSheet } from '@/components/account/FixBalanceSheet';
@@ -10,7 +10,7 @@ import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { DeleteInUseSheet } from '@/components/sheets/DeleteInUseSheet';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
-import { Button, Card, Header, IconChip, LinkButton, Screen, SectionLabel } from '@/components/ui';
+import { Button, Card, Header, LinkButton, Screen, SectionLabel } from '@/components/ui';
 import {
   accountDeletionImpact,
   archiveAccount,
@@ -78,7 +78,7 @@ export default function AccountDetailScreen() {
         setAside: setAsideByGoal(d, id),
         series,
         change: toDecimalString(dec(series[series.length - 1].balance).minus(dec(series[0].balance))),
-        rows: rows.slice(0, 5),
+        rows: rows.slice(0, 3),
       };
     },
     [id, range],
@@ -94,11 +94,10 @@ export default function AccountDetailScreen() {
 
   return (
     <Screen>
-      <Header title={account.name} subtitle={account.currency} onBack={goBack} />
+      <Header size={20} title={account.name} subtitle={account.currency} onBack={goBack} />
       {action.ui}
 
       <Card style={styles.balanceCard}>
-        <IconChip icon={account.icon} color={account.color} size={40} />
         <Text style={[styles.balanceLabel, { color: colors.inkMuted }]}>{s.balance}</Text>
         <Money value={balance} currency={account.currency} style={styles.balance} />
         <View style={styles.trend}>
@@ -134,7 +133,11 @@ export default function AccountDetailScreen() {
       ) : null}
 
       {setAsideTotal ? (
-        <View style={[styles.goals, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+        <Pressable
+          onPress={() => router.push('/savings')}
+          accessibilityRole="button"
+          style={[styles.goals, { backgroundColor: colors.surface, borderColor: colors.outline }]}
+        >
           <Icon name="piggy" size={16} color={colors.accent} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.goalsText, { color: colors.ink }]}>
@@ -144,7 +147,8 @@ export default function AccountDetailScreen() {
               {s.setAsideGoals(setAside.map((g) => g.goalName).join(', '), account.currency)}
             </Text>
           </View>
-        </View>
+          <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
 
       <View style={styles.buttons}>
@@ -154,7 +158,7 @@ export default function AccountDetailScreen() {
             <Button kind="secondary" label={a.fixBalance} onPress={() => setFixing(true)} style={{ flex: 1 }} />
           </>
         ) : null}
-        <Button kind="secondary" label={strings.common.edit} onPress={() => router.push(`/accounts/${id}/edit`)} style={{ flex: account.archivedAt ? 1 : 0.6 }} />
+        <Button kind="secondary" label={strings.common.edit} onPress={() => router.push(`/accounts/${id}/edit`)} style={account.archivedAt ? { flex: 1 } : { width: 72, paddingHorizontal: 0 }} />
       </View>
 
       <View style={styles.listHead}>
@@ -216,8 +220,8 @@ export default function AccountDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  balanceCard: { alignItems: 'center', padding: 18, gap: 6 },
-  balanceLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.5, marginTop: 6 },
+  balanceCard: { alignItems: 'center', padding: 18, gap: 4 },
+  balanceLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.5 },
   balance: { fontFamily: fonts.monoSemiBold, fontSize: 30 },
   notice: { fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 17, borderRadius: radius.field, padding: 12 },
   goals: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: radius.field, paddingHorizontal: 13, paddingVertical: 10 },

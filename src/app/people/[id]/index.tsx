@@ -65,7 +65,19 @@ export default function PersonScreen() {
             if (!t.paidByPersonId && refunded.has(t.id)) detail = s.lines.refundedShareKept;
           }
         }
-        const icon = t ? toListRowFromDb(db, t).icon : { name: 'check', color: 'teal' };
+        // Board "Person page": a split shows %, money lent out an outgoing arrow, money coming back an
+        // incoming one, something they paid for you its category's icon in grey, a settlement a tick.
+        const icon = !t
+          ? { name: 'tick', color: 'teal' }
+          : h.entry.source === 'split'
+            ? { name: 'percent', color: 'neutral' }
+            : h.entry.source === 'transfer'
+              ? t.accountId
+                ? { name: 'arrow-out', color: 'pink' }
+                : { name: 'arrow-in', color: 'teal' }
+              : h.entry.source === 'paid_by_person'
+                ? { name: toListRowFromDb(db, t).icon.name === 'user' ? 'basket' : toListRowFromDb(db, t).icon.name, color: 'neutral' }
+                : { name: 'tick', color: 'teal' };
         return { ...h, title, icon, detail: [formatShortDate(h.entry.date), detail, h.counts ? null : s.notCounted].filter(Boolean).join(' · ') };
       });
       const balances = [...personBalances(db, id, today)].map(([currency, balance]) => {
@@ -92,7 +104,7 @@ export default function PersonScreen() {
 
   return (
     <Screen>
-      <Header
+      <Header size={20}
         title={person.name}
         onBack={goBack}
         actions={
@@ -150,7 +162,7 @@ export default function PersonScreen() {
         </Pressable>
       ) : null}
 
-      {owed ? <Button kind="secondary" label={s.markSettled} onPress={() => setSettling(true)} /> : null}
+      {owed ? <Button kind="secondary" icon="tick" label={s.markSettled} onPress={() => setSettling(true)} /> : null}
 
       {history.length ? (
         <View>

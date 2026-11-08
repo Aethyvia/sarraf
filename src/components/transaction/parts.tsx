@@ -282,9 +282,23 @@ export function UtilityButton({ icon, label, onPress, dot, disabled }: { icon: s
   );
 }
 
-export function MoneyInline({ value, currency, tone, size = 14 }: { value: string; currency: string; tone?: 'expense' | 'income'; size?: number }) {
+export function MoneyInline({
+  value,
+  currency,
+  tone,
+  size = 14,
+  sign,
+}: {
+  value: string;
+  currency: string;
+  tone?: 'expense' | 'income';
+  size?: number;
+  sign?: 'always' | 'minus' | 'auto' | 'never';
+}) {
   const { colors } = useTheme();
-  return <Money value={value} currency={currency} allowCompact={false} style={[{ fontSize: size }, tone && { color: tone === 'expense' ? colors.expense : colors.income }]} />;
+  return (
+    <Money value={value} currency={currency} sign={sign} allowCompact={false} style={[{ fontSize: size }, tone && { color: tone === 'expense' ? colors.expense : colors.income }]} />
+  );
 }
 
 export { formatShortDate };

@@ -62,7 +62,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={goBack} />
+      <Header size={24} title={s.title} onBack={goBack} />
 
       <SectionLabel style={styles.section}>{s.profile}</SectionLabel>
       <View>

@@ -56,7 +56,7 @@ export function TransactionRow({
 }: {
   row: ListRow;
   /** 'recent': date-first detail (Home); 'account': the same on an account's own page, without its name. */
-  variant?: 'list' | 'recent' | 'account';
+  variant?: 'list' | 'recent' | 'account' | 'ledger';
   child?: boolean;
   selected?: boolean;
   selecting?: boolean;
@@ -78,6 +78,9 @@ export function TransactionRow({
   } else if (child) {
     title = `↳ ${title}`;
     detail = [formatShortDate(row.date), row.accountName].filter(Boolean).join(' · ');
+  } else if (variant === 'ledger') {
+    // A ledger's page: date, then the category when the title is something else.
+    detail = [formatShortDate(row.date), row.title && row.categoryName && row.title !== row.categoryName ? row.categoryName : row.accountName].filter(Boolean).join(' · ');
   } else if (variant !== 'list') {
     detail = recentDetail(row, variant === 'account' && row.kind !== 'transfer');
   } else if (row.paidByName) {
@@ -100,7 +103,7 @@ export function TransactionRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
-        variant === 'account' && styles.inCard,
+        (variant === 'account' || variant === 'ledger') && styles.inCard,
         card && [styles.card, { backgroundColor: colors.surface }],
         child && styles.child,
         !card && !last && { borderBottomWidth: 1, borderBottomColor: colors.line },

@@ -70,7 +70,7 @@ export function LedgerForm({ ledger }: { ledger?: Ledger }) {
       />
       {action.ui}
 
-      <SelectorRow chevron="forward" leading={<IconChip icon={shown.icon} color={shown.color} size={44} />} value={strings.accounts.iconColor} onPress={() => setPicking(true)} />
+      <SelectorRow chevron="forward" leading={<IconChip icon={shown.icon} color={shown.color} size={44} />} value={strings.accounts.iconColor} detail={ledger ? strings.accounts.iconColorCurrent(strings.iconPicker.colors[shown.color] ?? shown.color, shown.icon) : strings.accounts.iconColorPicked(strings.iconPicker.colors[shown.color] ?? shown.color)} onPress={() => setPicking(true)} />
       <Field label={strings.accounts.name} value={name} onChangeText={setName} placeholder={s.namePlaceholder} autoCapitalize="words" />
       {ledger?.isDefault ? (
         <Hint>{s.defaultLocked}</Hint>
@@ -118,14 +118,14 @@ export function LedgerForm({ ledger }: { ledger?: Ledger }) {
           }
           onMove={(targetLedgerId) => {
             setDeleting(false);
-            if (action.run(() => deleteLedger(db, ledger.id, { mode: 'move', targetLedgerId }))) router.back();
+            if (action.run(() => deleteLedger(db, ledger.id, { mode: 'move', targetLedgerId }))) router.dismissTo('/ledgers');
           }}
           onDelete={() => {
             setDeleting(false);
             const result = action.run(() => deleteLedger(db, ledger.id, { mode: 'delete_with_transactions' }));
             if (result) {
               deleteStoredFiles(result.attachmentPaths);
-              router.back();
+              router.dismissTo('/ledgers');
             }
           }}
           onClose={() => setDeleting(false)}

@@ -47,19 +47,23 @@ export function Header({
   onBack,
   backIcon = 'back',
   actions,
+  size,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   backIcon?: 'back' | 'close';
   actions?: ReactNode;
+  /** Title size. The boards: forms (✕) 18, lists 22, tab pages 24; detail pages pass 20. */
+  size?: number;
 }) {
+  const titleSize = size ?? (!onBack ? 24 : backIcon === 'close' ? 18 : 22);
   const { colors } = useTheme();
   return (
     <View style={{ gap: 2 }}>
       <View style={styles.header}>
         {onBack && <IconButton icon={backIcon} onPress={onBack} label={backIcon === 'back' ? 'Back' : 'Close'} />}
-        <Text style={[styles.title, { color: colors.ink }]} numberOfLines={1}>
+        <Text style={[styles.title, { color: colors.ink, fontSize: titleSize }]} numberOfLines={1}>
           {title}
         </Text>
         {actions}
@@ -223,6 +227,7 @@ export function SelectorRow({
   locked,
   leading,
   chevron = 'down',
+  detail,
 }: {
   label?: string;
   /** Text, or text with an amount inside (see parts()). */
@@ -231,6 +236,8 @@ export function SelectorRow({
   locked?: boolean;
   leading?: ReactNode;
   chevron?: 'down' | 'forward';
+  /** A muted second line under the value (e.g. "Teal · bank icon"). */
+  detail?: string;
 }) {
   const { colors } = useTheme();
   return (
@@ -244,6 +251,7 @@ export function SelectorRow({
       <View style={{ flex: 1 }}>
         {label ? <Text style={[styles.selectorLabel, { color: colors.inkMuted }]}>{label.toUpperCase()}</Text> : null}
         <Text style={[styles.selectorValue, { color: colors.ink }]}>{value}</Text>
+        {detail ? <Text style={[styles.selectorDetail, { color: colors.inkMuted }]}>{detail}</Text> : null}
       </View>
       <Icon name={locked ? 'lock' : chevron} size={14} color={colors.inkMuted} strokeWidth={2.2} />
     </Pressable>
@@ -530,6 +538,7 @@ const styles = StyleSheet.create({
   },
   selectorLabel: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.4 },
   selectorValue: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
+  selectorDetail: { fontFamily: fonts.sans, fontSize: 12 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 56 },
   rowTitle: { fontFamily: fonts.sansSemiBold, fontSize: 15 },

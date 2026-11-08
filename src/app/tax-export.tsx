@@ -76,7 +76,7 @@ export default function TaxExportScreen() {
 
   return (
     <Screen>
-      <Header title={s.title} onBack={goBack} />
+      <Header size={20} title={s.title} onBack={goBack} />
       <View style={styles.yearRow}>
         <IconButton icon="back" label={s.previousYear} onPress={() => shift(-1)} />
         <View style={[styles.year, { backgroundColor: colors.filled }]}>

@@ -143,8 +143,9 @@ export function CategoryForm({
 
       <SelectorRow
         chevron="forward"
-        leading={<IconChip icon={look.icon} color={look.color} size={44} />}
+        leading={<IconChip icon={look.icon} color={look.color} size={30} />}
         value={strings.accounts.iconColor}
+        detail={strings.accounts.iconColorCurrent(strings.iconPicker.colors[look.color] ?? look.color, look.icon)}
         onPress={() => setSheet('icon')}
       />
 

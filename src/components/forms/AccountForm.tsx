@@ -68,18 +68,15 @@ export function AccountForm({ account }: { account?: Account }) {
         chevron="forward"
         leading={<IconChip icon={shown.icon} color={shown.color} size={44} />}
         value={s.iconColor}
-        label={undefined}
+        detail={look ? s.iconColorCurrent(strings.iconPicker.colors[shown.color] ?? shown.color, shown.icon) : s.iconColorPicked(strings.iconPicker.colors[shown.color] ?? shown.color)}
         onPress={() => setSheet('icon')}
       />
-      <Hint>
-        {look ? s.iconColorCurrent(strings.iconPicker.colors[shown.color] ?? shown.color, shown.icon) : s.iconColorPicked(strings.iconPicker.colors[shown.color] ?? shown.color)}
-      </Hint>
 
       <Field label={s.name} value={name} onChangeText={setName} placeholder={s.namePlaceholder} autoCapitalize="words" />
 
       <SelectorRow
         label={s.currency}
-        value={currency ? `${currency} — ${getCurrency(currency).name}` : s.chooseCurrency}
+        value={currency ? (account ? currency : `${currency} — ${getCurrency(currency).name}`) : s.chooseCurrency}
         onPress={() => setSheet('currency')}
         locked={!!account}
       />
@@ -104,11 +101,16 @@ export function AccountForm({ account }: { account?: Account }) {
         </>
       ) : null}
 
-      <SelectorRow label={`${s.institution} (${strings.common.optional})`} value={institution ?? strings.common.none} onPress={() => setSheet('institution')} />
-      <Hint>{s.institutionHint}</Hint>
-
-      {!account ? <Text style={[styles.saveHint, { color: colors.inkMuted }]}>{s.saveHint}</Text> : null}
-      <Button label={account ? strings.common.save : s.save} onPress={save} disabled={!canSave} />
+      <SelectorRow label={account ? s.institution : `${s.institution} (${strings.common.optional})`} value={institution ?? strings.common.none} onPress={() => setSheet('institution')} />
+      {/* Edit account (board): no hint and no bottom button — the tick saves. */}
+      {!account ? (
+        <>
+          <Hint>{s.institutionHint}</Hint>
+          <View style={{ flex: 1 }} />
+          <Text style={[styles.saveHint, { color: colors.inkMuted }]}>{s.saveHint}</Text>
+          <Button label={s.save} onPress={save} disabled={!canSave} />
+        </>
+      ) : null}
 
       <IconColorSheet
         visible={sheet === 'icon'}
