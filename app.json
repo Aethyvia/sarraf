@@ -30,6 +30,13 @@
     "scheme": "sarraf",
     "experiments": {
       "typedRoutes": true
+    },
+    "owner": "aethyvia",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "035a2fc8-adc9-4896-9211-23dfb7b8962e"
+      }
     }
   }
 }
