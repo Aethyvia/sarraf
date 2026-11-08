@@ -4,7 +4,7 @@ import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData, SAMPLE_TODAY } from '@/db/sample';
 import { categories, ledgers } from '@/db/schema';
 import { createTestDb } from '@/test/db';
-import { budgetStatuses, budgetWarning } from '../budgets';
+import { budgetStatuses, budgetWarning, overlapWarnings } from '../budgets';
 import { flows, UNCATEGORIZED } from '../spending';
 import { saveTransaction, type TransactionDraft } from '../transactions';
 import { setup } from '@/test/factories';
@@ -31,6 +31,11 @@ describe('spending and income (the sample, Spec §19)', () => {
       [cat('Office & Utilities')]: '34',
     });
     expect(f.totalIncome).toBe('450');
+    // Analytics: Consulting income $450 = Retainer $300 + One-off $100 + its own $50; by person Beta Client $300, Acme $50, no person $100.
+    expect(f.income).toEqual([{ categoryId: cat('Consulting income'), amount: '450', count: 3 }]);
+    expect(Object.fromEntries(f.incomeSubs.map((x) => [x.categoryId, x.amount]))).toEqual({ [cat('Retainer')]: '300', [cat('One-off projects')]: '100', [cat('Consulting income')]: '50' });
+    expect(f.incomeByPerson.map((x) => x.amount)).toEqual(['300', '50', '100']);
+    expect(f.incomeByPerson[2].personId).toBeNull();
   });
 
   it('Business USD: $840 spent, $1,200 earned', async () => {
@@ -58,6 +63,8 @@ describe('budgets', () => {
     expect(byName.get('all:USD:180')).toMatchObject({ spent: '173', left: '7', over: false, percent: 96 });
     expect(byName.get('cat:USD:50')).toMatchObject({ spent: '54', left: '-4', over: true });
     expect(byName.get('cat:PKR:3100')).toMatchObject({ spent: '4200', left: '-1100', over: true });
+    // Heads-up: Software + Travel + Office = $190, $10 over the $180 cap.
+    expect(overlapWarnings(db, ledger('Personal'))).toEqual([{ currency: 'USD', categories: '190', cap: '180', over: '10' }]);
   });
 
   it('the Add warning checks the category in the selected ledger only, and only when it goes or is over', async () => {

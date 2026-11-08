@@ -21,6 +21,10 @@ export interface Flows {
   income: CategoryTotal[];
   totalSpending: DecimalString;
   totalIncome: DecimalString;
+  /** Income per subcategory (and the parent's own), for Analytics' breakdown under each category. */
+  incomeSubs: { categoryId: string; parentId: string; amount: DecimalString }[];
+  /** Income per tagged person (null: no person), for "Income by person". */
+  incomeByPerson: { personId: string | null; amount: DecimalString }[];
 }
 
 export interface FlowFilter {
@@ -89,6 +93,8 @@ export function flows(db: AppDb, filter: FlowFilter): Flows {
     }
   }
 
+  const subs = new Map<string, { parentId: string; amount: DecimalValue }>();
+  const byPerson = new Map<string | null, DecimalValue>();
   const spend = new Map<string, { amount: DecimalValue; ids: Set<string> }>();
   const earn = new Map<string, { amount: DecimalValue; ids: Set<string> }>();
   const addTo = (m: typeof spend, key: string, amount: DecimalValue, txId: string) => {
@@ -143,7 +149,13 @@ export function flows(db: AppDb, filter: FlowFilter): Flows {
       const inside = own
         .filter((c) => c.deduction === 'already_deducted')
         .reduce((s, c) => s.plus(chargeCurrency(t, c, accountCurrency).amount), new Decimal(0));
-      addTo(earn, top(t.categoryId), dec(t.accountAmount ?? t.amount).plus(inside), t.id);
+      const gross = dec(t.accountAmount ?? t.amount).plus(inside);
+      addTo(earn, top(t.categoryId), gross, t.id);
+      const key = t.categoryId ?? UNCATEGORIZED;
+      const sub = subs.get(key) ?? { parentId: top(t.categoryId), amount: new Decimal(0) };
+      sub.amount = sub.amount.plus(gross);
+      subs.set(key, sub);
+      byPerson.set(t.referencePersonId, (byPerson.get(t.referencePersonId) ?? new Decimal(0)).plus(gross));
     }
   }
 
@@ -155,7 +167,19 @@ export function flows(db: AppDb, filter: FlowFilter): Flows {
   const spending = list(spend);
   const income = list(earn);
   const total = (xs: CategoryTotal[]) => toDecimalString(xs.reduce((s, x) => s.plus(dec(x.amount)), new Decimal(0)));
-  return { currency: filter.currency, spending, income, totalSpending: total(spending), totalIncome: total(income) };
+  return {
+    currency: filter.currency,
+    spending,
+    income,
+    totalSpending: total(spending),
+    totalIncome: total(income),
+    incomeSubs: [...subs]
+      .map(([categoryId, v]) => ({ categoryId, parentId: v.parentId, amount: toDecimalString(v.amount) }))
+      .sort((a, b) => dec(b.amount).comparedTo(dec(a.amount))),
+    incomeByPerson: [...byPerson]
+      .map(([personId, v]) => ({ personId, amount: toDecimalString(v) }))
+      .sort((a, b) => (a.personId === null ? 1 : b.personId === null ? -1 : dec(b.amount).comparedTo(dec(a.amount)))),
+  };
 }
 
 /**
@@ -171,4 +195,21 @@ function chargeCurrency(t: Tx, c: Charge, accountCurrency: string, toCurrency?: 
   if (t.kind === 'transfer') return { currency: t.currency, amount: dec(inMain) };
   if (t.currency !== accountCurrency && t.rate) return { currency: accountCurrency, amount: dec(convert(inMain, t.rate, accountCurrency)) };
   return { currency: t.currency, amount: dec(inMain) };
+}
+
+/** Income and spending totals for each of the last `months` months up to `asOf` (Analytics' monthly trend). */
+export function monthlyTrend(db: AppDb, filter: Omit<FlowFilter, 'from' | 'to'>, asOf: string, months = 6): { month: string; income: DecimalString; spending: DecimalString }[] {
+  const [y, m] = asOf.split('-').map(Number);
+  const out: { month: string; income: DecimalString; spending: DecimalString }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const total = y * 12 + (m - 1) - i;
+    const yy = Math.floor(total / 12);
+    const mm = (total % 12) + 1;
+    const month = `${yy}-${String(mm).padStart(2, '0')}`;
+    const last = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+    const to = i === 0 ? asOf : `${month}-${String(last).padStart(2, '0')}`;
+    const f = flows(db, { ...filter, from: `${month}-01`, to });
+    out.push({ month, income: f.totalIncome, spending: f.totalSpending });
+  }
+  return out;
 }

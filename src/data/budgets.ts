@@ -12,6 +12,8 @@ export type Budget = typeof budgets.$inferSelect;
 
 export interface BudgetInput {
   ledgerId: string;
+  /** Monthly (default) or yearly; no rollover. */
+  period?: 'monthly' | 'yearly';
   /** Null: the whole ledger's spending ("All spending"), one cap per currency. */
   categoryId: string | null;
   currency: string;
@@ -48,13 +50,13 @@ export function createBudget(db: AppDb, input: BudgetInput): string {
   check(db, input);
   const id = newId();
   const rank = db.select({ r: budgets.rank }).from(budgets).where(eq(budgets.ledgerId, input.ledgerId)).all().reduce((m, b) => Math.max(m, b.r + 1), 0);
-  db.insert(budgets).values({ id, ...input, amount: toDecimalString(dec(input.amount)), period: 'monthly', rank }).run();
+  db.insert(budgets).values({ id, ...input, amount: toDecimalString(dec(input.amount)), period: input.period ?? 'monthly', rank }).run();
   return id;
 }
 
 export function updateBudget(db: AppDb, id: string, input: BudgetInput): void {
   check(db, input, id);
-  db.update(budgets).set({ ...input, amount: toDecimalString(dec(input.amount)), updatedAt: nowIso() }).where(eq(budgets.id, id)).run();
+  db.update(budgets).set({ ...input, amount: toDecimalString(dec(input.amount)), period: input.period ?? 'monthly', updatedAt: nowIso() }).where(eq(budgets.id, id)).run();
 }
 
 export function deleteBudget(db: AppDb, id: string): void {
@@ -71,14 +73,23 @@ export interface BudgetStatus {
   over: boolean;
 }
 
-/** Each budget of a ledger this month: what's been spent against it (same rules as Analytics). */
+/** The period a budget covers on a date: this month, or this calendar year. */
+export function budgetPeriod(period: string, asOf: string): { from: string; to: string } {
+  if (period === 'yearly') return { from: `${asOf.slice(0, 4)}-01-01`, to: `${asOf.slice(0, 4)}-12-31` };
+  return monthRange(monthOf(asOf));
+}
+
+/** Each budget of a ledger in its current period: what's been spent against it (same rules as Analytics). */
 export function budgetStatuses(db: AppDb, ledgerId: string, asOf: string = todayDate()): BudgetStatus[] {
-  const { from } = monthRange(monthOf(asOf));
   const list = db.select().from(budgets).where(eq(budgets.ledgerId, ledgerId)).orderBy(budgets.rank).all();
   const cache = new Map<string, ReturnType<typeof flows>>();
-  const flowsFor = (currency: string) => cache.get(currency) ?? (cache.set(currency, flows(db, { currency, from, to: asOf, ledgerId })), cache.get(currency)!);
+  const flowsFor = (currency: string, period: string) => {
+    const key = `${currency}:${period}`;
+    if (!cache.has(key)) cache.set(key, flows(db, { currency, from: budgetPeriod(period, asOf).from, to: asOf, ledgerId }));
+    return cache.get(key)!;
+  };
   return list.map((budget) => {
-    const f = flowsFor(budget.currency);
+    const f = flowsFor(budget.currency, budget.period);
     const spent = budget.categoryId ? (f.spending.find((x) => x.categoryId === budget.categoryId)?.amount ?? '0') : f.totalSpending;
     const left = dec(budget.amount).minus(dec(spent));
     const percent = dec(budget.amount).gt(0) ? Math.floor(dec(spent).dividedBy(dec(budget.amount)).times(100).toNumber()) : 0;
@@ -104,10 +115,21 @@ export function budgetWarning(
     .where(and(eq(budgets.ledgerId, input.ledgerId), eq(budgets.categoryId, topId), eq(budgets.currency, input.currency)))
     .get();
   if (!budget) return null;
-  const { from, to } = monthRange(monthOf(input.date));
+  const { from, to } = budgetPeriod(budget.period, input.date);
   const spent = dec(flows(db, { currency: input.currency, from, to, ledgerId: input.ledgerId }).spending.find((x) => x.categoryId === topId)?.amount ?? '0');
   const after = spent.plus(dec(input.amount));
   const cap = dec(budget.amount);
   if (after.lte(cap) && spent.lte(cap)) return null;
   return { categoryId: topId, cap: budget.amount, spent: toDecimalString(spent), after: toDecimalString(after), alreadyOver: spent.gt(cap) };
+}
+
+/** Category budgets in one ledger and currency that add up to more than its whole-ledger cap (a heads-up only). */
+export function overlapWarnings(db: AppDb, ledgerId: string): { currency: string; categories: DecimalString; cap: DecimalString; over: DecimalString }[] {
+  const list = db.select().from(budgets).where(eq(budgets.ledgerId, ledgerId)).all();
+  const out: { currency: string; categories: DecimalString; cap: DecimalString; over: DecimalString }[] = [];
+  for (const whole of list.filter((b) => !b.categoryId)) {
+    const sum = list.filter((b) => b.categoryId && b.currency === whole.currency && b.period === whole.period).reduce((s, b) => s.plus(dec(b.amount)), new Decimal(0));
+    if (sum.gt(dec(whole.amount))) out.push({ currency: whole.currency, categories: toDecimalString(sum), cap: whole.amount, over: toDecimalString(sum.minus(dec(whole.amount))) });
+  }
+  return out;
 }
