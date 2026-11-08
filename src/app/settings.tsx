@@ -7,6 +7,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { BottomSheet, Header, Screen, SectionLabel, SheetOption, ToggleRow } from '@/components/ui';
+import { currentUser, getDeviceState } from '@/data/backup-flow';
+import { useLive } from '@/state/live';
 import { db } from '@/db/client';
 import { settings } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -26,10 +28,23 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const [sheet, setSheet] = useState<'currency' | 'format' | 'theme' | null>(null);
   const go = (href: Href) => router.push(href);
+  const device = useLive(() => getDeviceState(db), []);
+  const user = currentUser(db);
 
   return (
     <Screen>
       <Header title={s.title} onBack={goBack} />
+
+      <SectionLabel style={styles.section}>{s.profile}</SectionLabel>
+      <View>
+        <Row
+          icon="user"
+          title={user?.email ?? s.notSignedIn}
+          hint={user ? s.signedInWith(strings.start.methods[user.method]) : undefined}
+          onPress={() => (user ? undefined : router.push('/start'))}
+          last
+        />
+      </View>
 
       <SectionLabel style={styles.section}>{s.organize}</SectionLabel>
       <View>
@@ -60,6 +75,17 @@ export default function SettingsScreen() {
 
       <SectionLabel style={styles.section}>{s.security}</SectionLabel>
       <ToggleRow title={s.hideAmounts} detail={s.hideAmountsDetail} value={current.hideAmounts} onChange={(v) => save({ hideAmounts: v })} />
+      <SectionLabel style={styles.section}>{s.data}</SectionLabel>
+      <View>
+        <Row
+          icon="layers"
+          title={s.backup}
+          value={device.backupMovedAt ? s.backupMoved : device.backupEnabled ? s.backupOn : s.backupOff}
+          onPress={() => go('/backup')}
+          last
+        />
+      </View>
+
       {__DEV__ ? (
         <View>
           <Row icon="code" title="Developer preview" onPress={() => go('/dev')} last />

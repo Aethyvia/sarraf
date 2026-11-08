@@ -10,7 +10,8 @@ import { db } from '@/db/client';
 import { accounts, settings } from '@/db/schema';
 import { SAMPLE_TODAY } from '@/db/sample';
 import { resetSampleData, wipeAsNewPhone } from '@/db/seed';
-import { cloud, keyStore } from '@/services/cloud';
+import { backupDeps, cloud, keyStore } from '@/services/cloud';
+import { backupNow, currentUser } from '@/data/backup-flow';
 import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
 import { DEFAULT_KDF, newDataKey, wrapKey } from '@/lib/backup-crypto';
 import { NUMBER_FORMATS } from '@/lib/money';
@@ -85,6 +86,16 @@ export default function DevPreview() {
           />
           {cloud.knobs ? (
             <>
+              <Toggle
+                label="Another phone takes the backup"
+                onPress={async () => {
+                  const user = currentUser(db);
+                  const record = user ? await cloud.getRecord(user) : null;
+                  if (user && record) await cloud.putRecord(user, { ...record, deviceId: 'galaxy-s24', deviceName: 'Galaxy S24' });
+                  await backupNow(backupDeps());
+                  router.push('/backup');
+                }}
+              />
               <Toggle label={`Offline: ${cloud.knobs.offline ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.offline = !cloud.knobs!.offline), setKnobTick((n) => n + 1))} />
               <Toggle label={`Drive refuses: ${cloud.knobs.refuseDrive ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.refuseDrive = !cloud.knobs!.refuseDrive), setKnobTick((n) => n + 1))} />
               <Toggle label={`Restore drops: ${cloud.knobs.dropDownload ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.dropDownload = !cloud.knobs!.dropDownload), setKnobTick((n) => n + 1))} />

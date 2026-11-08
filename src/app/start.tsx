@@ -1,12 +1,10 @@
-import * as Clipboard from 'expo-clipboard';
-import { File, Paths } from 'expo-file-system';
 import { getLocales } from 'expo-localization';
 import { router } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RecoveryKeyCard } from '@/components/backup/RecoveryKeyCard';
 import { Icon } from '@/components/icons/Icon';
 import { parts } from '@/components/parts';
 import { SignInSheet } from '@/components/start/SignInSheet';
@@ -26,7 +24,7 @@ import { backupDeps, cloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
-import { fonts, radius, useTheme } from '@/theme';
+import { fonts, useTheme } from '@/theme';
 
 /** What "We found your backup" shows: from the Supabase record or the Drive file's header. */
 interface Found {
@@ -245,24 +243,6 @@ export default function StartScreen() {
         backupNow(backupDeps()).catch(() => toast({ message: s.failed }));
       }
     });
-
-  const saveKeyFile = async () => {
-    if (!recoveryKey) return;
-    const f = new File(Paths.cache, 'Sarraf recovery key.txt');
-    if (f.exists) f.delete();
-    f.create();
-    f.write(s.keyFileText(recoveryKey));
-    await Sharing.shareAsync(f.uri, { mimeType: 'text/plain', dialogTitle: s.saveFile });
-  };
-  const copyKey = async () => {
-    if (!recoveryKey) return;
-    await Clipboard.setStringAsync(recoveryKey);
-    toast({ message: s.copied });
-    const key = recoveryKey;
-    setTimeout(async () => {
-      if ((await Clipboard.getStringAsync()) === key) await Clipboard.setStringAsync('');
-    }, 60_000);
-  };
 
   const methodName = s.methods[user?.method ?? 'dev'];
   const groups = recoveryKey?.split('-') ?? [];
@@ -721,18 +701,7 @@ export default function StartScreen() {
     case 'key':
       return (
         <StartPage step={4} title={s.keyShownTitle} body={s.keyShownBody} footer={<Button label={s.savedIt} onPress={() => (setCheck(['', '']), setCheckError(false), go({ k: 'check' }))} />}>
-          <Card style={styles.keyCard}>
-            <Text style={[styles.keyText, { color: colors.ink }]} selectable>
-              {`${groups.slice(0, 3).join('  ')}\n${groups.slice(3).join('  ')}`}
-            </Text>
-          </Card>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button label={s.saveFile} kind="secondary" style={{ flex: 1 }} onPress={() => void saveKeyFile()} />
-            <Button label={s.copy} kind="secondary" style={{ flex: 1 }} onPress={() => void copyKey()} />
-          </View>
-          <Note tone="amber" icon="key">
-            {s.keyWhere}
-          </Note>
+          {recoveryKey ? <RecoveryKeyCard recoveryKey={recoveryKey} /> : null}
         </StartPage>
       );
 
@@ -839,8 +808,6 @@ const styles = StyleSheet.create({
   infoValue: { flex: 1, fontFamily: fonts.sansSemiBold, fontSize: 13.5 },
   codeInput: { fontFamily: fonts.mono, fontSize: 22, letterSpacing: 8, textAlign: 'center' },
   keyInput: { fontFamily: fonts.mono, fontSize: 16, letterSpacing: 2 },
-  keyCard: { paddingVertical: 20, paddingHorizontal: 16, alignItems: 'center', borderRadius: radius.field },
-  keyText: { fontFamily: fonts.monoSemiBold, fontSize: 19, letterSpacing: 1.5, lineHeight: 30, textAlign: 'center' },
   bar: { height: 8, borderRadius: 4, overflow: 'hidden', marginTop: 8 },
   barFill: { height: '100%', borderRadius: 4 },
 });

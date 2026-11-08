@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData } from '@/db/sample';
-import { settings } from '@/db/schema';
+import { deviceState, settings } from '@/db/schema';
 import { createTestDb } from '@/test/db';
 import { planNotifications } from '../reminders';
 
@@ -39,5 +39,21 @@ describe('planned notifications', () => {
     const db = await sample();
     db.update(settings).set({ notifyRecurringDue: false, notifyExpectedLate: false }).where(eq(settings.id, 1)).run();
     expect(planNotifications(db, NOW)).toEqual([]);
+  });
+});
+
+describe('backup problem notifications', () => {
+  it('after 3 days of failed automatic backups, only while backup is on here', async () => {
+    const db = await createTestDb();
+    ensureBaseData(db);
+    const backupNote = () => planNotifications(db, { date: '2026-10-01', time: '08:00' }).filter((n) => n.key.startsWith('backup-failing'));
+    expect(backupNote()).toEqual([]);
+    db.update(deviceState).set({ backupEnabled: true, backupFailingSince: '2026-10-01T05:00:00.000Z' }).where(eq(deviceState.id, 1)).run();
+    expect(backupNote()).toEqual([expect.objectContaining({ at: '2026-10-04T09:00', route: '/backup', title: 'Backups haven’t worked for 3 days' })]);
+    db.update(deviceState).set({ backupMovedAt: '2026-10-02T00:00:00.000Z' }).where(eq(deviceState.id, 1)).run();
+    expect(backupNote()).toEqual([]);
+    db.update(deviceState).set({ backupMovedAt: null }).where(eq(deviceState.id, 1)).run();
+    db.update(settings).set({ notifyBackupProblems: false }).where(eq(settings.id, 1)).run();
+    expect(backupNote()).toEqual([]);
   });
 });

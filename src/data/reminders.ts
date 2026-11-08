@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
-import { accounts, budgets, categories, ledgers, recurringItems, settings, transactions } from '@/db/schema';
+import { accounts, budgets, categories, deviceState, ledgers, recurringItems, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { strings } from '@/i18n/strings';
 import { addDays } from '@/lib/dates';
@@ -93,6 +93,20 @@ export function planNotifications(db: AppDb, now: { date: string; time: string }
         title: s.inTransit,
         body: s.inTransitBody(from, to, IN_TRANSIT_AFTER_DAYS),
         route: '/review',
+      });
+    }
+  }
+
+  // Backups failing for 3 days (only while backup is on and this is still the backup phone).
+  if (set.notifyBackupProblems) {
+    const state = db.select().from(deviceState).where(eq(deviceState.id, 1)).get();
+    if (state?.backupEnabled && !state.backupMovedAt && state.backupFailingSince) {
+      add({
+        key: `backup-failing:${state.backupFailingSince}`,
+        at: `${addDays(state.backupFailingSince.slice(0, 10), 3)}T${OTHER_TIME}`,
+        title: s.backupFailing,
+        body: s.backupFailingBody,
+        route: '/backup',
       });
     }
   }
