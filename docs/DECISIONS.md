@@ -43,4 +43,7 @@ Record every decision made during the build that isn't already in SPEC.md, newes
 | 2026-11-08 | "The original expense's currency" for money back is the currency its account was charged in (the bill's currency when someone else paid). Reimbursement status compares the sum of linked counts-as amounts with that charged amount. | developer | §15 money back; Schema transaction_links |
 | 2026-11-08 | Mark as settled can't exceed the current balance in that currency; it's dated today. A settlement can be removed from the person's history. | developer | §9e |
 | 2026-11-08 | Money back (Got it, Add refund) is dated today or earlier, never in the future. | developer | §15a refunds |
+| 2026-11-08 | Share with a person: with Hide amounts on, the preview on screen is hidden too, but the text sent is the real one, since sending it is a choice to show it. | developer | §13, Hide amounts |
+| 2026-11-08 | Got it and Add refund are reached from Transaction detail (and Got it from Needs review); Write off sits inside the Got it sheet. A refund can't exceed what's left of the original. Money back in another currency pre-fills at today's market rate; untouched, it counts as exactly what's still expected. | developer | §9a, §10, Add refund board |
+| 2026-11-08 | Person page currencies follow Home's currency order. Tapping a history line opens its transaction; tapping a settlement offers Remove. | developer | §13 |
 | | Sarraf Plus price: _open (placeholder $2.99/mo, $24.99/yr)_ | owner | §16 |

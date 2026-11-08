@@ -6,10 +6,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { MoneyInline, chargeLabel, formatLongDate, trimRate } from '@/components/transaction/parts';
+import { GotItSheet } from '@/components/transaction/GotItSheet';
 import { amountSign, rowTitle } from '@/components/transaction/TransactionRow';
 import { BottomSheet, Button, Card, Header, IconChip, LinkButton, Screen } from '@/components/ui';
 import { vsMarketPercent } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
+import { chargedCurrencyOf } from '@/data/owing';
+import { splitOf } from '@/data/splits';
 import { cancelTransaction } from '@/data/review';
 import { deleteTransaction, deletionSet, restoreCancelled } from '@/data/transaction-ops';
 import { toListRowFromDb } from '@/data/transaction-list';
@@ -37,6 +40,7 @@ export default function TransactionDetailScreen() {
   const toast = useToast();
   const action = useAction();
   const [deleting, setDeleting] = useState(false);
+  const [gotIt, setGotIt] = useState(false);
 
   const data = useLive(
     (d) => {
@@ -51,6 +55,8 @@ export default function TransactionDetailScreen() {
         children: d.select().from(transactions).where(eq(transactions.parentId, id)).all().filter((c) => !c.deletedAt).map((c) => toListRowFromDb(d, c)),
         parent: t.parentId ? toListRowFromDb(d, d.select().from(transactions).where(eq(transactions.id, t.parentId)).get()!) : null,
         attachments: attachmentsOf(d, { transactionId: id }),
+        split: splitOf(d, id),
+        splitCurrency: t.kind === 'expense' ? chargedCurrencyOf(d, t) : t.currency,
         accounts: new Map(accountRows.map((a) => [a.id, a])),
         categories: name(d.select().from(categories).all()),
         ledgers: name(d.select().from(ledgers).all()),
@@ -124,6 +130,9 @@ export default function TransactionDetailScreen() {
   if (t.notes) fields.push([s.notes, t.notes]);
 
   const editable = t.kind === 'expense' || t.kind === 'income' || t.kind === 'transfer';
+  // Linked entries are added from here: Got it on a reimbursable expense, Add refund on any cleared expense paid from an account.
+  const waitingBack = t.reimbursable && (t.reimbursementStatus === 'awaiting' || t.reimbursementStatus === 'partly_back') && t.status === 'cleared';
+  const refundable = t.kind === 'expense' && !t.linkType && !!t.accountId && t.status === 'cleared' && !t.scheduled;
   const linkedAccounts = [...new Set(toDelete.flatMap((x) => [x.accountId, x.toAccountId]).filter(Boolean))].map((a) => data.accounts.get(a!)?.name).filter(Boolean);
 
   return (
@@ -193,6 +202,37 @@ export default function TransactionDetailScreen() {
         </Card>
       ) : null}
 
+      {data.split ? (
+        <View>
+          <Text style={[styles.label, { color: colors.inkMuted }]}>{s.split}</Text>
+          <Card style={styles.fields}>
+            {data.split.shares.map((sh, i, list) => {
+              const name = sh.personId ? (data.people.get(sh.personId) ?? '') : strings.split.you;
+              const detail = !sh.personId
+                ? t.paidByPersonId
+                  ? strings.split.youOwe(data.people.get(t.paidByPersonId) ?? '')
+                  : strings.split.yourShare
+                : t.paidByPersonId
+                  ? sh.personId === t.paidByPersonId
+                    ? strings.split.payerRow
+                    : strings.split.notTracked(data.people.get(t.paidByPersonId) ?? '')
+                  : sh.treat
+                    ? strings.split.treated
+                    : strings.split.owesYou;
+              return (
+                <View key={sh.personId ?? 'you'} style={[styles.field, i < list.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.fieldValue, { color: colors.ink, textAlign: 'left' }]}>{name}</Text>
+                    <Text style={[styles.small, { color: colors.inkMuted }]}>{detail}</Text>
+                  </View>
+                  <MoneyInline value={sh.amount} currency={data.splitCurrency} size={13} />
+                </View>
+              );
+            })}
+          </Card>
+        </View>
+      ) : null}
+
       {data.attachments.length ? (
         <View>
           <Text style={[styles.label, { color: colors.inkMuted }]}>{s.attachments(data.attachments.length)}</Text>
@@ -223,6 +263,8 @@ export default function TransactionDetailScreen() {
           {!t.linkType ? <Button kind="secondary" label={s.duplicate} style={{ flex: 1 }} onPress={() => router.push({ pathname: '/transaction/new', params: { duplicate: id } })} /> : null}
         </View>
       ) : null}
+      {waitingBack && !row.cancelled ? <Button kind="secondary" label={strings.review.gotIt} onPress={() => setGotIt(true)} /> : null}
+      {refundable ? <Button kind="secondary" label={s.addRefund} onPress={() => router.push(`/transaction/${id}/refund`)} /> : null}
       {editable ? (
         row.cancelled ? (
           <Button kind="secondary" label={s.restore} onPress={() => action.run(() => restoreCancelled(db, id))} />
@@ -267,6 +309,7 @@ export default function TransactionDetailScreen() {
           <Button kind="secondary" label={s.keep(toDelete.length)} onPress={() => setDeleting(false)} />
         </View>
       </BottomSheet>
+      <GotItSheet expenseId={gotIt ? id : null} onClose={() => setGotIt(false)} />
     </Screen>
   );
 }

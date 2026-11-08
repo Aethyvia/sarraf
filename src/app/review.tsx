@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
+import { GotItSheet } from '@/components/transaction/GotItSheet';
 import { Money } from '@/components/Money';
 import { BottomSheet, Button, Card, Header, Screen, SectionLabel, SheetOption } from '@/components/ui';
 import { cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsDetailsToConfirm, needsReview } from '@/data/review';
@@ -15,7 +16,6 @@ import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
-import { useToast } from '@/state/toast';
 import { fonts, radius, useTheme } from '@/theme';
 
 interface Names {
@@ -54,10 +54,10 @@ export default function ReviewScreen() {
   const today = todayDate();
   const data = useLive((d) => needsReview(d, todayDate()));
   const names = useNames();
-  const toast = useToast();
   const action = useAction();
   const [options, setOptions] = useState<TransactionRow | null>(null);
   const [confirming, setConfirming] = useState<TransactionRow | null>(null);
+  const [gotIt, setGotIt] = useState<string | null>(null);
 
   const startConfirm = (t: TransactionRow) => {
     if (needsDetailsToConfirm(t)) {
@@ -81,7 +81,7 @@ export default function ReviewScreen() {
       {button === 'date' ? (
         <Text style={[styles.date, { color: colors.inkSecondary }]}>{formatShortDate(t.date)}</Text>
       ) : button === 'gotIt' ? (
-        <Button kind="secondary" label={s.gotIt} onPress={() => toast({ message: s.gotItSoon })} />
+        <Button kind="secondary" label={s.gotIt} onPress={() => setGotIt(t.id)} />
       ) : (
         <Button label={confirmLabel(t) === 'paid' ? s.paid : s.received} onPress={() => startConfirm(t)} />
       )}
@@ -153,6 +153,7 @@ export default function ReviewScreen() {
           action.run(() => confirmTransaction(db, t.id, date));
         }}
       />
+      <GotItSheet expenseId={gotIt} onClose={() => setGotIt(null)} />
     </Screen>
   );
 }
