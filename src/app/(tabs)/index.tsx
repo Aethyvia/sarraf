@@ -6,10 +6,15 @@ import { Icon } from '@/components/icons/Icon';
 import { CurrencyTileCard as Tile } from '@/components/CurrencyTile';
 import { Money } from '@/components/Money';
 import { RecurringRow } from '@/components/RecurringRow';
+import { BudgetCard } from '@/components/BudgetCard';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
 import { Card, IconButton, LinkButton, SectionLabel } from '@/components/ui';
 import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
+import { budgetStatuses } from '@/data/budgets';
 import { recurringOnHome } from '@/data/recurring';
+import { categories, ledgers } from '@/db/schema';
+import type { AppDb } from '@/db/types';
+import { eq } from 'drizzle-orm';
 import { needsReview } from '@/data/review';
 import { recentTransactions } from '@/data/transaction-list';
 import { strings } from '@/i18n/strings';
@@ -18,6 +23,22 @@ import { formatShortDate } from '@/lib/format-date';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
+
+/**
+ * Home's budgets (Spec §8): only the default ledger's — any that are over,
+ * then the whole-ledger caps.
+ */
+function homeBudgets(db: AppDb, today: string) {
+  const ledger = db.select().from(ledgers).where(eq(ledgers.isDefault, true)).get();
+  if (!ledger) return null;
+  const cats = new Map(db.select().from(categories).all().map((c) => [c.id, c]));
+  const all = budgetStatuses(db, ledger.id, today);
+  const shown = [...all.filter((b) => b.over && b.budget.categoryId), ...all.filter((b) => !b.budget.categoryId)].map((status) => ({
+    status,
+    category: status.budget.categoryId ? (cats.get(status.budget.categoryId) ?? null) : null,
+  }));
+  return { ledger: ledger.name, shown };
+}
 
 /** Tiles shown on Home before "See all N currencies". */
 const HOME_TILES = 4;
@@ -40,10 +61,11 @@ export default function HomeScreen() {
       review: needsReview(db, today),
       recent: recentTransactions(db, 6, today),
       recurring: recurringOnHome(db, today),
+      budgets: homeBudgets(db, today),
     };
   }, [defaultCurrency]);
 
-  const { tiles, estimate, review, recent, recurring } = data;
+  const { tiles, estimate, review, recent, recurring, budgets } = data;
   const fixed = recurring.filter((r) => r.item.amountType === 'same');
   const bills = recurring.filter((r) => r.item.amountType === 'varies');
   // Added automatically and waiting in Needs review: shown here too, with an Auto tag (Spec §8).
@@ -99,6 +121,18 @@ export default function HomeScreen() {
               <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
             </Card>
           </Pressable>
+        ) : null}
+
+        {budgets && budgets.shown.length ? (
+          <>
+            <View style={styles.sectionHead}>
+              <SectionLabel>{strings.budgets.homeTitle(budgets.ledger)}</SectionLabel>
+              <LinkButton label={strings.recurring.seeAll} onPress={() => router.push('/budgets')} />
+            </View>
+            {budgets.shown.map((b) => (
+              <BudgetCard key={b.status.budget.id} status={b.status} category={b.category} compact />
+            ))}
+          </>
         ) : null}
 
         {recurring.length || autoAdded.length ? (

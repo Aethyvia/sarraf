@@ -159,7 +159,7 @@ export default function AccountDetailScreen() {
 
       <View style={styles.listHead}>
         <SectionLabel>{a.transactions}</SectionLabel>
-        {data.rows.length ? <LinkButton label={a.seeAll} onPress={() => router.push({ pathname: '/transactions', params: { account: id } })} /> : null}
+        {data.rows.length ? <LinkButton label={a.seeAll} onPress={() => router.push({ pathname: '/list', params: { account: id } })} /> : null}
       </View>
       {data.rows.length ? (
         <Card>

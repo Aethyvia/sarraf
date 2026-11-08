@@ -30,6 +30,7 @@ import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
 import { marketRate } from '@/data/rates';
 import { NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft } from '@/data/transactions';
+import { budgetWarning } from '@/data/budgets';
 import { accountFree, currencyPositions, spendWarning, upcomingOnAccount } from '@/data/usable';
 import { db } from '@/db/client';
 import { accounts, categories, ledgers, people } from '@/db/schema';
@@ -136,6 +137,14 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const outOfAccount =
     (form.kind === 'expense' || form.kind === 'transfer') && fromAccount && preview.result ? preview.result.accountAmount : null;
   const warning = useLive((d) => (fromAccount && outOfAccount ? spendWarning(d, fromAccount.id, outOfAccount) : null), [fromAccount?.id, outOfAccount]);
+  // Budget warning (Spec §11 — Decided): the category's budget in this ledger only; when this takes it over, or it's already over.
+  const budget = useLive(
+    (d) =>
+      form.kind === 'expense' && fromAccount && outOfAccount
+        ? budgetWarning(d, { ledgerId: form.ledgerId, categoryId: form.categoryId, currency: fromAccount.currency, amount: outOfAccount, date: form.date })
+        : null,
+    [form.kind, fromAccount?.id, outOfAccount, form.ledgerId, form.categoryId, form.date],
+  );
   const upcoming = useLive((d) => (fromAccount && !isSavings ? upcomingOnAccount(d, fromAccount.id) : null), [fromAccount?.id, isSavings]);
   const goalFree = useLive((d) => (goalAccount ? accountFree(d, goalAccount.id).free : null), [goalAccount?.id]);
   // Raising a goal past what the currency has (Decided Nov 7): allowed, with a red warning; Usable goes negative.
@@ -429,6 +438,16 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         ) : null}
       </>
     );
+    const budgetNote =
+      budget && fromAccount ? (
+        <RowNote tone="warning" icon="chart">
+          {parts(
+            budget.alreadyOver
+              ? strings.budgets.warnAlreadyOver(category?.name ?? '', <MoneyInline size={11} value={budget.cap} currency={fromAccount.currency} />, <MoneyInline size={11} value={budget.spent} currency={fromAccount.currency} />)
+              : strings.budgets.warnOver(category?.name ?? '', <MoneyInline size={11} value={budget.cap} currency={fromAccount.currency} />, <MoneyInline size={11} value={budget.after} currency={fromAccount.currency} />),
+          )}
+        </RowNote>
+      ) : null;
     const categoryRow = (
       <FormRow
         label={s.category}
@@ -486,6 +505,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         {warningNote}
         {fromPerson && form.kind === 'expense' ? <RowNote>{s.paidByHint(fromPerson.name)}</RowNote> : null}
         {categoryRow}
+        {form.kind === 'expense' ? budgetNote : null}
         {tagRow}
         {statusRows}
         {form.kind === 'expense' ? (

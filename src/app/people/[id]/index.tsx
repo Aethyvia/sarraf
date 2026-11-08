@@ -133,7 +133,7 @@ export default function PersonScreen() {
 
       {expected.length ? (
         <Pressable
-          onPress={() => router.push({ pathname: '/transactions', params: { reimbursable: '1' } })}
+          onPress={() => router.push({ pathname: '/list', params: { reimbursable: '1' } })}
           style={[styles.expected, { backgroundColor: colors.filled }]}
           accessibilityRole="button"
         >

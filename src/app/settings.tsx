@@ -37,7 +37,8 @@ export default function SettingsScreen() {
         <Row icon="list" title={s.categories} onPress={() => go('/categories')} />
         <Row icon="ledger" title={s.ledgers} onPress={() => go('/ledgers')} />
         <Row icon="people" title={s.people} onPress={() => go('/people')} />
-        <Row icon="cycle" title={strings.recurring.title} onPress={() => go('/recurring')} last />
+        <Row icon="cycle" title={strings.recurring.title} onPress={() => go('/recurring')} />
+        <Row icon="chart" title={strings.budgets.title} onPress={() => go('/budgets')} last />
       </View>
 
       <SectionLabel style={styles.section}>{s.preferences}</SectionLabel>
