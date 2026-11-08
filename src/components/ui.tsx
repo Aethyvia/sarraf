@@ -112,6 +112,7 @@ export function Button({
   kind = 'primary',
   disabled,
   style,
+  icon,
 }: {
   /** Text, or text with an amount inside (see parts()). */
   label: ReactNode;
@@ -119,6 +120,8 @@ export function Button({
   kind?: ButtonKind;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** An icon before the label. */
+  icon?: string;
 }) {
   const { colors } = useTheme();
   const look: Record<ButtonKind, { box: ViewStyle; text: string }> = {
@@ -140,6 +143,7 @@ export function Button({
         style,
       ]}
     >
+      {icon ? <Icon name={icon} size={16} color={look[kind].text} strokeWidth={2.4} /> : null}
       <Text style={[styles.buttonText, { color: look[kind].text }]}>{label}</Text>
     </Pressable>
   );
@@ -492,8 +496,10 @@ const styles = StyleSheet.create({
   button: {
     height: BUTTON_HEIGHT,
     borderRadius: radius.field,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     paddingHorizontal: 18,
   },
   buttonText: { fontFamily: fonts.sansBold, fontSize: 13.5 },

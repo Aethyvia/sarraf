@@ -69,7 +69,6 @@ export function TransactionRow({
   const sign = amountSign(row);
   const moneyValue = row.amount.value;
   const amountColor = row.amount.tone === 'expense' ? colors.expense : row.amount.tone === 'income' ? colors.income : colors.ink;
-  const dim = echo || row.cancelled;
 
   let title = rowTitle(row);
   let detail: string;
@@ -90,6 +89,10 @@ export function TransactionRow({
   }
 
   const tags = variant === 'list' && !child && !echo ? row.tags : [];
+  const small = child || echo;
+  // Home's Recent: each row is its own card. Lists: plain rows with a line under each.
+  const card = variant === 'recent';
+  const chipSize = card ? 40 : 38;
 
   return (
     <Pressable
@@ -97,39 +100,60 @@ export function TransactionRow({
       onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row,
+        variant === 'account' && styles.inCard,
+        card && [styles.card, { backgroundColor: colors.surface }],
         child && styles.child,
-        !last && { borderBottomWidth: 1, borderBottomColor: colors.line },
+        !card && !last && { borderBottomWidth: 1, borderBottomColor: colors.line },
+        echo && { opacity: 0.55 },
         pressed && { backgroundColor: colors.filled },
         selected && { backgroundColor: colors.accentSoft },
       ]}
     >
+      {child ? <View style={[styles.branch, { backgroundColor: colors.border }]} /> : null}
       {selecting ? (
         <View style={[styles.check, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accent : 'transparent' }]}>
           {selected ? <Icon name="tick" size={12} color={colors.onAccent} strokeWidth={3} /> : null}
         </View>
       ) : null}
-      {!child && !echo ? <IconChip icon={row.icon.name} color={row.icon.color} size={36} /> : null}
-      <View style={{ flex: 1, opacity: dim ? 0.55 : 1 }}>
-        <Text style={[styles.title, { color: colors.ink }, row.cancelled && styles.struck, (child || echo) && styles.childTitle]} numberOfLines={1}>
+      {small ? (
+        <View style={echo && styles.echoChip}>
+          <IconChip icon="tick" color="teal" size={30} />
+        </View>
+      ) : (
+        <IconChip icon={row.icon.name} color={row.icon.color} size={chipSize} />
+      )}
+      <View style={{ flex: 1, opacity: row.cancelled ? 0.55 : 1 }}>
+        <Text
+          style={[styles.title, { color: colors.ink }, row.cancelled && styles.struck, echo && styles.echoTitle, child && [styles.childTitle, { color: colors.inkSecondary }], card && { fontSize: 14 }]}
+          numberOfLines={small ? 1 : 2}
+        >
           {title}
         </Text>
         {detail ? (
-          <Text style={[styles.detail, { color: colors.inkMuted }]} numberOfLines={1}>
+          <Text style={[styles.detail, { color: colors.inkMuted }, small && { fontSize: 11.5 }]} numberOfLines={small ? 2 : 1}>
             {detail}
           </Text>
         ) : null}
         {tags.length ? (
           <View style={styles.tags}>
             {tags.map((t) => (
-              <View key={t} style={[styles.tag, { backgroundColor: t === 'reimbursed' ? colors.accentSoft : colors.filled }]}>
-                <Text style={[styles.tagText, { color: t === 'reimbursed' ? colors.accent : colors.inkSecondary }]}>{tagLabel(t, row)}</Text>
+              <View key={t} style={[styles.tag, { borderColor: t === 'reimbursed' ? colors.accent : colors.outline }]}>
+                <Text style={[styles.tagText, { color: t === 'reimbursed' ? colors.accent : colors.inkMuted }]}>{tagLabel(t, row).toUpperCase()}</Text>
               </View>
             ))}
           </View>
         ) : null}
       </View>
-      <View style={{ alignItems: 'flex-end', opacity: dim ? 0.55 : 1 }}>
-        <Money value={moneyValue} currency={row.amount.currency} sign={sign} style={[styles.amount, { color: amountColor }, row.cancelled && styles.struck]} />
+      <View style={{ alignItems: 'flex-end', opacity: row.cancelled ? 0.55 : 1 }}>
+        <View style={styles.amountLine}>
+          {row.kind === 'transfer' && !small ? <Icon name="swap" size={14} color={colors.inkSecondary} strokeWidth={1.9} /> : null}
+          <Money
+            value={moneyValue}
+            currency={row.amount.currency}
+            sign={sign}
+            style={[styles.amount, { color: amountColor }, row.cancelled && styles.struck, echo && { fontSize: 14 }, child && { fontSize: 13.5 }]}
+          />
+        </View>
         {row.sent ? (
           <Text style={[styles.sent, { color: colors.inkMuted }]}>
             <Money value={row.sent.value} currency={row.sent.currency} sign="never" style={[styles.sent, { color: colors.inkMuted }]} /> {strings.list.sent}
@@ -141,15 +165,21 @@ export function TransactionRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 60 },
-  child: { paddingStart: 62, paddingVertical: 9, minHeight: 0 },
-  title: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
-  childTitle: { fontFamily: fonts.sansMedium, fontSize: 13 },
-  detail: { fontFamily: fonts.sans, fontSize: 12, marginTop: 1 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4, paddingVertical: 12 },
+  inCard: { paddingHorizontal: 14 },
+  card: { borderRadius: 14, padding: 12 },
+  child: { paddingStart: 30 },
+  branch: { position: 'absolute', left: 15, top: 0, bottom: '50%', width: 1.5 },
+  echoChip: { marginHorizontal: 4 },
+  title: { fontFamily: fonts.sansSemiBold, fontSize: 14.5 },
+  echoTitle: { fontSize: 13.5 },
+  childTitle: { fontSize: 13 },
+  detail: { fontFamily: fonts.sans, fontSize: 12 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
-  tag: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  tagText: { fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.3 },
-  amount: { fontSize: 14 },
+  tag: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 1 },
+  tagText: { fontFamily: fonts.sansBold, fontSize: 10 },
+  amountLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  amount: { fontSize: 15 },
   sent: { fontFamily: fonts.mono, fontSize: 11 },
   struck: { textDecorationLine: 'line-through' },
   check: { width: 22, height: 22, borderRadius: radius.pill, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },

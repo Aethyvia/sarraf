@@ -8,7 +8,7 @@ import { Money } from '@/components/Money';
 import { RecurringRow } from '@/components/RecurringRow';
 import { BudgetCard } from '@/components/BudgetCard';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
-import { Card, IconButton, LinkButton, SectionLabel } from '@/components/ui';
+import { Card, IconButton, IconChip, LinkButton, SectionLabel } from '@/components/ui';
 import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
 import { budgetStatuses } from '@/data/budgets';
 import { recurringOnHome } from '@/data/recurring';
@@ -50,7 +50,7 @@ const HOME_TILES = 4;
  */
 export default function HomeScreen() {
   const s = strings.home;
-  const { colors } = useTheme();
+  const { colors, swatch } = useTheme();
   const { defaultCurrency } = useSettings();
   const data = useLive((db) => {
     const today = todayDate();
@@ -62,10 +62,12 @@ export default function HomeScreen() {
       recent: recentTransactions(db, 6, today),
       recurring: recurringOnHome(db, today),
       budgets: homeBudgets(db, today),
+      categoryLooks: new Map(db.select({ id: categories.id, icon: categories.icon, color: categories.color }).from(categories).all().map((c) => [c.id, c])),
     };
   }, [defaultCurrency]);
 
-  const { tiles, estimate, review, recent, recurring, budgets } = data;
+  const { tiles, estimate, review, recent, recurring, budgets, categoryLooks } = data;
+  const look = (id: string | null | undefined) => (id ? (categoryLooks.get(id) ?? null) : null);
   const fixed = recurring.filter((r) => r.item.amountType === 'same');
   const bills = recurring.filter((r) => r.item.amountType === 'varies');
   // Added automatically and waiting in Needs review: shown here too, with an Auto tag (Spec §8).
@@ -82,7 +84,7 @@ export default function HomeScreen() {
 
         {tiles.length > 0 ? (
           estimate.total !== null ? (
-            <View style={styles.estimate}>
+            <Card style={styles.estimate}>
               <Text style={[styles.estimateLabel, { color: colors.inkMuted }]}>{s.estimated(estimate.currency)}</Text>
               <Text style={[styles.estimateValue, { color: colors.ink }]}>
                 ≈ <Money value={estimate.total} currency={estimate.currency} style={[styles.estimateValue, { color: colors.ink }]} />
@@ -91,7 +93,7 @@ export default function HomeScreen() {
                 <Text style={[styles.ratesFrom, { color: colors.inkMuted }]}>{s.ratesFrom(formatShortDate(estimate.ratesFrom.slice(0, 10)))}</Text>
               ) : null}
               {ratesAge > RATES_WARN_AFTER_DAYS ? <Text style={[styles.ratesWarn, { color: colors.warning }]}>{s.ratesOld(ratesAge)}</Text> : null}
-            </View>
+            </Card>
           ) : (
             <Text style={[styles.hidden, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{s.totalHidden}</Text>
           )
@@ -104,19 +106,23 @@ export default function HomeScreen() {
             <Tile key={t.currency} tile={t} estimate={estimate.perCurrency.get(t.currency) ?? null} defaultCurrency={defaultCurrency} />
           ))}
         </View>
-        {tiles.length > HOME_TILES ? <LinkButton label={s.seeAll(tiles.length)} onPress={() => router.push('/currencies')} /> : null}
+        {tiles.length > HOME_TILES ? (
+          <View style={{ marginTop: -12, marginBottom: -8 }}>
+            <LinkButton label={s.seeAll(tiles.length)} onPress={() => router.push('/currencies')} />
+          </View>
+        ) : null}
 
         {review.toConfirm > 0 || review.waitingBack.length > 0 ? (
           <Pressable onPress={() => router.push('/review')} accessibilityRole="button">
-            <Card style={styles.confirm}>
+            <Card style={[styles.confirm, { borderColor: colors.warningSoft }]}>
               <View style={[styles.confirmBadge, { backgroundColor: colors.warningSoft }]}>
-                <Text style={[styles.confirmCount, { color: colors.warning }]}>{review.toConfirm || review.waitingBack.length}</Text>
+                <Icon name="review" size={16} color={swatch('gold').fg} strokeWidth={1.9} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.confirmTitle, { color: colors.ink }]}>
+                <Text style={[styles.confirmTitle, { color: colors.ink, fontFamily: fonts.sansBold, fontSize: 13.5 }]}>
                   {review.toConfirm > 0 ? s.needConfirm(review.toConfirm) : s.waitingOnly(review.waitingBack.length)}
                 </Text>
-                <Text style={[styles.confirmDetail, { color: colors.inkMuted }]}>{s.needConfirmDetail}</Text>
+                <Text style={[styles.confirmDetail, { color: colors.inkMuted, fontSize: 11.5 }]}>{s.needConfirmDetail}</Text>
               </View>
               <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
             </Card>
@@ -124,7 +130,7 @@ export default function HomeScreen() {
         ) : null}
 
         {budgets && budgets.shown.length ? (
-          <>
+          <View style={styles.section}>
             <View style={styles.sectionHead}>
               <SectionLabel>{strings.budgets.homeTitle(budgets.ledger)}</SectionLabel>
               <LinkButton label={strings.recurring.seeAll} onPress={() => router.push('/budgets')} />
@@ -132,51 +138,49 @@ export default function HomeScreen() {
             {budgets.shown.map((b) => (
               <BudgetCard key={b.status.budget.id} status={b.status} category={b.category} compact />
             ))}
-          </>
+          </View>
         ) : null}
 
         {recurring.length || autoAdded.length ? (
-          <>
+          <View style={styles.section}>
             <View style={styles.sectionHead}>
               <SectionLabel>{strings.recurring.title.toUpperCase()}</SectionLabel>
               <LinkButton label={strings.recurring.seeAll} onPress={() => router.push('/recurring')} />
             </View>
-            <Card>
-              {fixed.length || autoAdded.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted }]}>{strings.recurring.homeFixed}</Text> : null}
-              {fixed.map((r, i) => (
-                <RecurringRow key={r.item.id} item={r.item} variant="home" last={i === fixed.length - 1 && !autoAdded.length && !bills.length} />
-              ))}
-              {autoAdded.map((t, i) => (
-                <Pressable key={t.id} onPress={() => router.push('/review')} style={[styles.autoRow, (i < autoAdded.length - 1 || bills.length > 0) && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+            {fixed.length || autoAdded.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted }]}>{strings.recurring.homeFixed}</Text> : null}
+            {fixed.map((r) => (
+              <RecurringRow key={r.item.id} item={r.item} variant="home" category={look(r.item.categoryId)} />
+            ))}
+            {autoAdded.map((t) => (
+              <Pressable key={t.id} onPress={() => router.push('/review')}>
+                <Card style={styles.autoRow}>
+                  <IconChip icon="repeat" color={look(t.categoryId)?.color ?? 'neutral'} size={40} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.confirmTitle, { color: colors.ink }]} numberOfLines={1}>
                       {t.notes?.split('\n')[0] ?? strings.recurring.title}
                     </Text>
                     <Text style={[styles.confirmDetail, { color: colors.inkMuted }]} numberOfLines={1}>
-                      <Money value={t.amount} currency={t.currency} style={[styles.confirmDetail, { fontFamily: fonts.mono }]} /> · {strings.recurring.addedAuto(formatShortDate(t.date))}
+                      <Money value={t.amount} currency={t.currency} style={styles.confirmDetail} /> · {strings.recurring.addedAuto(formatShortDate(t.date))}
                     </Text>
                   </View>
                   <Text style={[styles.autoTag, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{strings.recurring.auto}</Text>
-                </Pressable>
-              ))}
-              {bills.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted }]}>{strings.recurring.homeBills}</Text> : null}
-              {bills.map((r, i) => (
-                <RecurringRow key={r.item.id} item={r.item} variant="home" last={i === bills.length - 1} />
-              ))}
-            </Card>
-          </>
+                </Card>
+              </Pressable>
+            ))}
+            {bills.length ? <Text style={[styles.groupLabel, { color: colors.inkMuted, paddingTop: 4 }]}>{strings.recurring.homeBills}</Text> : null}
+            {bills.map((r) => (
+              <RecurringRow key={r.item.id} item={r.item} variant="home" category={look(r.item.categoryId)} />
+            ))}
+          </View>
         ) : null}
 
+        <View style={styles.section}>
         <View style={styles.sectionHead}>
           <SectionLabel>{s.recent.toUpperCase()}</SectionLabel>
           {recent.length ? <LinkButton label={s.seeAllShort} onPress={() => router.push('/transactions')} /> : null}
         </View>
         {recent.length ? (
-          <Card>
-            {recent.map((r, i) => (
-              <TransactionRow key={r.id} row={r} variant="recent" last={i === recent.length - 1} onPress={() => router.push(`/transaction/${r.id}`)} />
-            ))}
-          </Card>
+          recent.map((r) => <TransactionRow key={r.id} row={r} variant="recent" onPress={() => router.push(`/transaction/${r.id}`)} />)
         ) : (
           <Card style={styles.empty}>
             <Icon name="nav-transactions" size={26} color={colors.border} strokeWidth={1.6} />
@@ -184,31 +188,33 @@ export default function HomeScreen() {
             <Text style={[styles.emptyBody, { color: colors.inkMuted }]}>{s.emptyRecentBody}</Text>
           </Card>
         )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20, gap: 14 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontFamily: fonts.serif, fontSize: 22 },
-  estimate: { gap: 2, paddingHorizontal: 2 },
-  estimateLabel: { fontFamily: fonts.sansExtraBold, fontSize: 10.5, letterSpacing: 0.6 },
-  estimateValue: { fontFamily: fonts.mono, fontSize: 26 },
-  ratesFrom: { fontFamily: fonts.sans, fontSize: 11.5 },
-  ratesWarn: { fontFamily: fonts.sansSemiBold, fontSize: 11.5, lineHeight: 16, marginTop: 4 },
+  content: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 20, gap: 22 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: -4 },
+  title: { fontFamily: fonts.serif, fontSize: 20 },
+  estimate: { padding: 16, alignItems: 'center', gap: 4 },
+  estimateLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.53, textAlign: 'center' },
+  estimateValue: { fontFamily: fonts.monoSemiBold, fontSize: 32 },
+  ratesFrom: { fontFamily: fonts.sans, fontSize: 11.5, textAlign: 'center' },
+  ratesWarn: { fontFamily: fonts.sansSemiBold, fontSize: 11.5, lineHeight: 16, marginTop: 4, textAlign: 'center' },
   hidden: { fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 18, borderRadius: radius.field, padding: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  confirm: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  confirm: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 15, borderWidth: 1 },
   confirmBadge: { width: 34, height: 34, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   confirmCount: { fontFamily: fonts.monoSemiBold, fontSize: 14 },
   confirmTitle: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   confirmDetail: { fontFamily: fonts.sans, fontSize: 12 },
-  groupLabel: { fontFamily: fonts.sansExtraBold, fontSize: 10.5, letterSpacing: 0.6, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2 },
-  autoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
-  autoTag: { fontFamily: fonts.sansBold, fontSize: 10.5, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, marginBottom: -6 },
+  section: { gap: 10 },
+  groupLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.53, paddingHorizontal: 2 },
+  autoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14 },
+  autoTag: { fontFamily: fonts.sansBold, fontSize: 11, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 22, paddingHorizontal: 16 },
   emptyTitle: { fontFamily: fonts.sansSemiBold, fontSize: 13.5 },
   emptyBody: { fontFamily: fonts.sans, fontSize: 12, textAlign: 'center', maxWidth: 220 },

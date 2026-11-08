@@ -58,13 +58,16 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
     return () => setToastInset(0);
   }, [focused, height, setToastInset]);
   return (
-    <View style={{ backgroundColor: colors.bg }} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+    <View
+      style={{ backgroundColor: colors.sheet, borderTopWidth: 1, borderTopColor: colors.outline }}
+      onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+    >
       {WITH_ADD_BAR.has(active) ? (
         <View style={styles.addBar}>
-          <Button label={strings.home.addTransaction} onPress={() => router.push('/transaction/new')} />
+          <Button label={strings.home.addTransaction} icon="plus" onPress={() => router.push('/transaction/new')} />
         </View>
       ) : null}
-      <View style={[styles.bar, { backgroundColor: colors.sheet, borderTopColor: colors.line, paddingBottom: 10 + insets.bottom }]}>
+      <View style={[styles.bar, { paddingTop: WITH_ADD_BAR.has(active) ? 6 : 10, paddingBottom: 8 + insets.bottom }]}>
         {TABS.map((t) => {
           const on = t.name === active;
           return (
@@ -86,8 +89,8 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
 }
 
 const styles = StyleSheet.create({
-  addBar: { paddingHorizontal: 20, paddingBottom: 10, paddingTop: 6 },
-  bar: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, paddingTop: 10 },
+  addBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  bar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 16 },
   item: { alignItems: 'center', gap: 3, minWidth: 64 },
   label: { fontSize: 11 },
 });

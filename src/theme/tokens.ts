@@ -15,6 +15,8 @@ export interface Palette {
   inkMuted: string;
   line: string;
   border: string;
+  /** Light outlines: tags, outlined cards and the Add bar's top edge. */
+  outline: string;
   accent: string;
   /** Text and icons placed on the accent colour. */
   onAccent: string;
@@ -26,6 +28,10 @@ export interface Palette {
   /** "Dips into savings" warning. */
   warning: string;
   warningSoft: string;
+  /** Background of a card that's over (an over budget). */
+  warningTint: string;
+  /** Bar of an over budget. */
+  overBar: string;
   scrim: string;
   /** The dark "EXACT" bubble behind a tapped short amount. */
   tooltip: string;
@@ -42,6 +48,7 @@ export const light: Palette = {
   inkMuted: '#948C7C',
   line: '#EFE9DC',
   border: '#D9D2C2',
+  outline: '#E8E1D3',
   accent: '#1F5A52',
   onAccent: '#FFFFFF',
   accentSoft: '#DCEAE6',
@@ -50,6 +57,8 @@ export const light: Palette = {
   expenseSoft: '#FDF1F0',
   warning: '#8A5A00',
   warningSoft: '#F6EDD6',
+  warningTint: '#FFFDF6',
+  overBar: '#C66510',
   scrim: 'rgba(33,29,23,0.45)',
   tooltip: '#211D17',
   onTooltip: '#FFFFFF',
@@ -65,6 +74,7 @@ export const dark: Palette = {
   inkMuted: '#8A8172',
   line: '#332D25',
   border: '#4A4236',
+  outline: '#3A332A',
   accent: '#2F7A6D',
   onAccent: '#0E1512',
   accentSoft: '#1D3B35',
@@ -73,6 +83,8 @@ export const dark: Palette = {
   expenseSoft: '#3A201D',
   warning: '#D9A73D',
   warningSoft: '#3A2F1A',
+  warningTint: '#2A2418',
+  overBar: '#E0913D',
   scrim: 'rgba(0,0,0,0.55)',
   tooltip: '#F5F1E8',
   onTooltip: '#17140F',

@@ -1,7 +1,7 @@
 import { isNull } from 'drizzle-orm';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icons/Icon';
@@ -10,7 +10,7 @@ import { DateRangeSheet, MultiPickerSheet, type DateRange } from '@/components/s
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useCategorySections, useLedgerItems, usePeopleItems } from '@/components/sheets/pickers';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
-import { Button, Header, IconChip, LinkButton } from '@/components/ui';
+import { Button, Header, IconButton, IconChip, LinkButton } from '@/components/ui';
 import { bulkUpdate, restoreTransactions, softDeleteTransactions, undoBulk, type BulkChange } from '@/data/transaction-ops';
 import { listTransactions, type ListKind, type ListRow, type TransactionFilters } from '@/data/transaction-list';
 import { db } from '@/db/client';
@@ -102,11 +102,10 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
       onPress={() => setSheet(key)}
       style={[styles.chip, { backgroundColor: count ? colors.accentSoft : colors.filled, borderColor: count ? colors.accent : 'transparent' }]}
     >
-      <Text style={[styles.chipText, { color: count ? colors.accent : colors.inkSecondary }]}>
+      <Text style={[styles.chipText, { color: count ? colors.accent : colors.ink }]}>
         {label}
         {count ? ` · ${count}` : ''}
       </Text>
-      <Icon name="down" size={10} color={count ? colors.accent : colors.inkMuted} strokeWidth={2.4} />
     </Pressable>
   );
   const datesLabel = filters.from || filters.to ? `${filters.from ? formatShortDate(filters.from) : '…'} – ${filters.to ? formatShortDate(filters.to) : '…'}` : s.filters.dates;
@@ -124,10 +123,15 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
             <View style={styles.selectSide} />
           </View>
         ) : (
-          <Header title={s.title} subtitle={total ? strings.analytics.fromAnalytics : undefined} onBack={onBack} />
+          <Header
+            title={s.title}
+            subtitle={total ? strings.analytics.fromAnalytics : undefined}
+            onBack={onBack}
+            actions={onBack ? undefined : <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />}
+          />
         )}
         {!selecting ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <View style={styles.chips}>
             {chip('ledger', s.filters.ledger, filters.ledgerIds?.length ?? 0)}
             {chip('kind', s.filters.kind, filters.kinds?.length ?? 0)}
             {chip('currency', s.filters.currency, filters.currencies?.length ?? 0)}
@@ -138,9 +142,9 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
               onPress={() => setFilters((f) => ({ ...f, reimbursable: !f.reimbursable || undefined }))}
               style={[styles.chip, { backgroundColor: filters.reimbursable ? colors.accentSoft : colors.filled, borderColor: filters.reimbursable ? colors.accent : 'transparent' }]}
             >
-              <Text style={[styles.chipText, { color: filters.reimbursable ? colors.accent : colors.inkSecondary }]}>{s.filters.reimbursable}</Text>
+              <Text style={[styles.chipText, { color: filters.reimbursable ? colors.accent : colors.ink }]}>{s.filters.reimbursable}</Text>
             </Pressable>
-          </ScrollView>
+          </View>
         ) : null}
       </View>
 
@@ -172,24 +176,18 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
           renderSectionHeader={({ section }) => (
             <Text style={[styles.day, { color: colors.inkMuted }]}>{formatShortDate(section.title).toUpperCase()}</Text>
           )}
-          renderItem={({ item, index, section }) => (
-            <View
-              style={[
-                { backgroundColor: colors.surface },
-                index === 0 && styles.cardTop,
-                index === section.data.length - 1 && styles.cardBottom,
-              ]}
-            >
+          renderItem={({ item }) => (
+            <View>
               <TransactionRow
                 row={item}
                 selecting={selecting && !item.echoOf}
                 selected={!item.echoOf && selected?.includes(item.id)}
                 onPress={() => open(item)}
                 onLongPress={item.echoOf ? undefined : () => toggle(item.id)}
-                last={index === section.data.length - 1 && item.children.length === 0}
+                last={item.children.length > 0}
               />
               {item.children.map((c, i) => (
-                <TransactionRow key={c.id} row={c} child onPress={() => open(item)} last={index === section.data.length - 1 && i === item.children.length - 1} />
+                <TransactionRow key={c.id} row={c} child onPress={() => open(item)} last={i < item.children.length - 1} />
               ))}
             </View>
           )}
@@ -315,21 +313,19 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: 20, paddingTop: 16, gap: 10 },
+  top: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6, gap: 14 },
   selectBar: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
   selectSide: { flex: 1, alignItems: 'flex-start' },
   selectCount: { fontFamily: fonts.serif, fontSize: 18 },
-  chips: { gap: 8, paddingBottom: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1.5 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9, paddingHorizontal: 13, paddingVertical: 7, borderWidth: 1 },
   chipText: { fontFamily: fonts.sansBold, fontSize: 12.5 },
   list: { paddingHorizontal: 20, paddingBottom: 24 },
   totalCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: radius.card, paddingHorizontal: 15, paddingVertical: 12 },
   totalText: { fontFamily: fonts.sans, fontSize: 12 },
   totalAmount: { fontFamily: fonts.monoSemiBold, fontSize: 17 },
-  hint: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16, paddingVertical: 8, paddingHorizontal: 2 },
-  day: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.7, paddingTop: 14, paddingBottom: 6, paddingHorizontal: 2 },
-  cardTop: { borderTopLeftRadius: radius.card, borderTopRightRadius: radius.card },
-  cardBottom: { borderBottomLeftRadius: radius.card, borderBottomRightRadius: radius.card },
+  hint: { fontFamily: fonts.sans, fontSize: 10.5, lineHeight: 15, paddingBottom: 8 },
+  day: { fontFamily: fonts.sansExtraBold, fontSize: 12, letterSpacing: 0.72, paddingTop: 14, paddingBottom: 2, paddingHorizontal: 4 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32 },
   emptyTitle: { fontFamily: fonts.serif, fontSize: 20 },
   emptyBody: { fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19, textAlign: 'center' },

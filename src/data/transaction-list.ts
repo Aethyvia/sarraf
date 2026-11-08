@@ -129,16 +129,24 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
   if (t.reimbursable) tags.push(t.reimbursementStatus === 'reimbursed' ? 'reimbursed' : 'reimbursable');
   if (t.paidByPersonId) tags.push('paid_by');
 
+  // The boards: income and transfers get an incoming arrow, anything with a person a person,
+  // linked money back a tick; expenses show their category.
   const icon =
-    t.kind === 'transfer'
-      ? { name: 'cycle', color: 'teal' }
-      : t.linkType
-        ? { name: 'check', color: 'teal' }
-        : t.kind === 'opening_balance' || t.kind === 'balance_adjustment'
-          ? { name: 'accounts', color: 'neutral' }
-          : categoryRow
-            ? { name: categoryRow.icon, color: categoryRow.color }
-            : { name: t.kind === 'income' ? 'trend' : 'circle', color: 'neutral' };
+    t.linkType
+      ? { name: 'tick', color: 'teal' }
+      : t.kind === 'transfer'
+        ? person
+          ? { name: 'user', color: 'neutral' }
+          : { name: 'arrow-in', color: 'teal' }
+        : t.kind === 'income'
+          ? { name: 'arrow-in', color: 'teal' }
+          : t.kind === 'opening_balance' || t.kind === 'balance_adjustment'
+            ? { name: 'accounts', color: 'neutral' }
+            : t.paidByPersonId
+              ? { name: 'user', color: 'neutral' }
+              : categoryRow
+                ? { name: categoryRow.icon, color: categoryRow.color }
+                : { name: 'circle', color: 'neutral' };
 
   return {
     id: t.id,

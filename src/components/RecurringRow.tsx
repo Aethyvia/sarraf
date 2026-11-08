@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { ruleText } from '@/components/forms/RecurringForm';
-import { Button } from '@/components/ui';
+import { Button, IconChip } from '@/components/ui';
 import { canPayInOneTap, payRecurring, type RecurringItem, type RepeatRule } from '@/data/recurring';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
@@ -18,14 +18,28 @@ import { fonts, radius, useTheme } from '@/theme';
  * (expenses) or Received; bills get Add, which opens Add transaction; auto-add
  * items show an Auto tag. In the list, it shows its schedule and opens Edit.
  */
-export function RecurringRow({ item, variant, last, onSkip }: { item: RecurringItem; variant: 'home' | 'list'; last?: boolean; onSkip?: () => void }) {
+export function RecurringRow({
+  item,
+  variant,
+  last,
+  onSkip,
+  category,
+}: {
+  item: RecurringItem;
+  variant: 'home' | 'list';
+  last?: boolean;
+  onSkip?: () => void;
+  /** Its category's look: on Home a fixed payment shows a repeat icon in its colour, a bill its icon. */
+  category?: { icon: string; color: string } | null;
+}) {
   const s = strings.recurring;
   const { colors } = useTheme();
   const toast = useToast();
   const action = useAction({ itemName: item.name });
   const varies = item.amountType === 'varies';
   const due = formatShortDate(item.nextDueDate);
-  const money = (v: string) => <Money value={v} currency={item.currency} style={[styles.detailMoney, { color: colors.inkMuted }]} />;
+  const home = variant === 'home';
+  const money = (v: string) => <Money value={v} currency={item.currency} style={[home ? styles.detail : styles.detailMoney, { color: colors.inkMuted }]} />;
 
   const detail = varies
     ? item.lastAmount
@@ -60,8 +74,13 @@ export function RecurringRow({ item, variant, last, onSkip }: { item: RecurringI
   return (
     <Pressable
       onPress={() => router.push(`/recurring/${item.id}/edit`)}
-      style={({ pressed }) => [styles.row, !last && { borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { backgroundColor: colors.filled }]}
+      style={({ pressed }) => [
+        styles.row,
+        home ? [styles.card, { backgroundColor: colors.surface }] : !last && { borderBottomWidth: 1, borderBottomColor: colors.line },
+        pressed && { backgroundColor: colors.filled },
+      ]}
     >
+      {home ? <IconChip icon={varies ? (category?.icon ?? 'repeat') : 'repeat'} color={category?.color ?? 'neutral'} size={40} /> : null}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.title, { color: colors.ink }, !item.active && { color: colors.inkMuted }]} numberOfLines={1}>
           {item.name}
@@ -88,5 +107,6 @@ const styles = StyleSheet.create({
   detailMoney: { fontFamily: fonts.mono, fontSize: 12 },
   tag: { fontFamily: fonts.sansBold, fontSize: 10.5, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
   skip: { fontFamily: fonts.sansBold, fontSize: 11.5, marginTop: 4, alignSelf: 'flex-start' },
-  button: { paddingHorizontal: 16, minWidth: 72 },
+  card: { borderRadius: 14, padding: 12, gap: 12, minHeight: 0 },
+  button: { paddingHorizontal: 14, minWidth: 64 },
 });
