@@ -66,15 +66,25 @@ export async function lookInDrive(deps: BackupDeps, options?: { another?: boolea
 
 /**
  * Turns backup on (setup step 3 or Settings): a new data key wrapped by the
- * password and by a new recovery key, kept on this phone. Returns the recovery
- * key to show once. Call backupNow() afterwards.
+ * password and by a new recovery key, kept on this phone. The recovery key is
+ * returned at once so it can be shown while the (slow) password wrap finishes;
+ * await `finished` before backing up.
  */
-export async function turnOnBackup(deps: BackupDeps, password: string): Promise<{ recoveryKey: string }> {
+export function startBackupSetup(deps: BackupDeps, password: string): { recoveryKey: string; finished: Promise<void> } {
   const dataKey = newDataKey();
   const recoveryKey = newRecoveryKey();
-  const [byRecovery, byPassword] = await Promise.all([wrapKey(dataKey, normalizeRecoveryKey(recoveryKey), RECOVERY_KDF), wrapKey(dataKey, password, DEFAULT_KDF)]);
-  await deps.keyStore.set({ dataKey: b64(dataKey), keys: { password: byPassword, recovery: byRecovery } });
-  setDeviceState(deps.db, { backupEnabled: true, backupMovedAt: null, backupMovedTo: null });
+  const finished = (async () => {
+    const byRecovery = await wrapKey(dataKey, normalizeRecoveryKey(recoveryKey), RECOVERY_KDF);
+    const byPassword = await wrapKey(dataKey, password, DEFAULT_KDF);
+    await deps.keyStore.set({ dataKey: b64(dataKey), keys: { password: byPassword, recovery: byRecovery } });
+    setDeviceState(deps.db, { backupEnabled: true, backupMovedAt: null, backupMovedTo: null });
+  })();
+  return { recoveryKey, finished };
+}
+
+export async function turnOnBackup(deps: BackupDeps, password: string): Promise<{ recoveryKey: string }> {
+  const { recoveryKey, finished } = startBackupSetup(deps, password);
+  await finished;
   return { recoveryKey };
 }
 
@@ -129,10 +139,33 @@ export async function restoreFromDrive(
   secret: string,
   onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
 ): Promise<BackupHeader> {
-  const { db, cloud } = deps;
-  const file = await cloud.downloadBackup((done, total) => onProgress?.('download', done, total));
+  const file = await deps.cloud.downloadBackup((done, total) => onProgress?.('download', done, total));
+  return restoreFromFile(deps, file, secret, onProgress);
+}
+
+/** Restore from an already-downloaded backup (so a wrong password doesn't download it again). */
+export async function restoreFromFile(
+  deps: BackupDeps,
+  file: Uint8Array,
+  secret: string,
+  onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
+): Promise<BackupHeader> {
   onProgress?.('open', 0, 1);
   const opened = await openBackup(file, secret);
+  return applyRestore(deps, opened, file.length, onProgress);
+}
+
+/**
+ * The replace step of a restore, once the backup is open: replaces everything
+ * on this phone, keeps the keys, and claims the backup for this phone.
+ */
+export async function applyRestore(
+  deps: BackupDeps,
+  opened: Awaited<ReturnType<typeof openBackup>>,
+  sizeBytes: number,
+  onProgress?: (step: 'download' | 'open' | 'replace', done: number, total: number) => void,
+): Promise<BackupHeader> {
+  const { db, cloud } = deps;
   onProgress?.('replace', 0, 1);
   const me = deviceId(db);
   restoreSnapshot(db, opened.data, { deviceId: me });
@@ -146,7 +179,7 @@ export async function restoreFromDrive(
       lastBackupAt: opened.header.createdAt,
       deviceId: me,
       deviceName: deps.deviceName,
-      sizeBytes: file.length,
+      sizeBytes,
       counts: opened.header.counts,
       format: opened.header.format,
     });

@@ -5,6 +5,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Animated,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -408,7 +409,8 @@ export function BottomSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]} onPress={onClose} accessibilityLabel="Close" />
-      <View style={styles.sheetWrap} pointerEvents="box-none">
+      {/* Keeps the sheet above the keyboard (search fields in sheets). */}
+      <KeyboardAvoidingView style={styles.sheetWrap} behavior="padding" pointerEvents="box-none">
         <Animated.View
           style={[
             styles.sheet,
@@ -420,7 +422,7 @@ export function BottomSheet({
           {title ? <Text style={[styles.sheetTitle, { color: colors.ink }]}>{title}</Text> : null}
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

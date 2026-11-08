@@ -35,3 +35,23 @@ export function resetSampleData(db: AppDb): void {
   ensureBaseData(db);
   seedSampleData(db);
 }
+
+/**
+ * Development only: empties this phone as if Sarraf were just installed on a
+ * new one (new phone id, signed out), keeping the dev stand-in's "cloud", so
+ * first run, backup and restore can be tried.
+ */
+export function wipeAsNewPhone(db: AppDb): void {
+  const tables = db
+    .all<{ name: string }>(sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name not like '__drizzle%'`)
+    .map((t) => t.name);
+  db.run(sql`PRAGMA foreign_keys = OFF`);
+  try {
+    db.transaction((tx) => {
+      for (const name of tables) tx.run(sql.raw(`delete from "${name}"`));
+    });
+  } finally {
+    db.run(sql`PRAGMA foreign_keys = ON`);
+  }
+  ensureBaseData(db);
+}

@@ -1,4 +1,4 @@
-import { Tabs, router, useIsFocused } from 'expo-router';
+import { Redirect, Tabs, router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons/Icon';
 import { Button } from '@/components/ui';
 import { strings } from '@/i18n/strings';
+import { useSettings } from '@/state/settings';
 import { useSetToastInset } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
 
@@ -21,6 +22,9 @@ const WITH_ADD_BAR = new Set(['index', 'transactions']);
 
 /** The four tabs, with the Add transaction bar docked above them on Home and Transactions. */
 export default function TabsLayout() {
+  // First run comes before anything else (sign in, then restore or setup).
+  const { onboardingCompletedAt } = useSettings();
+  if (!onboardingCompletedAt) return <Redirect href="/start" />;
   return (
     <Tabs
       screenOptions={{ headerShown: false }}

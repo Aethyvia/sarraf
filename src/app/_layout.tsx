@@ -54,9 +54,11 @@ export default function RootLayout() {
   const data = useMemo<{ ready: boolean; error: Error | null; added: TransactionRow[] }>(() => {
     if (!migration.success) return { ready: false, error: null, added: [] };
     try {
-      ensureBaseData(db);
+      const fresh = ensureBaseData(db);
       if (__DEV__) {
-        seedSampleData(db);
+        // Dev builds start with the canvas's sample data on a fresh install only,
+        // so "Try first run" (Developer preview) isn't undone by a reload.
+        if (fresh) seedSampleData(db);
         loadSampleClock();
       }
       // Deleted rows kept for Undo are removed for good on the next app open.

@@ -9,7 +9,8 @@ import { Money } from '@/components/Money';
 import { db } from '@/db/client';
 import { accounts, settings } from '@/db/schema';
 import { SAMPLE_TODAY } from '@/db/sample';
-import { resetSampleData } from '@/db/seed';
+import { resetSampleData, wipeAsNewPhone } from '@/db/seed';
+import { cloud, keyStore } from '@/services/cloud';
 import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
 import { DEFAULT_KDF, newDataKey, wrapKey } from '@/lib/backup-crypto';
 import { NUMBER_FORMATS } from '@/lib/money';
@@ -46,6 +47,7 @@ export default function DevPreview() {
   };
   const [pinned, setPinned] = useState(loadSampleClock);
   const [kdfTime, setKdfTime] = useState<string | null>(null);
+  const [, setKnobTick] = useState(0);
   const nextFormat = NUMBER_FORMATS[(NUMBER_FORMATS.indexOf(s.numberFormat) + 1) % NUMBER_FORMATS.length];
   const nextTheme = ({ system: 'light', light: 'dark', dark: 'system' } as const)[s.theme];
 
@@ -73,6 +75,21 @@ export default function DevPreview() {
           />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
           <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
+          <Toggle
+            label="Try first run (new phone)"
+            onPress={() => {
+              void keyStore.clear();
+              wipeAsNewPhone(db);
+              router.replace('/start');
+            }}
+          />
+          {cloud.knobs ? (
+            <>
+              <Toggle label={`Offline: ${cloud.knobs.offline ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.offline = !cloud.knobs!.offline), setKnobTick((n) => n + 1))} />
+              <Toggle label={`Drive refuses: ${cloud.knobs.refuseDrive ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.refuseDrive = !cloud.knobs!.refuseDrive), setKnobTick((n) => n + 1))} />
+              <Toggle label={`Restore drops: ${cloud.knobs.dropDownload ? 'on' : 'off'}`} onPress={() => ((cloud.knobs!.dropDownload = !cloud.knobs!.dropDownload), setKnobTick((n) => n + 1))} />
+            </>
+          ) : null}
           <Toggle
             label={kdfTime ?? 'Time Argon2id'}
             onPress={async () => {

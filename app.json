@@ -24,7 +24,8 @@
       "expo-splash-screen",
       "@react-native-community/datetimepicker",
       "expo-secure-store",
-      "expo-localization"
+      "expo-localization",
+      "expo-sharing"
     ],
     "scheme": "sarraf",
     "experiments": {
