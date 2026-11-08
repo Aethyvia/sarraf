@@ -3,7 +3,7 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { isNull } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icons/Icon';
@@ -779,13 +779,25 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onClose={() => setSheet(null)}
       />
       <NotesSheet visible={sheet === 'notes'} value={form.notes} onDone={(v) => set({ notes: v })} onClose={() => setSheet(null)} />
-      <BottomSheet visible={sheet === 'charges'} onClose={() => setSheet(null)}>
-        <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ gap: 12 }}>
-          <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} />
-          {goesUp}
-        </ScrollView>
-        <Button label={strings.receipt.done} onPress={() => setSheet(null)} style={{ marginTop: 12 }} />
-      </BottomSheet>
+      {/* Charges: a full page over the form (the form keeps everything typed); the add/edit sheet opens on top. */}
+      <Modal
+        visible={sheet === 'charges' || (typeof sheet === 'object' && sheet !== null && 'charge' in sheet)}
+        animationType="slide"
+        onRequestClose={() => setSheet(null)}
+        statusBarTranslucent
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
+          <View style={styles.chargesPage}>
+            <Header title={strings.receipt.pageTitle} onBack={() => setSheet(null)} />
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 12 }}>
+              <Text style={[styles.chargesIntro, { color: colors.inkSecondary }]}>{strings.receipt.pageIntro}</Text>
+              <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} />
+              {goesUp}
+            </ScrollView>
+            <Button label={strings.receipt.done} onPress={() => setSheet(null)} />
+          </View>
+        </SafeAreaView>
+      </Modal>
       <AddChargeSheet
         visible={typeof sheet === 'object' && sheet !== null && 'charge' in sheet}
         initial={typeof sheet === 'object' && sheet !== null && typeof sheet.charge === 'number' ? form.charges[sheet.charge] : null}
@@ -932,6 +944,8 @@ const styles = StyleSheet.create({
   intro: { fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 18, paddingHorizontal: 2 },
   goalLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
   goalText: { fontFamily: fonts.sansSemiBold, fontSize: 13 },
+  chargesPage: { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 14 },
+  chargesIntro: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, paddingHorizontal: 2 },
   goesUp: { borderRadius: 16, paddingHorizontal: 17, paddingVertical: 15 },
   goesUpLabel: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
   goesUpAmount: { fontFamily: fonts.mono, fontSize: 30, marginTop: 2 },

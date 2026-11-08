@@ -360,6 +360,8 @@ export const strings = {
   receipt: {
     title: 'CHARGES',
     done: 'Done',
+    pageTitle: 'Charges',
+    pageIntro: 'Fees and taxes on this transaction: inside the amount, or paid on top from an account.',
     beforeDeductions: 'Before deductions',
     whatLeft: (account: string) => `Left ${account}`,
     inside: 'inside the amount',
