@@ -359,6 +359,7 @@ export const strings = {
   },
   receipt: {
     title: 'CHARGES',
+    done: 'Done',
     beforeDeductions: 'Before deductions',
     whatLeft: (account: string) => `Left ${account}`,
     inside: 'inside the amount',

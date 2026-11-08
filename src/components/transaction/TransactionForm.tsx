@@ -51,6 +51,7 @@ import { SplitEditor } from './SplitEditor';
 import { AmountCard, ConversionBlock, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
 
 type Sheet =
+  | 'charges'
   | 'from'
   | 'to'
   | 'category'
@@ -81,7 +82,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const toast = useToast();
   const [form, setForm] = useState<FormState>(initial);
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [showCharges, setShowCharges] = useState(false);
   const action = useAction();
   const today = todayDate();
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
@@ -156,7 +156,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const onKey = (key: Parameters<typeof applyKey>[1]) =>
     setForm((f) => applyKey(f, key, getCurrency(f.target === 'known' ? receivingCurrency : mainCurrency).minorUnits));
   const changeKind = (kind: FormKind) => {
-    setShowCharges(false);
     setForm((f) => switchKind(f, kind, { date: today, accountId: ref.firstAccount }));
   };
   const pickDate = (value: string, onPick: (d: string) => void) => {
@@ -598,14 +597,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.rows} keyboardShouldPersistTaps="handled">
-        {showCharges && !isSavings ? (
-          <>
-            <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} />
-            {goesUp}
-          </>
-        ) : (
-          rows
-        )}
+        {rows}
       </ScrollView>
 
       <View style={styles.bottom}>
@@ -638,8 +630,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <UtilityButton
               icon="ledger"
               label={chargesTotal ? (chargesTotal.currency ? <MoneyInline value={chargesTotal.text} currency={chargesTotal.currency} /> : `${s.charges} · ${chargesTotal.text}`) : s.charges}
-              onPress={() => setShowCharges((v) => !v)}
-              dot={showCharges}
+              onPress={() => setSheet('charges')}
+              dot={form.charges.length > 0}
             />
             <UtilityButton icon="layers" label={ledger?.name ?? '—'} onPress={() => setSheet('ledger')} />
           </View>
@@ -787,6 +779,13 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onClose={() => setSheet(null)}
       />
       <NotesSheet visible={sheet === 'notes'} value={form.notes} onDone={(v) => set({ notes: v })} onClose={() => setSheet(null)} />
+      <BottomSheet visible={sheet === 'charges'} onClose={() => setSheet(null)}>
+        <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ gap: 12 }}>
+          <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} />
+          {goesUp}
+        </ScrollView>
+        <Button label={strings.receipt.done} onPress={() => setSheet(null)} style={{ marginTop: 12 }} />
+      </BottomSheet>
       <AddChargeSheet
         visible={typeof sheet === 'object' && sheet !== null && 'charge' in sheet}
         initial={typeof sheet === 'object' && sheet !== null && typeof sheet.charge === 'number' ? form.charges[sheet.charge] : null}
@@ -832,7 +831,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onDelete={() =>
           setForm((f) => ({ ...f, charges: f.charges.filter((_, i) => !(typeof sheet === 'object' && sheet && sheet.charge === i)) }))
         }
-        onClose={() => setSheet(null)}
+        onClose={() => setSheet('charges')}
       />
     </SafeAreaView>
   );
