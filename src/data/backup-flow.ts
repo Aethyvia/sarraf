@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 
-import { deviceState, settings } from '@/db/schema';
+import { deviceState, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, RECOVERY_KDF, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
@@ -10,6 +10,8 @@ import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader,
 export interface StoredKeys {
   dataKey: string;
   keys: BackupHeader['keys'];
+  /** When the backup password was last set (Backup screen: "Set Sep 2, 2026"). */
+  passwordSetAt?: string;
 }
 
 export interface KeyStore {
@@ -76,7 +78,7 @@ export function startBackupSetup(deps: BackupDeps, password: string): { recovery
   const finished = (async () => {
     const byRecovery = await wrapKey(dataKey, normalizeRecoveryKey(recoveryKey), RECOVERY_KDF);
     const byPassword = await wrapKey(dataKey, password, DEFAULT_KDF);
-    await deps.keyStore.set({ dataKey: b64(dataKey), keys: { password: byPassword, recovery: byRecovery } });
+    await deps.keyStore.set({ dataKey: b64(dataKey), keys: { password: byPassword, recovery: byRecovery }, passwordSetAt: deps.now?.() ?? new Date().toISOString() });
     setDeviceState(deps.db, { backupEnabled: true, backupMovedAt: null, backupMovedTo: null });
   })();
   return { recoveryKey, finished };
@@ -186,6 +188,68 @@ export async function applyRestore(
   }
   onProgress?.('replace', 1, 1);
   return opened.header;
+}
+
+/**
+ * Backup screen → Backup password → Change. The data key stays the same; only
+ * its password-wrapped copy changes, so the next backup opens with the new
+ * password (and the recovery key keeps working).
+ */
+export async function changeBackupPassword(deps: BackupDeps, password: string): Promise<void> {
+  const stored = await deps.keyStore.get();
+  if (!stored) throw new Error('Backup isn’t on');
+  const byPassword = await wrapKey(unb64(stored.dataKey), password, DEFAULT_KDF);
+  await deps.keyStore.set({ ...stored, keys: { ...stored.keys, password: byPassword }, passwordSetAt: deps.now?.() ?? new Date().toISOString() });
+}
+
+/** Backup screen → Recovery key → Renew: a new key; the old one stops working with the next backup. */
+export async function renewRecoveryKey(deps: BackupDeps): Promise<string> {
+  const stored = await deps.keyStore.get();
+  if (!stored) throw new Error('Backup isn’t on');
+  const recoveryKey = newRecoveryKey();
+  const byRecovery = await wrapKey(unb64(stored.dataKey), normalizeRecoveryKey(recoveryKey), RECOVERY_KDF);
+  await deps.keyStore.set({ ...stored, keys: { ...stored.keys, recovery: byRecovery } });
+  return recoveryKey;
+}
+
+/** "Make this the backup phone" on a phone whose backups moved: its next backup takes over. */
+export async function makeThisTheBackupPhone(deps: BackupDeps): Promise<BackupResult> {
+  setDeviceState(deps.db, { backupMovedAt: null, backupMovedTo: null, lastBackupAt: null });
+  return backupNow(deps);
+}
+
+/** Backup screen → Turn backup off (keeps the backup in Drive; keys stay so turning on again is quick). */
+export function setAutomaticBackup(db: AppDb, on: boolean): void {
+  db.update(settings).set({ backupFrequency: on ? 'daily' : 'manual' }).where(eq(settings.id, 1)).run();
+}
+
+/** Days between automatic backups for each frequency; manual never runs on its own. */
+const EVERY_DAYS = { daily: 1, weekly: 7 } as const;
+
+/**
+ * Whether an automatic backup should run now (on app open): backup is on,
+ * not moved, the frequency isn't Manual, enough time has passed, and the
+ * network fits "Wi-Fi only".
+ */
+export function automaticBackupDue(db: AppDb, now: Date, network: { online: boolean; wifi: boolean }): boolean {
+  const state = getDeviceState(db);
+  const set = db.select().from(settings).where(eq(settings.id, 1)).get()!;
+  if (!state.backupEnabled || state.backupMovedAt || set.backupFrequency === 'manual') return false;
+  if (!network.online || (set.backupWifiOnly && !network.wifi)) return false;
+  if (!state.lastBackupAt) return true;
+  const days = EVERY_DAYS[set.backupFrequency];
+  return now.getTime() - new Date(state.lastBackupAt).getTime() >= days * 24 * 60 * 60 * 1000 - 60 * 60 * 1000;
+}
+
+/** Records a failed automatic backup; "Backup problems" notifies after 3 days of this. */
+export function noteBackupFailed(db: AppDb, now: string): void {
+  const state = getDeviceState(db);
+  if (!state.backupFailingSince) setDeviceState(db, { backupFailingSince: now });
+}
+
+/** Restore confirm sheet: transactions on this phone added after the backup was made (they'd be lost). */
+export function addedSince(db: AppDb, iso: string): number {
+  return db.select({ id: transactions.id }).from(transactions).where(and(isNull(transactions.deletedAt), gt(transactions.createdAt, iso))).all().length;
 }
 
 export function memoryKeyStore(): KeyStore {
