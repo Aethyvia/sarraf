@@ -1,0 +1,1 @@
+ALTER TABLE `recurring_items` ADD `occurrences` integer DEFAULT 0 NOT NULL;

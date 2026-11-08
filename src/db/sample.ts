@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import { addToGoal } from '@/data/goals';
+import { createRecurring, type RecurringInput } from '@/data/recurring';
 import { storeRates } from '@/data/rates';
 import { saveTransaction, type TransactionDraft } from '@/data/transactions';
 import { newId } from '@/lib/id';
@@ -10,6 +11,7 @@ import {
   currencyOrder,
   ledgers,
   people,
+  recurringItems,
   savingsGoals,
   settings,
   transactions,
@@ -151,7 +153,16 @@ export function buildSampleData(db: AppDb): void {
     '278.10',
   );
   save({ kind: 'income', date: '2026-09-20', accountId: usd, amount: '500', currency: 'USD', status: 'pending', expectedDate: '2026-10-14', notes: 'Upwork payout' });
-  save({ kind: 'expense', date: '2026-09-29', accountId: usd, amount: '15.49', currency: 'USD', status: 'pending', categoryId: cat['Software & Subscriptions'], notes: 'Netflix', autoAdded: true });
+  // Recurring (Home's Recurring section): Netflix auto-adds monthly; Adobe reminds; two bills vary.
+  const recurring = (input: Omit<RecurringInput, 'showOnHomeDays'> & { showOnHomeDays?: number }) =>
+    createRecurring(db, { showOnHomeDays: 7, ledgerId: personal, ...input }, SAMPLE_TODAY);
+  const netflix = recurring({ kind: 'expense', amountType: 'same', name: 'Netflix', amount: '15.49', accountId: usd, categoryId: cat['Software & Subscriptions'], rule: { freq: 'monthly', interval: 1, day: 29 }, autoAdd: true, startOn: '2026-10-01' });
+  db.update(recurringItems).set({ occurrences: 1 }).where(eq(recurringItems.id, netflix)).run();
+  save({ kind: 'expense', date: '2026-09-29', accountId: usd, amount: '15.49', currency: 'USD', status: 'pending', categoryId: cat['Software & Subscriptions'], notes: 'Netflix', autoAdded: true, recurringId: netflix, recurringDueDate: '2026-09-29' });
+  recurring({ kind: 'expense', amountType: 'same', name: 'Adobe Creative Cloud', amount: '54.99', accountId: usd, categoryId: cat['Software & Subscriptions'], rule: { freq: 'monthly', interval: 1, day: 6 }, autoAdd: false });
+  recurring({ kind: 'expense', amountType: 'varies', name: 'Electricity', accountId: acct['Cash PKR'], categoryId: cat['Office & Utilities'], rule: { freq: 'monthly', interval: 1, day: 5 }, autoAdd: false });
+  const internet = recurring({ kind: 'expense', amountType: 'varies', name: 'Internet', accountId: acct['Alfalah PKR'], categoryId: cat['Office & Utilities'], rule: { freq: 'monthly', interval: 1, day: 3 }, autoAdd: false });
+  db.update(recurringItems).set({ lastAmount: '5500' }).where(eq(recurringItems.id, internet)).run();
 
   // Upcoming (future-dated): wait in Needs review, count nowhere yet.
   save({ kind: 'expense', date: '2026-10-26', accountId: acct['Alfalah PKR'], amount: '12500', currency: 'PKR', categoryId: cat['Office & Utilities'] });

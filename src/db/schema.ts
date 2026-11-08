@@ -171,6 +171,8 @@ export const recurringItems = sqliteTable(
     autoAdd: bool('auto_add').notNull().default(false),
     endsOn: text('ends_on'),
     maxOccurrences: integer('max_occurrences'),
+    /** Due dates handled so far (added, paid or skipped), for "ends after N times". */
+    occurrences: integer('occurrences').notNull().default(0),
     active: bool('active').notNull().default(true),
     ...timestamps,
   },

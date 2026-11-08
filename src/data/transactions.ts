@@ -8,6 +8,7 @@ import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalStri
 import { computeAmounts, type AmountResult, type RateMode } from './amounts';
 import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
+import { noteRecurringHandled } from './recurring';
 import { checkSplit, splitOf, type SplitDraft } from './splits';
 
 export type TransactionRow = typeof transactions.$inferSelect;
@@ -314,6 +315,11 @@ export function saveTransaction(
       }
     } else if (draft.kind === 'expense' && draft.fromPersonId) {
       entry(draft.fromPersonId, negate(amount), 'paid_by_person');
+    }
+
+    // Paid / Added for a recurring item's due date: the item moves on to its next date.
+    if (!existing && draft.recurringId && draft.recurringDueDate && !draft.autoAdded) {
+      noteRecurringHandled(tx, draft.recurringId, draft.recurringDueDate, toDecimalString(dec(draft.amount)));
     }
 
     const { removedPaths } = applyAttachmentChanges(tx, { transactionId: id }, options.attachments);

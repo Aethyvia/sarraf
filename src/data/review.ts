@@ -4,6 +4,7 @@ import { transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { nowIso, today as todayDate } from '@/lib/dates';
 import { DataError } from './errors';
+import { remindersDue, type RecurringItem } from './recurring';
 import { withLinkedChildren } from './transaction-sets';
 import type { TransactionRow } from './transactions';
 
@@ -14,6 +15,8 @@ import type { TransactionRow } from './transactions';
 export interface NeedsReview {
   /** Added automatically by a recurring item; confirmed with Paid (expenses) or Received. */
   recurring: TransactionRow[];
+  /** "Remind me, don't auto-add" items whose date has come; Paid / Received adds them. */
+  reminders: RecurringItem[];
   pending: TransactionRow[];
   inTransit: TransactionRow[];
   /** Reimbursable expenses awaiting money back. Not in the badge. */
@@ -47,13 +50,15 @@ export function needsReview(db: AppDb, today: string = todayDate()): NeedsReview
   const inTransit = now.filter((t) => !t.autoAdded && t.status === 'in_transit');
   const dueUpcoming = upcoming.filter((t) => t.date <= today).length;
 
+  const reminders = remindersDue(db, today);
   return {
     recurring,
+    reminders,
     pending,
     inTransit,
     waitingBack,
     upcoming,
-    toConfirm: recurring.length + pending.length + inTransit.length + dueUpcoming,
+    toConfirm: recurring.length + reminders.length + pending.length + inTransit.length + dueUpcoming,
     upcomingCount: upcoming.length - dueUpcoming,
   };
 }

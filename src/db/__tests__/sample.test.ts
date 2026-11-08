@@ -6,6 +6,7 @@ import { accounts, categories, people, personEntries } from '../schema';
 import { accountBalances } from '@/data/balances';
 import { currencyTiles, estimatedTotal } from '@/data/home';
 import { expectedBack, personBalances } from '@/data/owing';
+import { backfillRecurring, recurringOnHome } from '@/data/recurring';
 import { needsReview } from '@/data/review';
 import { listTransactions, recentTransactions } from '@/data/transaction-list';
 import { createTestDb } from '@/test/db';
@@ -102,5 +103,11 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     expect(recent).toHaveLength(6);
     expect(recent[0]).toMatchObject({ date: '2026-09-29', title: 'Netflix', tags: ['auto_review'] });
     expect(recent.every((r) => !r.echoOf && r.kind !== 'opening_balance')).toBe(true);
+  });
+
+  it('has Home’s recurring items, and nothing to back-fill on Sep 30', async () => {
+    const db = await sample();
+    expect(recurringOnHome(db, SAMPLE_TODAY).map((r) => r.item.name)).toEqual(['Internet', 'Electricity', 'Adobe Creative Cloud']);
+    expect(backfillRecurring(db, SAMPLE_TODAY)).toEqual([]);
   });
 });
