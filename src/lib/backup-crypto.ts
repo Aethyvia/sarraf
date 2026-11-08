@@ -19,6 +19,11 @@ export interface KdfParams {
 
 /** OWASP's minimum for Argon2id; stored in each file so it can change later. */
 export const DEFAULT_KDF: KdfParams = { t: 2, m: 19 * 1024, p: 1 };
+/**
+ * For the recovery key: it's 120 random bits, so stretching adds nothing against
+ * guessing; a light setting keeps setup quick (pure JS Argon2id takes seconds).
+ */
+export const RECOVERY_KDF: KdfParams = { t: 1, m: 4 * 1024, p: 1 };
 
 export interface WrappedKey {
   kdf: KdfParams;

@@ -11,6 +11,7 @@ import { accounts, settings } from '@/db/schema';
 import { SAMPLE_TODAY } from '@/db/sample';
 import { resetSampleData } from '@/db/seed';
 import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
+import { DEFAULT_KDF, newDataKey, wrapKey } from '@/lib/backup-crypto';
 import { NUMBER_FORMATS } from '@/lib/money';
 import { useSettings } from '@/state/settings';
 import { BUTTON_HEIGHT, fonts, radius, useTheme } from '@/theme';
@@ -44,6 +45,7 @@ export default function DevPreview() {
     await db.update(settings).set(values).where(eq(settings.id, 1));
   };
   const [pinned, setPinned] = useState(loadSampleClock);
+  const [kdfTime, setKdfTime] = useState<string | null>(null);
   const nextFormat = NUMBER_FORMATS[(NUMBER_FORMATS.indexOf(s.numberFormat) + 1) % NUMBER_FORMATS.length];
   const nextTheme = ({ system: 'light', light: 'dark', dark: 'system' } as const)[s.theme];
 
@@ -71,6 +73,17 @@ export default function DevPreview() {
           />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
           <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
+          <Toggle
+            label={kdfTime ?? 'Time Argon2id'}
+            onPress={async () => {
+              setKdfTime('Timing…');
+              const start = Date.now();
+              await wrapKey(newDataKey(), 'timing test', DEFAULT_KDF);
+              const ms = Date.now() - start;
+              console.log('argon2id ms', ms);
+              setKdfTime(`Argon2id: ${ms} ms`);
+            }}
+          />
         </View>
 
         <Text style={[styles.label, { color: colors.inkMuted }]}>FORMATTING</Text>
