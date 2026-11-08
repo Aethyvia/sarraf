@@ -19,6 +19,7 @@ import { dec } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
+import { SWATCH_KEYS, type SwatchKey } from '@/theme/tokens';
 
 type RangeKey = 'month' | 'last' | 'three' | 'year';
 
@@ -87,7 +88,15 @@ export default function AnalyticsScreen() {
 
   const f = data.flows;
   const catName = (id: string) => (id === UNCATEGORIZED ? s.uncategorized : (data.cats.get(id)?.name ?? s.uncategorized));
-  const catColor = (id: string) => swatch(data.cats.get(id)?.color ?? 'neutral').fg;
+  // Each slice gets its category's colour, or the next unused one so neighbours never look alike.
+  const sliceColors = new Map<string, string>();
+  for (const x of f.spending) {
+    const own = data.cats.get(x.categoryId)?.color ?? 'neutral';
+    const used = new Set(sliceColors.values());
+    const key = !used.has(own) ? own : (SWATCH_KEYS.find((k) => k !== 'neutral' && !used.has(k)) ?? own);
+    sliceColors.set(x.categoryId, key);
+  }
+  const catColor = (id: string) => swatch((sliceColors.get(id) ?? 'neutral') as SwatchKey).fg;
   const sel = f.spending.find((x) => x.categoryId === selected) ?? null;
   const money = (v: string, style?: object) => <Money value={v} currency={f.currency} allowCompact={false} style={style} />;
   const ledgerName = data.ledger ? (data.ledgerRows.find((l) => l.id === data.ledger)?.name ?? '') : s.allLedgers;
@@ -334,8 +343,8 @@ const styles = StyleSheet.create({
   barTrack: { flex: 1, height: 18, borderRadius: 5, overflow: 'hidden' },
   barTrackSmall: { height: 14, borderRadius: 4 },
   barFill: { height: '100%', borderRadius: 5 },
-  barValue: { fontFamily: fonts.monoSemiBold, fontSize: 12.5 },
-  barValueSmall: { fontFamily: fonts.mono, fontSize: 11.5 },
+  barValue: { fontFamily: fonts.monoSemiBold, fontSize: 12.5, minWidth: 70, textAlign: 'right' },
+  barValueSmall: { fontFamily: fonts.mono, fontSize: 11.5, minWidth: 70, textAlign: 'right' },
   linkCard: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   linkTitle: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
 });

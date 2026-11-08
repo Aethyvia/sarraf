@@ -45,9 +45,9 @@ export function buildSampleData(db: AppDb): void {
 
   const acct: Record<string, string> = {};
   const accountRows = [
-    { name: 'Payoneer USD', currency: 'USD', institution: 'Payoneer', icon: 'wallet', color: 'orange', opening: '912.46' },
+    { name: 'Payoneer USD', currency: 'USD', institution: 'Payoneer', icon: 'wallet', color: 'orange', opening: '1112.46' },
     { name: 'Payoneer EUR', currency: 'EUR', institution: 'Payoneer', icon: 'wallet', color: 'orange', opening: '40.00' },
-    { name: 'Alfalah PKR', currency: 'PKR', institution: null, icon: 'bank', color: 'teal', opening: '100502.92' },
+    { name: 'Alfalah PKR', currency: 'PKR', institution: null, icon: 'bank', color: 'teal', opening: '45502.92' },
     { name: 'Cash PKR', currency: 'PKR', institution: null, icon: 'cash', color: 'gold', opening: '2500.00' },
     { name: 'Cash AED', currency: 'AED', institution: null, icon: 'cash', color: 'gold', opening: '1510.00' },
     { name: 'Cash SAR', currency: 'SAR', institution: null, icon: 'cash', color: 'gold', opening: '450.00' },
@@ -136,6 +136,12 @@ export function buildSampleData(db: AppDb): void {
   save({ kind: 'expense', date: '2026-09-27', accountId: acct['Alfalah PKR'], amount: '4200', currency: 'PKR', categoryId: cat['Groceries'] });
   save({ kind: 'expense', date: '2026-09-14', accountId: acct['Cash AED'], amount: '310', currency: 'AED', categoryId: cat['Travel'], notes: 'Dubai taxi + meals' });
   save({ kind: 'income', date: '2026-09-20', accountId: acct['Payoneer EUR'], amount: '340', currency: 'EUR', categoryId: cat['Consulting income'], notes: 'Riverbend LLC' });
+
+  // A cleared withdrawal at ₨275 when the market said ₨278.10 (What converting cost you: ₨620 rate gap).
+  save(
+    { kind: 'transfer', date: '2026-09-15', accountId: usd, toAccountId: acct['Alfalah PKR'], amount: '200', currency: 'USD', rateMode: 'amount_known', knownAmount: '55000' },
+    '278.10',
+  );
 
   // Waiting in Needs review: a transfer in transit (with a ₨150 bank charge), a pending payout, an auto-added Netflix.
   save(
