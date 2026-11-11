@@ -227,6 +227,8 @@ export interface ReceiptLine {
   amount?: ReactNode;
   highlight?: boolean;
   onPress?: () => void;
+  /** The charge open in the editor below (outlined). */
+  editing?: boolean;
 }
 
 /** Charges as a receipt, top to bottom: each charge on the line where it happened. */
@@ -247,6 +249,7 @@ export function ReceiptCard({ lines, onAdd, emptyText, onCollapse }: { lines: Re
           style={[
             styles.receiptLine,
             l.highlight ? { backgroundColor: colors.filled, borderRadius: 8, paddingHorizontal: 8, marginVertical: 4 } : i < lines.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.line } : null,
+            l.editing ? { backgroundColor: colors.accentSoft, borderColor: colors.accent, borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 8, marginVertical: 2 } : null,
           ]}
         >
           <Text style={[styles.receiptLabel, { color: l.highlight ? colors.ink : colors.inkSecondary }, l.highlight && { fontFamily: fonts.sansBold }]}>{l.label}</Text>

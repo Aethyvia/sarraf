@@ -1,6 +1,6 @@
 import { goBack } from '@/state/nav';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
-import { isNull } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,7 +10,6 @@ import { Icon } from '@/components/icons/Icon';
 import { Keypad } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
-import { AddChargeSheet } from '@/components/sheets/AddChargeSheet';
 import { AttachSheet } from '@/components/sheets/AttachSheet';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
@@ -24,17 +23,17 @@ import {
   usePeopleItems,
 } from '@/components/sheets/pickers';
 import { BottomSheet, Button, Field, Header, IconButton, Segmented, ToggleRow } from '@/components/ui';
-import { computeAmounts, vsMarketPercent, type AmountResult } from '@/data/amounts';
+import { vsMarketPercent, type AmountResult } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
 import { marketRate } from '@/data/rates';
-import { NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft } from '@/data/transactions';
+import { CHARGE_TYPES, NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft, type ChargeType } from '@/data/transactions';
 import { budgetWarning } from '@/data/budgets';
 import { accountFree, currencyPositions, spendWarning, upcomingOnAccount } from '@/data/usable';
 import { db } from '@/db/client';
 import { exportedPeriodFor } from '@/data/tax-export';
-import { accounts, categories, ledgers, people } from '@/db/schema';
+import { accounts, categories, ledgers, people, transactionCharges } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { expressionValue, hasOperator } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
@@ -45,8 +44,24 @@ import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
+import {
+  commitCharges,
+  editCharge,
+  isForcedTax,
+  liveCharges,
+  needsRate,
+  newChargeEdit,
+  pressChargeKey,
+  chargeAmount,
+  withAccount,
+  withDeduction,
+  withType,
+  type ChargeContext,
+  type ChargeEdit,
+} from '@/state/charge-edit';
 import { applyKey, draftFromForm, splitForTotal, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
 import { fonts, useTheme } from '@/theme';
+import { ChargeEditor, ChargeEditorHint } from './ChargeEditor';
 import { SplitEditor } from './SplitEditor';
 import { AmountCard, ConversionBlock, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
 
@@ -66,7 +81,6 @@ type Sheet =
   | 'rate'
   | 'goal'
   | 'goalAccount'
-  | { charge: number | 'new' }
   | null;
 
 /**
@@ -101,6 +115,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const ledgerItems = useLedgerItems();
   const goal = goals.find((g) => g.id === form.goalId) ?? null;
   const goalAccountSections = useAccountSections({ currency: goal?.currency ?? '—', showFree: true });
+  const chargeAccountSections = useAccountSections();
 
   const fromAccount = form.from?.type === 'account' ? (ref.accounts.get(form.from.id) ?? null) : null;
   const toAccount = form.to?.type === 'account' ? (ref.accounts.get(form.to.id) ?? null) : null;
@@ -125,11 +140,90 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const rate = form.rateText && isDecimalString(form.rateText) ? form.rateText : null;
   const market = useLive((d) => (converts ? marketRate(d, mainCurrency, receivingCurrency) : null), [converts, mainCurrency, receivingCurrency]);
 
+  // ── Charges page (Decided Nov 11, option D): one charge at a time in the panel above the keypad ──
+  const [chargeEdit, setChargeEdit] = useState<ChargeEdit | null>(null);
+  // The charges as they were when the page opened: ✕ goes back to these (after a warning).
+  const [chargesBefore, setChargesBefore] = useState<ChargeDraft[]>([]);
+  const [chargeSheet, setChargeSheet] = useState<'type' | 'account' | 'currency' | 'rate' | 'discard' | null>(null);
+  const chargeCtx: ChargeContext = {
+    mainCurrency,
+    receivingCurrency,
+    defaultAccountId: (form.kind === 'transfer' ? toAccount?.id : null) ?? fromAccount?.id ?? null,
+    accountCurrency: (id) => ref.accounts.get(id)?.currency,
+  };
+  // While a charge is being typed, the receipt and "goes up by" count it as soon as it's complete.
+  const liveForm = chargeEdit ? { ...form, charges: liveCharges(form.charges, chargeEdit, chargeCtx) } : form;
+
+  // Types you've named before (custom charges already saved) come back in the list.
+  const customTypes = useLive(
+    (d) =>
+      d
+        .selectDistinct({ label: transactionCharges.label })
+        .from(transactionCharges)
+        .where(eq(transactionCharges.type, 'custom'))
+        .all()
+        .map((r) => r.label)
+        .filter((l): l is string => !!l),
+    [],
+  );
+  const chargeTypeSections = [
+    {
+      items: CHARGE_TYPES.filter((t) => t !== 'custom').map((t) => ({ id: t, title: strings.charge.types[t], detail: strings.charge.typeNotes[t] })),
+    },
+    ...(customTypes.length ? [{ label: strings.charge.yourTypes, items: customTypes.map((l) => ({ id: `custom:${l}`, title: l })) }] : []),
+  ];
+
+  /** The charges with the open edit kept (when it's complete). */
+  const committed = () => commitCharges(form.charges, chargeEdit, chargeCtx);
+  const openCharges = () => {
+    setChargesBefore(form.charges);
+    setChargeEdit(null);
+    setSheet('charges');
+    // Nothing yet: start the first charge straight away; its type list opens once the page is up (onShow).
+    if (!form.charges.length) setChargeEdit(newChargeEdit('transfer_fee', chargeCtx));
+  };
+  const startNewCharge = () => {
+    set({ charges: committed() });
+    setChargeEdit(newChargeEdit('transfer_fee', chargeCtx));
+    setChargeSheet('type');
+  };
+  const selectCharge = (i: number) => {
+    if (chargeEdit?.index === i) return;
+    const list = committed();
+    set({ charges: list });
+    setChargeEdit(editCharge(list[i], i));
+  };
+  const removeCharge = () => {
+    if (chargeEdit?.index !== null && chargeEdit?.index !== undefined) {
+      const index = chargeEdit.index;
+      set({ charges: form.charges.filter((_, i) => i !== index) });
+    }
+    setChargeEdit(null);
+  };
+  /** ✓ and the arrow on the receipt: keep the charges and go back to the form. */
+  const doneCharges = () => {
+    set({ charges: committed() });
+    setChargeEdit(null);
+    setChargeSheet(null);
+    setSheet(null);
+  };
+  const discardCharges = () => {
+    set({ charges: chargesBefore });
+    setChargeEdit(null);
+    setChargeSheet(null);
+    setSheet(null);
+  };
+  /** ✕ and Back: drop this visit's changes, after a warning when there are any. */
+  const cancelCharges = () => {
+    if (JSON.stringify(committed()) === JSON.stringify(chargesBefore)) return discardCharges();
+    setChargeSheet('discard');
+  };
+
   // What the draft would save, worked out on every render (a few synchronous reads).
   const preview: { result: AmountResult | null; error: string | null } = (() => {
     if (isSavings || !amount || dec(amount).lte(0)) return { result: null, error: null };
     try {
-      return { result: prepareTransaction(db, draftFromForm(form, { amount, knownAmount: known, rate, mainCurrency })), error: null };
+      return { result: prepareTransaction(db, draftFromForm(liveForm, { amount, knownAmount: known, rate, mainCurrency })), error: null };
     } catch (e) {
       return { result: null, error: (e as { code?: string }).code ?? null };
     }
@@ -233,16 +327,30 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     const r = strings.receipt;
     const lines: ReceiptLine[] = [];
     const amountMoney = amount ? <MoneyInline value={amount} currency={mainCurrency} /> : null;
-    const chargeLine = (c: ChargeDraft, i: number): ReceiptLine => {
+    const chargeLine = (c: ChargeDraft, i: number | 'new'): ReceiptLine => {
       const { name, where } = chargeLabel(c);
+      const editing = chargeEdit !== null && (chargeEdit.index ?? 'new') === i;
+      const typed = editing ? chargeAmount(chargeEdit) : c.amount;
       return {
         key: `c${i}`,
         label: `− ${name} · ${where}`,
-        amount: <MoneyInline value={`-${c.amount}`} currency={c.currency} tone="expense" />,
-        onPress: () => setSheet({ charge: i }),
+        amount: typed ? <MoneyInline value={`-${typed}`} currency={c.currency} tone="expense" /> : <Text style={{ color: colors.inkMuted }}>—</Text>,
+        onPress: i === 'new' ? undefined : () => selectCharge(i),
+        editing,
       };
     };
-    const indexed = charges.map((c, i) => ({ c, i }));
+    // Every saved charge, with the one being edited shown as typed (even before it's complete).
+    const editShown = (e: ChargeEdit): ChargeDraft => ({
+      type: e.type,
+      label: e.label,
+      amount: chargeAmount(e) ?? '0',
+      currency: e.currency,
+      deduction: e.deduction,
+      accountId: e.accountId,
+      isTax: e.isTax,
+    });
+    const indexed: { c: ChargeDraft; i: number | 'new' }[] = form.charges.map((c, i) => ({ c: chargeEdit?.index === i ? editShown(chargeEdit) : c, i }));
+    if (chargeEdit && chargeEdit.index === null) indexed.push({ c: editShown(chargeEdit), i: 'new' });
     const insideBefore = indexed.filter(({ c }) => c.deduction === 'already_deducted' && (!converts || c.currency !== receivingCurrency));
     const insideAfter = indexed.filter(({ c }) => c.deduction === 'already_deducted' && converts && c.currency === receivingCurrency);
     const onTop = indexed.filter(({ c }) => c.deduction === 'charged_separately');
@@ -642,7 +750,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <UtilityButton
               icon="ledger"
               label={chargesTotal ? (chargesTotal.currency ? <MoneyInline value={chargesTotal.text} currency={chargesTotal.currency} /> : `${s.charges} · ${chargesTotal.text}`) : s.charges}
-              onPress={() => setSheet('charges')}
+              onPress={openCharges}
               dot={form.charges.length > 0}
             />
             <UtilityButton icon="layers" label={ledger?.name ?? '—'} onPress={() => setSheet('ledger')} />
@@ -791,77 +899,97 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onClose={() => setSheet(null)}
       />
       <NotesSheet visible={sheet === 'notes'} value={form.notes} onDone={(v) => set({ notes: v })} onClose={() => setSheet(null)} />
-      {/* Charges: a full page over the form (the form keeps everything typed); the add/edit sheet opens on top. */}
+      {/* Charges: a page over the form (board "Add — Income, charges expanded", option D). ✓ keeps the charges and goes back to the form; ✕ or Back drops this visit's changes, after a warning. */}
       <Modal
-        visible={sheet === 'charges' || (typeof sheet === 'object' && sheet !== null && 'charge' in sheet)}
+        visible={sheet === 'charges'}
         animationType="slide"
-        onRequestClose={() => setSheet(null)}
+        onRequestClose={cancelCharges}
+        onShow={() => chargeEdit?.index === null && !chargeEdit.expression && setChargeSheet('type')}
         statusBarTranslucent
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
           <View style={styles.chargesPage}>
-            {/* Board "Add — Income, charges expanded": the Add header, the account, the charges, what it goes up by. ✕ and the arrow go back to the form; ✓ saves. */}
             <Header
               title={editId ? s.editTitle : s.title}
-              onBack={() => setSheet(null)}
+              onBack={cancelCharges}
               backIcon="close"
-              actions={<IconButton icon="tick" filled label={strings.common.save} onPress={() => (setSheet(null), save())} disabled={!canSave || saving} />}
+              actions={<IconButton icon="tick" filled label={strings.receipt.done} onPress={doneCharges} />}
             />
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 11, paddingBottom: 12 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 11, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
               {chargesAccount ? <FormRow label={form.kind === 'transfer' ? s.to : s.account} icon={accountChip(chargesAccount)} value={chargesAccount.name} /> : null}
-              <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} onCollapse={() => setSheet(null)} />
+              <ReceiptCard lines={receiptLines} onAdd={startNewCharge} emptyText={strings.receipt.none} onCollapse={doneCharges} />
               {goesUp}
             </ScrollView>
           </View>
+          {chargeEdit ? (
+            <ChargeEditor
+              edit={chargeEdit}
+              typeName={chargeEdit.type === 'custom' ? (chargeEdit.label ?? strings.charge.types.custom) : strings.charge.types[chargeEdit.type]}
+              insideLabel={amount && !settings.hideAmounts ? strings.charge.insideShort(formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat }).text) : strings.charge.insideAmount}
+              accountName={chargeEdit.accountId ? (ref.accounts.get(chargeEdit.accountId)?.name ?? null) : null}
+              rateLabel={needsRate(chargeEdit, chargeCtx) ? strings.charge.rate(chargeEdit.currency, mainCurrency) : null}
+              rateValue={chargeEdit.rate ? trimRate(chargeEdit.rate) : null}
+              forcedTax={isForcedTax(chargeEdit.type)}
+              onType={() => setChargeSheet('type')}
+              onRemove={removeCharge}
+              onDeduction={(d) => setChargeEdit((e) => e && withDeduction(e, d, chargeCtx))}
+              onTax={() => setChargeEdit((e) => e && { ...e, isTax: !e.isTax })}
+              onAccount={() => setChargeSheet('account')}
+              onCurrency={() => setChargeSheet('currency')}
+              onRate={() => setChargeSheet('rate')}
+              onKey={(k) => setChargeEdit((e) => e && pressChargeKey(e, k))}
+            />
+          ) : (
+            <ChargeEditorHint>{strings.charge.pickHint}</ChargeEditorHint>
+          )}
         </SafeAreaView>
+
+        <PickerSheet
+          visible={chargeSheet === 'type'}
+          title={strings.charge.typeTitle}
+          searchPlaceholder={strings.charge.typeSearch}
+          searchDetails
+          sections={chargeTypeSections}
+          selectedId={chargeEdit ? (chargeEdit.type === 'custom' ? `custom:${chargeEdit.label ?? ''}` : chargeEdit.type) : null}
+          onSelect={(id) =>
+            setChargeEdit((e) =>
+              e && (id.startsWith('custom:') ? withType(e, 'custom', chargeCtx, id.slice(7)) : withType(e, id as ChargeType, chargeCtx)),
+            )
+          }
+          onCreate={{ label: strings.charge.addType, onCreate: (name) => setChargeEdit((e) => e && withType(e, 'custom', chargeCtx, name)) }}
+          onClose={() => setChargeSheet(null)}
+        />
+        <PickerSheet
+          visible={chargeSheet === 'account'}
+          title={strings.charge.paidFrom}
+          sections={chargeAccountSections}
+          selectedId={chargeEdit?.accountId ?? null}
+          onSelect={(id) => setChargeEdit((e) => e && withAccount(e, id, chargeCtx))}
+          onClose={() => setChargeSheet(null)}
+        />
+        <CurrencySheet
+          visible={chargeSheet === 'currency'}
+          selected={chargeEdit?.currency ?? mainCurrency}
+          onSelect={(c) => setChargeEdit((e) => e && { ...e, currency: c, rate: null })}
+          onClose={() => setChargeSheet(null)}
+        />
+        <RateSheet
+          visible={chargeSheet === 'rate'}
+          from={chargeEdit?.currency ?? mainCurrency}
+          to={mainCurrency}
+          value={chargeEdit?.rate ?? ''}
+          market={null}
+          onDone={(v) => setChargeEdit((e) => e && { ...e, rate: v || null })}
+          onClose={() => setChargeSheet(null)}
+        />
+        <BottomSheet visible={chargeSheet === 'discard'} onClose={() => setChargeSheet(null)} title={strings.charge.discardTitle}>
+          <View style={{ gap: 12 }}>
+            <Text style={[styles.discardBody, { color: colors.inkSecondary }]}>{strings.charge.discardBody}</Text>
+            <Button kind="danger" label={strings.charge.discard} onPress={discardCharges} />
+            <Button kind="secondary" label={strings.charge.keepEditing} onPress={() => setChargeSheet(null)} />
+          </View>
+        </BottomSheet>
       </Modal>
-      <AddChargeSheet
-        visible={typeof sheet === 'object' && sheet !== null && 'charge' in sheet}
-        initial={typeof sheet === 'object' && sheet !== null && typeof sheet.charge === 'number' ? form.charges[sheet.charge] : null}
-        mainAmount={amount}
-        mainCurrency={mainCurrency}
-        receivingCurrency={receivingCurrency}
-        defaultAccountId={(form.kind === 'transfer' ? toAccount?.id : null) ?? fromAccount?.id ?? null}
-        previewInside={(c) => {
-          if (form.kind === 'expense' || !amount || !receivingName) {
-            return fromAccount && amount ? (
-              <Text style={[styles.preview, { color: colors.ink }]}>
-                {parts(strings.charge.stillGoesDown(fromAccount.name, <MoneyInline value={r?.accountAmount ?? amount} currency={fromAccount.currency} />))}
-              </Text>
-            ) : null;
-          }
-          try {
-            const others = form.charges.filter((_, i) => !(typeof sheet === 'object' && sheet && sheet.charge === i));
-            const res = computeAmounts({
-              kind: form.kind === 'income' ? 'income' : 'transfer',
-              amount,
-              currency: mainCurrency,
-              receivingCurrency,
-              rateMode: form.rateMode,
-              rate,
-              knownAmount: known,
-              charges: [...others, c],
-            });
-            return (
-              <Text style={[styles.preview, { color: colors.ink }]}>
-                {strings.receipt.arrivesIn(receivingName)}: <MoneyInline value={res.arrives ?? '0'} currency={receivingCurrency} />
-              </Text>
-            );
-          } catch {
-            return null;
-          }
-        }}
-        onSave={(c) =>
-          setForm((f) => {
-            const index = typeof sheet === 'object' && sheet ? sheet.charge : 'new';
-            return { ...f, charges: index === 'new' ? [...f.charges, c] : f.charges.map((x, i) => (i === index ? c : x)) };
-          })
-        }
-        onDelete={() =>
-          setForm((f) => ({ ...f, charges: f.charges.filter((_, i) => !(typeof sheet === 'object' && sheet && sheet.charge === i)) }))
-        }
-        onClose={() => setSheet('charges')}
-      />
     </SafeAreaView>
   );
 }
@@ -962,6 +1090,7 @@ const styles = StyleSheet.create({
   intro: { fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 18, paddingHorizontal: 2 },
   goalLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
   goalText: { fontFamily: fonts.sansSemiBold, fontSize: 13 },
+  discardBody: { fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19 },
   chargesPage: { flex: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, gap: 11 },
   goesUp: { borderRadius: 16, paddingHorizontal: 17, paddingVertical: 15 },
   goesUpLabel: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
@@ -969,7 +1098,6 @@ const styles = StyleSheet.create({
   goesUpDetail: { fontFamily: fonts.sans, fontSize: 12, marginTop: 4 },
   converted: { fontFamily: fonts.sans, fontSize: 11.5, flexShrink: 1, textAlign: 'right' },
   convertedValue: { fontFamily: fonts.monoSemiBold, fontSize: 14 },
-  preview: { fontFamily: fonts.sans, fontSize: 12.5, paddingStart: 28 },
   notes: { borderRadius: 12, padding: 14, minHeight: 140, textAlignVertical: 'top', fontFamily: fonts.sans, fontSize: 14.5 },
   counter: { fontFamily: fonts.mono, fontSize: 11, textAlign: 'right' },
 });

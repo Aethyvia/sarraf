@@ -39,6 +39,8 @@ export function PickerSheet({
   newLabel,
   onNew,
   clearLabel,
+  searchDetails,
+  onCreate,
 }: {
   visible: boolean;
   title: string;
@@ -52,6 +54,10 @@ export function PickerSheet({
   onNew?: () => void;
   /** Offers a "none" choice (onSelect('')). */
   clearLabel?: string;
+  /** Search also matches each item's detail line. */
+  searchDetails?: boolean;
+  /** Offers "+ Add “what you typed”" when the search matches no item's title exactly. */
+  onCreate?: { label: (query: string) => string; onCreate: (query: string) => void };
 }) {
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
@@ -59,13 +65,15 @@ export function PickerSheet({
     const q = query.trim().toLowerCase();
     const out: Row[] = [];
     for (const s of sections) {
-      const items = q ? s.items.filter((i) => i.title.toLowerCase().includes(q)) : s.items;
+      const items = q ? s.items.filter((i) => i.title.toLowerCase().includes(q) || (searchDetails && !!i.detail?.toLowerCase().includes(q))) : s.items;
       if (!items.length) continue;
       if (s.label && !q) out.push({ type: 'label', text: s.label });
       for (const item of items) out.push({ type: 'item', item });
     }
     return out;
-  }, [query, sections]);
+  }, [query, sections, searchDetails]);
+  const typed = query.trim();
+  const canCreate = !!onCreate && typed !== '' && !sections.some((s) => s.items.some((i) => i.title.toLowerCase() === typed.toLowerCase()));
 
   const close = () => {
     setQuery('');
@@ -123,6 +131,15 @@ export function PickerSheet({
           )
         }
       />
+      {canCreate ? (
+        <LinkButton
+          label={onCreate!.label(typed)}
+          onPress={() => {
+            close();
+            onCreate!.onCreate(typed);
+          }}
+        />
+      ) : null}
       {onNew && newLabel ? (
         <LinkButton
           label={newLabel}
