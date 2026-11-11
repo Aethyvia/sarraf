@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import type { BackupDeps, KeyStore, LocalFiles, StoredKeys } from '@/data/backup-flow';
 import { db } from '@/db/client';
 import { fakeCloud, type FakeStore } from './fake';
+import { realCloud } from './real';
 import type { Cloud } from './types';
 
 /** The dev stand-in keeps its "cloud" in a folder that survives wiping the app's data from /dev. */
@@ -33,8 +34,26 @@ const notReady: Cloud = new Proxy({ ready: false } as Cloud, {
   get: (target, prop) => (prop === 'ready' ? false : prop in target ? target[prop as keyof Cloud] : () => Promise.reject(new Error('Sign-in isn’t set up yet'))),
 });
 
-export const devStore: FakeStore | null = __DEV__ ? fileStore() : null;
-export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = devStore ? fakeCloud(devStore) : notReady;
+/** The public Supabase and Google values from .env (none of them secret). */
+const config = {
+  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+  supabaseKey: process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '',
+  googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
+};
+const configured = !!(config.supabaseUrl && config.supabaseKey && config.googleWebClientId);
+
+/** Dev builds use the stand-in unless "Real cloud" is switched on in /dev (takes effect after a reload). */
+export const DEV_REAL_CLOUD_KEY = 'sarraf.dev.real-cloud';
+const devWantsReal = __DEV__ && SecureStore.getItem(DEV_REAL_CLOUD_KEY) === '1';
+
+export const devStore: FakeStore | null = __DEV__ && !devWantsReal ? fileStore() : null;
+export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = devStore
+  ? fakeCloud(devStore)
+  : configured
+    ? realCloud(config)
+    : notReady;
+/** True when this build talks to the real Supabase and Drive. */
+export const usingRealCloud = !devStore && configured;
 
 const KEYS = 'sarraf.backup-keys';
 

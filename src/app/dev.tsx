@@ -2,15 +2,16 @@ import { eq } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { DevSettings, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 
 import { Money } from '@/components/Money';
 import { db } from '@/db/client';
 import { accounts, settings } from '@/db/schema';
 import { SAMPLE_TODAY } from '@/db/sample';
 import { resetSampleData, wipeAsNewPhone } from '@/db/seed';
-import { backupDeps, cloud, keyStore } from '@/services/cloud';
+import { backupDeps, cloud, DEV_REAL_CLOUD_KEY, keyStore, usingRealCloud } from '@/services/cloud';
 import { backupNow, currentUser } from '@/data/backup-flow';
 import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
 import { DEFAULT_KDF, newDataKey, wrapKey } from '@/lib/backup-crypto';
@@ -76,6 +77,14 @@ export default function DevPreview() {
           />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
           <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
+          <Toggle
+            label={`Cloud: ${usingRealCloud ? 'real (Supabase + Drive)' : 'stand-in'}`}
+            onPress={() => {
+              // Picked when the app starts, so switching reloads it.
+              SecureStore.setItem(DEV_REAL_CLOUD_KEY, usingRealCloud ? '0' : '1');
+              DevSettings.reload();
+            }}
+          />
           <Toggle
             label="Try first run (new phone)"
             onPress={() => {
