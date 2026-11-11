@@ -1,7 +1,8 @@
 import { isNull } from 'drizzle-orm';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { BottomSheet, Button, Field, LinkButton, SelectorRow, ToggleRow } from '@/components/ui';
@@ -135,7 +136,7 @@ export function AddChargeSheet({
           <Pressable onPress={() => !onTop && setSheet('currency')} disabled={onTop} style={[styles.currencyChip, { backgroundColor: colors.surface }]}>
             <Text style={[styles.currencyText, { color: colors.ink }]}>{chargeCurrency}</Text>
           </Pressable>
-          <TextInput
+          <AmountTextInput
             value={amountText}
             onChangeText={setAmountText}
             placeholder="0.00"

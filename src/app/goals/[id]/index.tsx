@@ -1,8 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
@@ -195,7 +196,7 @@ function TakeOutSheet({
           <Text style={[styles.fieldLabel, { color: colors.inkMuted }]}>{s.amount}</Text>
           <View style={[styles.amountBox, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
             <Text style={[styles.code, { color: colors.inkSecondary }]}>{currency}</Text>
-            <TextInput value={text} onChangeText={setText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
+            <AmountTextInput value={text} onChangeText={setText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
             <Text onPress={() => setText(from.amount)} style={[styles.all, { color: colors.accent }]}>
               {parts(s.all(money(from.amount, { fontSize: 12, color: colors.accent })))}
             </Text>

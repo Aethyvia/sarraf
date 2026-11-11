@@ -296,16 +296,19 @@ export function Segmented<T extends string>({
   onChange,
   disabled,
   tint,
+  small,
 }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
   tint?: Partial<Record<T, string>>;
+  /** The compact kind selector at the top of Add transaction. */
+  small?: boolean;
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.segTrack, { backgroundColor: colors.filled }, disabled && { opacity: 0.6 }]}>
+    <View style={[styles.segTrack, small && styles.segTrackSmall, { backgroundColor: colors.filled }, disabled && { opacity: 0.6 }]}>
       {options.map((o) => {
         const on = o.value === value;
         const bg = on ? (tint?.[o.value] ?? colors.surface) : 'transparent';
@@ -316,9 +319,9 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.value)}
             accessibilityRole="button"
             accessibilityState={{ selected: on, disabled }}
-            style={[styles.seg, { backgroundColor: bg }, on && styles.segOn]}
+            style={[styles.seg, small && styles.segSmall, { backgroundColor: bg }, on && styles.segOn]}
           >
-            <Text style={[styles.segText, { color: on ? (tint?.[o.value] ? '#FFFFFF' : colors.ink) : colors.inkSecondary }]}>{o.label}</Text>
+            <Text style={[styles.segText, small && { fontSize: 10.5 }, { color: on ? (tint?.[o.value] ? '#FFFFFF' : colors.ink) : colors.inkSecondary }]}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -567,6 +570,8 @@ const styles = StyleSheet.create({
   },
   segTrack: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: radius.field },
   seg: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9 },
+  segTrackSmall: { gap: 3, borderRadius: 11 },
+  segSmall: { paddingVertical: 7, borderRadius: 8 },
   segOn: { elevation: 1, shadowColor: '#1E180C', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
   segText: { fontFamily: fonts.sansBold, fontSize: 12.5 },
   tick: { width: 22, height: 22, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },

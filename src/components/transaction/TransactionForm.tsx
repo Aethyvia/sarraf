@@ -278,6 +278,12 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     </View>
   );
   const personChip = (name: string) => <Initials name={name} size={24} />;
+  /** A grey row icon for rows with nothing picked yet (Tag, Status, Expected back). */
+  const plainChip = (icon: string, color: string) => (
+    <View style={[styles.rowIcon, { backgroundColor: colors.filled }]}>
+      <Icon name={icon} size={12} color={color} />
+    </View>
+  );
   const sideValue = (side: typeof form.from) => {
     if (!side) return undefined;
     if (side.type === 'account') return ref.accounts.get(side.id)?.name;
@@ -325,7 +331,10 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     .map((sh) => ref.people.get(sh.personId!)?.name ?? '')
     .join(', ');
   const splitCurrency = form.from?.type === 'person' ? mainCurrency : (fromAccount?.currency ?? mainCurrency);
-  const splitRow = (
+  // No split yet: an outlined button (board "Add — Expense"); once set, a row with the shares.
+  const splitRow = !form.split ? (
+    <Button kind="secondary" icon="split" label={strings.split.button} onPress={() => setSheet('split')} style={styles.splitButton} />
+  ) : (
     <FormRow
       dashed={!form.split}
       label={strings.split.row}
@@ -419,7 +428,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       <FormRow
         dashed={!form.referencePersonId}
         label={s.tag}
-        icon={form.referencePersonId ? personChip(ref.people.get(form.referencePersonId)?.name ?? '?') : undefined}
+        icon={form.referencePersonId ? personChip(ref.people.get(form.referencePersonId)?.name ?? '?') : plainChip('user', colors.inkMuted)}
         value={form.referencePersonId ? ref.people.get(form.referencePersonId)?.name : undefined}
         placeholder={s.tagPlaceholder[form.kind as 'expense' | 'income' | 'transfer']}
         onPress={() => setSheet('tag')}
@@ -427,7 +436,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     );
     const statusRows = (
       <>
-        <FormRow label={s.status} value={s.statuses[form.status]} onPress={() => setSheet('status')} />
+        <FormRow label={s.status} icon={plainChip('clock', colors.inkSecondary)} value={s.statuses[form.status]} onPress={() => setSheet('status')} />
         {form.status === 'pending' ? (
           <FormRow
             label={s.expected}
@@ -523,7 +532,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             {form.reimbursable ? (
               <FormRow
                 label={s.expectedBackFrom}
-                icon={form.expectedFromPersonId ? personChip(ref.people.get(form.expectedFromPersonId)?.name ?? '?') : undefined}
+                icon={form.expectedFromPersonId ? personChip(ref.people.get(form.expectedFromPersonId)?.name ?? '?') : plainChip('user', colors.inkSecondary)}
                 value={form.expectedFromPersonId ? ref.people.get(form.expectedFromPersonId)?.name : undefined}
                 placeholder={strings.common.none}
                 onPress={() => setSheet('expectedBack')}
@@ -538,6 +547,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   })();
 
   const r = preview.result;
+  // The account the charges page shows: where the money arrives (income, transfer) or leaves (expense).
+  const chargesAccount = form.kind === 'transfer' ? (toAccount ?? fromAccount) : fromAccount;
   const goesUp =
     (form.kind === 'income' || (form.kind === 'transfer' && toAccount)) && r?.netAmount && receivingName ? (
       <View style={[styles.goesUp, { backgroundColor: colors.accentSoft }]}>
@@ -590,6 +601,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             options={(['expense', 'income', 'transfer', 'savings'] as const).map((k) => ({ value: k, label: s.kinds[k] }))}
             value={form.kind}
             onChange={changeKind}
+            small
             tint={{ expense: colors.expense, income: colors.income, transfer: colors.accent, savings: colors.accent }}
           />
         ) : null}
@@ -788,13 +800,18 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
           <View style={styles.chargesPage}>
-            <Header title={strings.receipt.pageTitle} onBack={() => setSheet(null)} />
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12, paddingBottom: 12 }}>
-              <Text style={[styles.chargesIntro, { color: colors.inkSecondary }]}>{strings.receipt.pageIntro}</Text>
-              <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} />
+            {/* Board "Add — Income, charges expanded": the Add header, the account, the charges, what it goes up by. ✕ and the arrow go back to the form; ✓ saves. */}
+            <Header
+              title={editId ? s.editTitle : s.title}
+              onBack={() => setSheet(null)}
+              backIcon="close"
+              actions={<IconButton icon="tick" filled label={strings.common.save} onPress={() => (setSheet(null), save())} disabled={!canSave || saving} />}
+            />
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 11, paddingBottom: 12 }}>
+              {chargesAccount ? <FormRow label={form.kind === 'transfer' ? s.to : s.account} icon={accountChip(chargesAccount)} value={chargesAccount.name} /> : null}
+              <ReceiptCard lines={receiptLines} onAdd={() => setSheet({ charge: 'new' })} emptyText={strings.receipt.none} onCollapse={() => setSheet(null)} />
               {goesUp}
             </ScrollView>
-            <Button label={strings.receipt.done} onPress={() => setSheet(null)} />
           </View>
         </SafeAreaView>
       </Modal>
@@ -939,16 +956,16 @@ const styles = StyleSheet.create({
   bottom: { paddingHorizontal: 20, paddingBottom: 12, gap: 8 },
   utilRow: { flexDirection: 'row', gap: 8 },
   rowIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  splitButton: { height: 40 },
   rowLabelSmall: { fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.38 },
   has: { fontFamily: fonts.monoSemiBold, fontSize: 12 },
   intro: { fontFamily: fonts.sans, fontSize: 12.5, lineHeight: 18, paddingHorizontal: 2 },
   goalLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 },
   goalText: { fontFamily: fonts.sansSemiBold, fontSize: 13 },
-  chargesPage: { flex: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, gap: 14 },
-  chargesIntro: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, paddingHorizontal: 2 },
+  chargesPage: { flex: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, gap: 11 },
   goesUp: { borderRadius: 16, paddingHorizontal: 17, paddingVertical: 15 },
   goesUpLabel: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
-  goesUpAmount: { fontFamily: fonts.mono, fontSize: 30, marginTop: 2 },
+  goesUpAmount: { fontFamily: fonts.mono, fontSize: 34, marginTop: 2 },
   goesUpDetail: { fontFamily: fonts.sans, fontSize: 12, marginTop: 4 },
   converted: { fontFamily: fonts.sans, fontSize: 11.5, flexShrink: 1, textAlign: 'right' },
   convertedValue: { fontFamily: fonts.monoSemiBold, fontSize: 14 },

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
@@ -118,7 +119,7 @@ export function SettleSheet({
               <Text style={[styles.label, { color: colors.inkMuted }]}>{s.amount}</Text>
               <View style={[styles.amountBox, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
                 <Text style={[styles.code, { color: colors.inkSecondary }]}>{chosen.currency}</Text>
-                <TextInput value={text} onChangeText={setText} keyboardType="numeric" autoFocus placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
+                <AmountTextInput value={text} onChangeText={setText} keyboardType="numeric" autoFocus placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
               </View>
             </View>
           ) : null}

@@ -49,11 +49,11 @@ export function Keypad({ onKey }: { onKey: (key: CalcKey) => void }) {
 }
 
 /** A backspace button for the amount card. */
-export function BackspaceButton({ onPress, onLongPress }: { onPress: () => void; onLongPress: () => void }) {
+export function BackspaceButton({ onPress, onLongPress, small }: { onPress: () => void; onLongPress: () => void; small?: boolean }) {
   const { colors } = useTheme();
   return (
     <Pressable onPress={onPress} onLongPress={onLongPress} hitSlop={10} accessibilityRole="button" accessibilityLabel="Delete" accessibilityHint="Hold to clear" style={styles.back}>
-      <Icon name="backspace" size={22} color={colors.inkSecondary} strokeWidth={1.8} />
+      <Icon name="backspace" size={small ? 17 : 22} color={colors.inkSecondary} strokeWidth={1.8} />
     </Pressable>
   );
 }
@@ -61,8 +61,8 @@ export function BackspaceButton({ onPress, onLongPress }: { onPress: () => void;
 const styles = StyleSheet.create({
   grid: { gap: 7 },
   row: { flexDirection: 'row', gap: 7 },
-  key: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  keyText: { fontFamily: fonts.monoSemiBold, fontSize: 17 },
-  opText: { fontFamily: fonts.monoSemiBold, fontSize: 18 },
+  key: { flex: 1, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  keyText: { fontFamily: fonts.monoSemiBold, fontSize: 16 },
+  opText: { fontFamily: fonts.monoSemiBold, fontSize: 16 },
   back: { padding: 4 },
 });

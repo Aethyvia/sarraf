@@ -1,7 +1,8 @@
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { formatLongDate } from '@/components/transaction/parts';
@@ -72,7 +73,7 @@ export function FixBalanceSheet({ account, visible, onClose }: { account: typeof
           <Text style={[styles.label, { color: colors.inkMuted }]}>{s.whatShows(institution)}</Text>
           <View style={[styles.input, { backgroundColor: colors.filled }]}>
             <Text style={[styles.code, { color: colors.inkMuted }]}>{account.currency}</Text>
-            <TextInput
+            <AmountTextInput
               value={text}
               onChangeText={setText}
               keyboardType="numeric"

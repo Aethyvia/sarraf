@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { BottomSheet, Button, Field, Header, Hint, IconButton, LinkButton, Screen, SelectorRow } from '@/components/ui';
 import { createGoal, deleteGoal, goalTotal, updateGoal, type Goal } from '@/data/goals';
@@ -46,7 +47,7 @@ export function GoalForm({ goal }: { goal?: Goal }) {
         <Text style={[styles.label, { color: colors.inkMuted }]}>{s.target}</Text>
         <View style={[styles.amountBox, { backgroundColor: colors.filled }]}>
           <Text style={[styles.code, { color: colors.inkSecondary }]}>{currency}</Text>
-          <TextInput value={targetText} onChangeText={setTargetText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
+          <AmountTextInput value={targetText} onChangeText={setTargetText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
         </View>
       </View>
       <Button label={s.save} disabled={!canSave} onPress={save} />

@@ -2,8 +2,9 @@ import { goBack } from '@/state/nav';
 import { asc, isNotNull } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { IconColorSheet } from '@/components/sheets/IconColorSheet';
 import { BottomSheet, Button, Field, Header, Hint, IconButton, IconChip, Screen, SelectorRow, SheetOption } from '@/components/ui';
@@ -88,7 +89,7 @@ export function AccountForm({ account }: { account?: Account }) {
             <Text style={[styles.amountLabel, { color: colors.inkMuted }]}>
               {s.currentBalance.toUpperCase()} ({strings.common.optional.toUpperCase()})
             </Text>
-            <TextInput
+            <AmountTextInput
               value={balance}
               onChangeText={setBalance}
               placeholder="0.00"

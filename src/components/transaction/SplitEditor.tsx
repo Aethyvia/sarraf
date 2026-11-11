@@ -1,8 +1,9 @@
 import { isNull } from 'drizzle-orm';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Money } from '@/components/Money';
 import { AddPeopleSheet } from '@/components/sheets/AddPeopleSheet';
 import { Initials } from '@/components/sheets/pickers';
@@ -222,7 +223,7 @@ export function SplitEditor({
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 5 }}>
                       {mode === 'amounts' ? (
-                        <TextInput
+                        <AmountTextInput small wrapStyle={{ flexGrow: 0 }}
                           value={r.amountText}
                           onChangeText={(t) => update(i, { amountText: t })}
                           keyboardType="numeric"
@@ -232,7 +233,7 @@ export function SplitEditor({
                         />
                       ) : mode === 'percent' ? (
                         <View style={styles.pctRow}>
-                          <TextInput
+                          <AmountTextInput small wrapStyle={{ flexGrow: 0 }}
                             value={r.percentText}
                             onChangeText={(t) => update(i, { percentText: t })}
                             keyboardType="numeric"

@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useAccountSections, useCategorySections, usePeopleItems } from '@/components/sheets/pickers';
 import { formatLongDate } from '@/components/transaction/parts';
@@ -148,7 +149,7 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
           <Text style={[styles.label, { color: colors.inkMuted }]}>{s.amount}</Text>
           <View style={[styles.amountBox, { backgroundColor: colors.filled }]}>
             <Text style={[styles.code, { color: colors.inkSecondary }]}>{names.account?.currency ?? ''}</Text>
-            <TextInput value={amountText} onChangeText={setAmountText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
+            <AmountTextInput value={amountText} onChangeText={setAmountText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
           </View>
         </View>
       ) : null}

@@ -1,8 +1,9 @@
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { eq } from 'drizzle-orm';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AmountTextInput } from '@/components/AmountTextInput';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
@@ -103,7 +104,7 @@ export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; ki
         <Text style={[styles.label, { color: colors.inkMuted }]}>{kind === 'refund' ? s.refundAmount : s.amountReceived}</Text>
         <View style={[styles.amountBox, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
           <Text style={[styles.code, { color: colors.inkSecondary }]}>{account?.currency ?? ''}</Text>
-          <TextInput
+          <AmountTextInput
             value={amountText ?? (defaultAmount ? toTypedText(defaultAmount, numberFormat) : '')}
             onChangeText={setAmountText}
             keyboardType="numeric"
@@ -120,7 +121,7 @@ export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; ki
           <Text style={[styles.label, { color: colors.inkMuted }]}>{s.countsAs}</Text>
           <View style={[styles.amountBox, { borderColor: colors.border, backgroundColor: colors.filled }]}>
             <Text style={[styles.code, { color: colors.inkSecondary }]}>{base.currency}</Text>
-            <TextInput
+            <AmountTextInput
               value={countsText ?? (defaultCounts ? toTypedText(defaultCounts, numberFormat) : '')}
               onChangeText={setCountsText}
               keyboardType="numeric"

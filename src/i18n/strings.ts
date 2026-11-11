@@ -373,8 +373,6 @@ export const strings = {
   receipt: {
     title: 'CHARGES',
     done: 'Done',
-    pageTitle: 'Charges',
-    pageIntro: 'Fees and taxes on this transaction: inside the amount, or paid on top from an account.',
     beforeDeductions: 'Before deductions',
     whatLeft: (account: string) => `Left ${account}`,
     inside: 'inside the amount',
@@ -819,6 +817,7 @@ export const strings = {
     title: 'Split with people',
     row: 'Split',
     rowPlaceholder: 'Split with people',
+    button: 'Split with people (optional)',
     rowValue: (names: string, share: ReactNode): ReactNode[] => [`With ${names} · your share `, share],
     whoPaid: 'WHO PAID?',
     iPaid: 'I paid',

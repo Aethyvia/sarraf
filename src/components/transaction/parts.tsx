@@ -230,11 +230,14 @@ export interface ReceiptLine {
 }
 
 /** Charges as a receipt, top to bottom: each charge on the line where it happened. */
-export function ReceiptCard({ lines, onAdd, emptyText }: { lines: ReceiptLine[]; onAdd: () => void; emptyText?: string }) {
+export function ReceiptCard({ lines, onAdd, emptyText, onCollapse }: { lines: ReceiptLine[]; onAdd: () => void; emptyText?: string; onCollapse?: () => void }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.receipt, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.receiptTitle, { color: colors.inkMuted }]}>{strings.receipt.title}</Text>
+      <Pressable onPress={onCollapse} disabled={!onCollapse} style={styles.receiptHead} accessibilityRole={onCollapse ? 'button' : undefined}>
+        <Text style={[styles.receiptTitle, { color: colors.inkMuted }]}>{strings.receipt.title}</Text>
+        {onCollapse ? <Icon name="up" size={13} color={colors.inkMuted} strokeWidth={2.2} /> : null}
+      </Pressable>
       {lines.length === 0 && emptyText ? <Text style={[styles.small, { color: colors.inkMuted, paddingVertical: 8 }]}>{emptyText}</Text> : null}
       {lines.map((l, i) => (
         <Pressable
@@ -324,7 +327,8 @@ const styles = StyleSheet.create({
   small: { fontFamily: fonts.sans, fontSize: 10.5, flexShrink: 1 },
   marketRate: { fontFamily: fonts.sansBold, textDecorationLine: 'underline' },
   receipt: { borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 14 },
-  receiptTitle: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66, marginBottom: 4 },
+  receiptHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  receiptTitle: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
   receiptLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 2, gap: 8 },
   receiptLabel: { fontFamily: fonts.sans, fontSize: 13, flexShrink: 1 },
   addCharge: { alignItems: 'center', paddingTop: 8 },
