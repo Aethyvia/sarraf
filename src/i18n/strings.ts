@@ -57,6 +57,7 @@ export const strings = {
     limit_reached: 'You’ve reached the Free limit.',
     invalid_split: 'The shares need to add up to the total.',
     nothing_owed: 'There’s nothing to settle in that currency.',
+    same_currency: 'That account is in the same currency — use the usual Mark as settled.',
     unknown: 'Something went wrong. Nothing was changed.',
   },
   settings: {
@@ -1491,6 +1492,19 @@ export const strings = {
     save: (amount: ReactNode): ReactNode[] => ['Mark ', amount, ' settled'],
     done: 'Marked as settled',
     pickCurrency: 'Which currency?',
+    // Paid in another currency (Decided Nov 12)
+    otherCurrency: 'Paid in another currency',
+    subtitleOther: 'The money moves in one of your accounts; the balance clears in its own currency.',
+    otherCurrencyDetail: (name: string) => `${name} paid, or you paid ${name}, in a different currency. The money moves in that account.`,
+    into: 'INTO',
+    outOf: 'OUT OF',
+    pickAccount: 'Choose an account',
+    paidAmount: (currency: string) => `AMOUNT PAID IN ${currency}`,
+    rate: (from: string, rate: string, to: string) => `1 ${from} = ${rate} ${to}`,
+    balanceAfter: (name: string, currency: string) => `${name}’s ${currency} balance after this`,
+    accountUp: (account: string) => `${account} goes up by`,
+    accountDown: (account: string) => `${account} goes down by`,
+    explainOther: (name: string) => `${name}’s balance clears in the owed currency; the account moves in its own. It’s saved as a transfer with ${name}, with the rate you got.`,
   },
   shareSummary: {
     title: (name: string) => `Share with ${name}`,

@@ -267,6 +267,13 @@ export const transactions = sqliteTable(
     /** Linked money back: what it counts as in the original expense's currency, and the rate used. */
     countsAsAmount: money('counts_as_amount'),
     countsAsRate: money('counts_as_rate'),
+    /**
+     * A transfer with a person paid in another currency (Decided Nov 12): the
+     * person's balance moves in this currency, by person_amount, while the
+     * account moves in its own. E.g. John's $250 cleared with ₨69,500 cash.
+     */
+    personCurrency: text('person_currency'),
+    personAmount: money('person_amount'),
     recurringId: text('recurring_id').references(() => recurringItems.id, { onDelete: 'restrict' }),
     /** The recurring due date this row was made for; (recurring_id, recurring_due_date) is unique. */
     recurringDueDate: text('recurring_due_date'),

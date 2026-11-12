@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { accounts, people, personEntries, transactions } from '@/db/schema';
+import { accounts, ledgers, people, personEntries, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
@@ -8,6 +8,7 @@ import { Decimal, dec, isDecimalString, toDecimalString, type DecimalString, typ
 import { sortByCurrencyOrder } from './currency-order';
 import { DataError } from './errors';
 import { splitOf } from './splits';
+import { saveTransaction } from './transactions';
 
 type EntryRow = typeof personEntries.$inferSelect;
 
@@ -115,6 +116,43 @@ export function markSettled(
       .run();
     return id;
   });
+}
+
+/**
+ * Mark as settled, paid in another currency (Decided Nov 12): John owes you
+ * $250 and pays ₨69,500 cash. Money really moves, so it's a transfer between
+ * the person and your account in the account's currency, and it clears
+ * `clears` of their balance in the owed currency. You owe them → the money
+ * goes out of your account instead.
+ */
+export function settleInOtherCurrency(
+  db: AppDb,
+  input: { personId: string; currency: string; clears: DecimalString; accountId: string; amount: DecimalString; note?: string | null; date?: string },
+  today: string = todayDate(),
+): string {
+  if (!isDecimalString(input.clears) || dec(input.clears).lte(0)) throw new DataError('invalid_amount', 'Enter how much it settles, above zero');
+  if (!isDecimalString(input.amount) || dec(input.amount).lte(0)) throw new DataError('invalid_amount', 'Enter the amount paid, above zero');
+  const account = db.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
+  if (!account) throw new DataError('not_found', 'No account');
+  if (account.currency === input.currency) throw new DataError('same_currency', 'That account is in the same currency; use Mark as settled');
+  const balance = dec(personBalances(db, input.personId, today).get(input.currency) ?? '0');
+  if (balance.isZero()) throw new DataError('nothing_owed', 'Nothing to settle in that currency');
+  if (dec(input.clears).gt(balance.abs())) throw new DataError('invalid_amount', 'That’s more than the balance');
+  const theyOwe = balance.isPositive();
+  const ledgerId = db.select({ id: ledgers.id }).from(ledgers).where(eq(ledgers.isDefault, true)).get()?.id ?? null;
+  return saveTransaction(db, {
+    kind: 'transfer',
+    date: input.date ?? today,
+    status: 'cleared',
+    ledgerId,
+    // They pay you: from them into your account. You pay them: from your account to them.
+    ...(theyOwe ? { fromPersonId: input.personId, toAccountId: account.id } : { accountId: account.id, toPersonId: input.personId }),
+    amount: toDecimalString(dec(input.amount)),
+    currency: account.currency,
+    notes: input.note?.trim() || null,
+    personCurrency: input.currency,
+    personAmount: toDecimalString(dec(input.clears)),
+  }).id;
 }
 
 /** Removes a Mark as settled entry (from the person page's history). */

@@ -87,6 +87,12 @@ export interface TransactionDraft {
   autoAdded?: boolean;
   /** Expense only: split with people (Spec §9c). With fromPersonId set, someone else paid. */
   split?: SplitDraft | null;
+  /**
+   * A transfer with a person paid in another currency (Decided Nov 12): their
+   * balance moves by personAmount in personCurrency, not by the transfer's amount.
+   */
+  personCurrency?: string | null;
+  personAmount?: DecimalString | null;
 }
 
 export const NOTES_MAX = 2000;
@@ -214,6 +220,15 @@ export function saveTransaction(
     if (split) checkSplit(split, splitTotal, draft.fromPersonId ?? null);
     const yourShare = split ? split.shares.find((sh) => sh.personId === null)!.amount : null;
     const isPersonTransfer = draft.kind === 'transfer' && (draft.fromPersonId || draft.toPersonId);
+    // Only a person transfer can clear a balance in another currency, and only when the currencies differ.
+    const personSettle =
+      isPersonTransfer && draft.personCurrency && draft.personAmount && draft.personCurrency !== a.currency
+        ? (() => {
+            if (!isDecimalString(draft.personAmount) || dec(draft.personAmount).lte(0)) throw new DataError('invalid_amount', 'Enter what it clears, above zero');
+            if (!isCurrencyCode(draft.personCurrency)) throw new DataError('invalid_currency', 'Unknown currency');
+            return { currency: draft.personCurrency, amount: toDecimalString(dec(draft.personAmount)) };
+          })()
+        : null;
 
     const row: typeof transactions.$inferInsert = {
       id,
@@ -244,6 +259,8 @@ export function saveTransaction(
       recurringDueDate: draft.recurringDueDate ?? existing?.recurringDueDate ?? null,
       autoAdded: draft.autoAdded ?? existing?.autoAdded ?? false,
       notes: draft.notes?.trim() || null,
+      personCurrency: personSettle ? personSettle.currency : null,
+      personAmount: personSettle ? personSettle.amount : null,
       marketRateAtEntry: a.converts ? (options.marketRate?.rate ?? existing?.marketRateAtEntry ?? null) : null,
       marketRateFetchedAt: a.converts ? (options.marketRate?.fetchedAt ?? existing?.marketRateFetchedAt ?? null) : null,
       updatedAt: nowIso(),
@@ -285,10 +302,12 @@ export function saveTransaction(
       tx.insert(personEntries)
         .values({ id: newId(), personId, transactionId: id, source, currency, amount, date: draft.date })
         .run();
-    const amount = toDecimalString(dec(draft.amount));
     const negate = (v: DecimalString) => toDecimalString(dec(v).negated());
-    if (draft.kind === 'transfer' && draft.toPersonId) entry(draft.toPersonId, amount, 'transfer');
-    if (draft.kind === 'transfer' && draft.fromPersonId) entry(draft.fromPersonId, negate(amount), 'transfer');
+    // Paid in another currency: the person's balance moves in their currency by what it clears.
+    const amount = personSettle ? personSettle.amount : toDecimalString(dec(draft.amount));
+    const personCur = personSettle ? personSettle.currency : a.currency;
+    if (draft.kind === 'transfer' && draft.toPersonId) entry(draft.toPersonId, amount, 'transfer', personCur);
+    if (draft.kind === 'transfer' && draft.fromPersonId) entry(draft.fromPersonId, negate(amount), 'transfer', personCur);
 
     if (split) {
       const splitCurrency = draft.accountId ? accountCurrency(tx, draft.accountId) : a.currency;
@@ -374,6 +393,8 @@ export function draftFromTransaction(db: AppDb, id: string): TransactionDraft {
       isTax: c.isTax,
     })),
     reimbursable: t.reimbursable,
+    personCurrency: t.personCurrency,
+    personAmount: t.personAmount,
     expectedFromPersonId: t.expectedFromPersonId,
     notes: t.notes,
     recurringId: t.recurringId,

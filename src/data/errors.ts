@@ -17,7 +17,8 @@ export type DataErrorCode =
   | 'has_subcategories'
   | 'system_category'
   | 'invalid_split'
-  | 'nothing_owed';
+  | 'nothing_owed'
+  | 'same_currency';
 
 export class DataError extends Error {
   constructor(

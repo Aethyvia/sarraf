@@ -6,6 +6,7 @@ import m0001 from './0001_recurring_occurrences.sql';
 import m0002 from './0002_budget_alerted.sql';
 import m0003 from './0003_device_state.sql';
 import m0004 from './0004_sign_out_and_plan.sql';
+import m0005 from './0005_person_currency.sql';
 
   export default {
     journal,
@@ -14,7 +15,8 @@ import m0004 from './0004_sign_out_and_plan.sql';
 m0001,
 m0002,
 m0003,
-m0004
+m0004,
+m0005
     }
   }
   

@@ -44,6 +44,8 @@ export interface FormState {
   /** Pay / Add from a recurring item: which item and due date this handles. */
   recurringId: string | null;
   recurringDueDate: string | null;
+  /** A settlement paid in another currency: what it clears in the person's currency (kept as is on edit). */
+  personSettle: { currency: string; amount: string } | null;
 }
 
 export function initialForm(defaults: { date: string; ledgerId: string | null; accountId: string | null; kind?: FormKind }): FormState {
@@ -73,6 +75,7 @@ export function initialForm(defaults: { date: string; ledgerId: string | null; a
     split: null,
     recurringId: null,
     recurringDueDate: null,
+    personSettle: null,
   };
 }
 
@@ -129,6 +132,7 @@ export function formFromDraft(d: TransactionDraft): FormState {
     split: d.split ?? null,
     recurringId: d.recurringId ?? null,
     recurringDueDate: d.recurringDueDate ?? null,
+    personSettle: d.personCurrency && d.personAmount ? { currency: d.personCurrency, amount: d.personAmount } : null,
   };
 }
 
@@ -178,5 +182,8 @@ export function draftFromForm(
     split: s.kind === 'expense' ? s.split : null,
     recurringId: s.recurringId,
     recurringDueDate: s.recurringDueDate,
+    // Still a transfer with a person: it keeps clearing the same amount in their currency.
+    personCurrency: s.kind === 'transfer' && s.personSettle && (s.from?.type === 'person' || s.to?.type === 'person') ? s.personSettle.currency : null,
+    personAmount: s.kind === 'transfer' && s.personSettle && (s.from?.type === 'person' || s.to?.type === 'person') ? s.personSettle.amount : null,
   };
 }
