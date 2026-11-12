@@ -1,38 +1,55 @@
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { eq } from 'drizzle-orm';
-import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox, ConversionTrio, type TrioSlot } from '@/components/AmountBox';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useAccountSections } from '@/components/sheets/pickers';
-import { Button, Field, SelectorRow } from '@/components/ui';
+import { Field, SelectorRow } from '@/components/ui';
+import { vsMarketPercent } from '@/data/amounts';
 import { addMoneyBack, refundableLeft, type MoneyBackKind } from '@/data/money-back';
 import { chargedCurrencyOf, outstandingOf } from '@/data/owing';
 import { marketRate } from '@/data/rates';
 import { db } from '@/db/client';
 import { accounts, categories, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
+import { expressionValue, pressKey, type CalcKey } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
-import { convert, dec, parseTypedAmount, toDecimalString, toTypedText } from '@/lib/money';
+import { convert, dec, getCurrency, toDecimalString } from '@/lib/money';
+import { RATE_MAX_DECIMALS } from '@/state/transaction-form';
+import { rateFromYFirst, workOut } from '@/state/conversion';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
-import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
-import { fonts, radius, useTheme } from '@/theme';
+import { fonts, useTheme } from '@/theme';
 import { formatLongDate, trimRate } from './parts';
+
+export interface MoneyBackParts {
+  ready: boolean;
+  /** The rows above the amount (account, date, notes, what it does). */
+  rows: ReactNode;
+  /** The amount — or, in another currency, amount back · rate · counts as — docked above the keypad. */
+  amount: ReactNode;
+  onKey: (key: CalcKey) => void;
+  save: () => void;
+  valid: boolean;
+  /** Sheets this form opens (render once, anywhere). */
+  sheets: ReactNode;
+  actionUi: ReactNode;
+}
 
 /**
  * Money back on an expense: Got it (a reimbursement) or a refund. Pick the
- * account it arrived in, what arrived, and — in another currency — what it
- * counts as in the expense's currency, pre-filled at today's market rate.
+ * account it arrived in and what arrived; in another currency, the amount
+ * back, the rate and what it counts as in the expense's currency (option D,
+ * Owner Nov 12): tap the one you know. All on Sarraf's keypad.
  */
-export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; kind: MoneyBackKind; onDone: () => void }) {
+export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () => void): MoneyBackParts {
   const s = strings.moneyBack;
   const { colors } = useTheme();
-  const { numberFormat } = useSettings();
   const toast = useToast();
   const action = useAction();
   const today = todayDate();
@@ -49,31 +66,77 @@ export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; ki
     [parentId, kind],
   );
   const [accountId, setAccountId] = useState<string | null>(null);
+  // null = untouched: pre-filled with what's still expected / today's market rate.
   const [amountText, setAmountText] = useState<string | null>(null);
-  const [countsText, setCountsText] = useState<string | null>(null);
+  const [rateText, setRateText] = useState<string | null>(null);
+  const [countsText, setCountsText] = useState('');
+  const [known, setKnown] = useState<'rate' | 'y'>('rate');
+  const [focus, setFocus] = useState<TrioSlot>('amount');
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
   const [picking, setPicking] = useState(false);
   const accountSections = useAccountSections();
+  // A different expense (the Got it sheet is reused): start fresh.
+  const [forId, setForId] = useState(parentId);
+  if (forId !== parentId) {
+    setForId(parentId);
+    setAccountId(null);
+    setAmountText(null);
+    setRateText(null);
+    setCountsText('');
+    setKnown('rate');
+    setFocus('amount');
+    setDate(today);
+    setNotes('');
+  }
 
   const chosenId = accountId ?? base?.parent.accountId ?? null;
   const account = useLive((d) => (chosenId ? (d.select().from(accounts).where(eq(accounts.id, chosenId)).get() ?? null) : null), [chosenId]);
-  const rate = useLive((d) => (account && base && account.currency !== base.currency ? marketRate(d, account.currency, base.currency) : null), [account?.currency, base?.currency]);
-  if (!base) return null;
+  const market = useLive((d) => (account && base && account.currency !== base.currency ? marketRate(d, account.currency, base.currency) : null), [account?.currency, base?.currency]);
+
+  const empty: MoneyBackParts = { ready: false, rows: null, amount: null, onKey: () => {}, save: () => {}, valid: false, sheets: null, actionUi: action.ui };
+  if (!base) return empty;
 
   const other = !!account && account.currency !== base.currency;
   const left = dec(base.left).gt(0) ? base.left : '0';
-  // Defaults: what's still expected, in the receiving account's currency.
-  const defaultAmount = !account ? '' : !other ? left : rate ? convert(left, toDecimalString(dec('1').dividedBy(dec(rate.rate))), account.currency) : '';
-  const amount = amountText !== null ? parseTypedAmount(amountText, numberFormat) : defaultAmount || null;
+  const accCur = account?.currency ?? base.currency;
+  // X = what arrived (account currency); Y = what it counts as (the expense's currency).
+  const xPerY = market ? toDecimalString(dec('1').dividedBy(dec(market.rate))) : null;
+  const fromY = rateFromYFirst(xPerY);
+  const marketShown = market ? trimRate(fromY ? xPerY! : market.rate) : null;
+  const defaultAmount = !account ? '' : !other ? left : market ? convert(left, xPerY!, account.currency) : '';
+  const amountExpr = amountText ?? defaultAmount;
+  const amount = amountExpr ? expressionValue(amountExpr, getCurrency(accCur).minorUnits) : null;
+  const rateExpr = rateText ?? marketShown ?? '';
+  const typedRate = expressionValue(rateExpr, RATE_MAX_DECIMALS);
+  const typedCounts = expressionValue(countsText, getCurrency(base.currency).minorUnits);
+  const worked = workOut({ x: amount, known, rate: typedRate, y: typedCounts, curY: base.currency, rateFromY: fromY });
   // Untouched, the pre-filled amount counts as exactly what's still expected (no round trip through the rate).
-  const defaultCounts = !other ? null : amountText === null && defaultAmount ? left : amount && rate ? convert(amount, rate.rate, base.currency) : null;
-  const countsAs = !other ? amount : countsText !== null ? parseTypedAmount(countsText, numberFormat) : defaultCounts;
+  const countsAs = !other ? amount : amountText === null && rateText === null && known === 'rate' && defaultAmount ? left : worked.y;
   const after = countsAs ? toDecimalString(dec(left).minus(dec(countsAs))) : left;
   const afterStatus = dec(after).lte(0) ? 'reimbursed' : 'partly_back';
   const overRefund = kind === 'refund' && !!countsAs && dec(countsAs).gt(dec(left));
   const valid = !!account && !!amount && dec(amount).gt(0) && !!countsAs && dec(countsAs).gt(0) && !overRefund;
 
+  const onKey = (key: CalcKey) => {
+    Keyboard.dismiss();
+    const slot = other ? focus : 'amount';
+    if (slot === 'amount') setAmountText(pressKey(amountExpr, key, getCurrency(accCur).minorUnits));
+    else if (slot === 'rate') setRateText(pressKey(rateExpr, key, RATE_MAX_DECIMALS));
+    else setCountsText(pressKey(countsText, key, getCurrency(base.currency).minorUnits));
+  };
+  const onFocus = (slot: TrioSlot) => {
+    Keyboard.dismiss();
+    setFocus(slot);
+    // Tapping the worked-out one makes it the typed one, starting empty.
+    if (slot === 'rate' && known !== 'rate') {
+      setKnown('rate');
+      setRateText('');
+    } else if (slot === 'counter' && known !== 'y') {
+      setKnown('y');
+      setCountsText('');
+    }
+  };
   const pickDate = () => {
     const [y, m, d] = date.split('-').map(Number);
     DateTimePickerAndroid.open({
@@ -94,62 +157,13 @@ export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; ki
     }
   };
   const money = (v: string, c: string, extra?: object) => <Money value={v} currency={c} allowCompact={false} style={[styles.mono, extra]} />;
+  const amountLabel = (kind === 'refund' ? s.refundAmount : s.amountReceived).toUpperCase();
 
-  return (
-    <View style={{ gap: 14 }}>
-      {action.ui}
+  const rows = (
+    <>
       <SelectorRow label={kind === 'refund' ? s.refundedTo : s.receivedInto} value={account?.name ?? '—'} onPress={() => setPicking(true)} />
-
-      <View>
-        <Text style={[styles.label, { color: colors.inkMuted }]}>{kind === 'refund' ? s.refundAmount : s.amountReceived}</Text>
-        <View style={[styles.amountBox, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
-          <Text style={[styles.code, { color: colors.inkSecondary }]}>{account?.currency ?? ''}</Text>
-          <AmountTextInput
-            value={amountText ?? (defaultAmount ? toTypedText(defaultAmount, numberFormat) : '')}
-            onChangeText={setAmountText}
-            keyboardType="numeric"
-            placeholder="0.00"
-            placeholderTextColor={colors.inkMuted}
-            style={[styles.amountInput, { color: colors.ink }]}
-          />
-        </View>
-        {kind === 'refund' && !other ? <Text style={[styles.hint, { color: overRefund ? colors.expense : colors.inkMuted }]}>{parts(s.refundHint(money(left, base.currency, { fontSize: 11.5 })))}</Text> : null}
-      </View>
-
-      {other ? (
-        <View>
-          <Text style={[styles.label, { color: colors.inkMuted }]}>{s.countsAs}</Text>
-          <View style={[styles.amountBox, { borderColor: colors.border, backgroundColor: colors.filled }]}>
-            <Text style={[styles.code, { color: colors.inkSecondary }]}>{base.currency}</Text>
-            <AmountTextInput
-              value={countsText ?? (defaultCounts ? toTypedText(defaultCounts, numberFormat) : '')}
-              onChangeText={setCountsText}
-              keyboardType="numeric"
-              placeholder="0.00"
-              placeholderTextColor={colors.inkMuted}
-              style={[styles.amountInput, { color: colors.ink }]}
-            />
-          </View>
-          {rate ? (
-            <Text style={[styles.hint, { color: colors.inkMuted }]}>
-              {s.atRate(`1 ${base.currency} = ${trimRate(toDecimalString(dec('1').dividedBy(dec(rate.rate))))} ${account!.currency}`)}
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-
-      {kind === 'reimbursement' ? (
-        <View style={styles.afterRow}>
-          <Text style={[styles.hint, { color: colors.inkMuted, marginTop: 0 }]}>{s.stillExpected}</Text>
-          <Text style={[styles.hint, { color: colors.ink, marginTop: 0 }]}>
-            {money(dec(after).lt(0) ? '0' : after, base.currency, { fontSize: 12 })} · {s.statuses[afterStatus]}
-          </Text>
-        </View>
-      ) : null}
-
       <SelectorRow label={s.date} value={date === today ? s.today(formatLongDate(date)) : formatLongDate(date)} onPress={pickDate} />
       {kind === 'refund' ? <Field label={s.notes} optional value={notes} onChangeText={setNotes} placeholder={s.refundNotesPlaceholder} /> : null}
-
       <Text style={[styles.small, { color: colors.inkMuted }]}>
         {kind === 'refund'
           ? s.refundExplain
@@ -157,30 +171,77 @@ export function MoneyBackForm({ parentId, kind, onDone }: { parentId: string; ki
             ? parts(s.gotItExplain(money(amount, account.currency, { fontSize: 11.5 }), account.name, base.category, money(countsAs, base.currency, { fontSize: 11.5 })))
             : null}
       </Text>
-      <Button label={kind === 'refund' ? s.saveRefund : s.save} disabled={!valid} onPress={save} />
-
-      <PickerSheet
-        visible={picking}
-        title={kind === 'refund' ? s.pickRefundedTo : s.pickReceivedInto}
-        sections={accountSections}
-        selectedId={chosenId}
-        onSelect={(id) => {
-          setAccountId(id);
-          setAmountText(null);
-          setCountsText(null);
-        }}
-        onClose={() => setPicking(false)}
-      />
-    </View>
+    </>
   );
+
+  const amountUi = (
+    <>
+      {other ? (
+        <ConversionTrio
+          amount={{ label: amountLabel, currency: accCur, expression: amountExpr, value: amount }}
+          rate={{
+            from: fromY ? base.currency : accCur,
+            to: fromY ? accCur : base.currency,
+            expression: rateExpr,
+            value: known === 'rate' ? typedRate : worked.rate,
+            worked: known !== 'rate',
+          }}
+          counter={{ label: s.countsAs.toUpperCase(), currency: base.currency, expression: countsText, value: countsAs, worked: known !== 'y' }}
+          focused={focus}
+          onFocus={onFocus}
+          onBackspace={() => onKey('back')}
+          onClear={() => onKey('clear')}
+          market={marketShown}
+          onUseMarket={() => {
+            setKnown('rate');
+            setRateText(marketShown);
+            setFocus('rate');
+          }}
+          vsMarket={(() => {
+            const r = known === 'rate' ? typedRate : worked.rate;
+            const pct = r && marketShown ? vsMarketPercent(r, fromY ? xPerY : market!.rate) : null;
+            return pct ? strings.add.vsMarket(pct) : null;
+          })()}
+        />
+      ) : (
+        <AmountBox label={amountLabel} expression={amountExpr} value={amount} currency={accCur} onBackspace={() => onKey('back')} onClear={() => onKey('clear')} />
+      )}
+      {kind === 'refund' ? (
+        <Text style={[styles.hint, { color: overRefund ? colors.expense : colors.inkMuted }]}>{parts(s.refundHint(money(left, base.currency, { fontSize: 11.5 })))}</Text>
+      ) : (
+        <View style={styles.afterRow}>
+          <Text style={[styles.hint, { color: colors.inkMuted }]}>{s.stillExpected}</Text>
+          <Text style={[styles.hint, { color: colors.ink }]}>
+            {money(dec(after).lt(0) ? '0' : after, base.currency, { fontSize: 12 })} · {s.statuses[afterStatus]}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+
+  const sheets = (
+    <PickerSheet
+      visible={picking}
+      title={kind === 'refund' ? s.pickRefundedTo : s.pickReceivedInto}
+      sections={accountSections}
+      selectedId={chosenId}
+      onSelect={(id) => {
+        setAccountId(id);
+        setAmountText(null);
+        setRateText(null);
+        setCountsText('');
+        setKnown('rate');
+        setFocus('amount');
+      }}
+      onClose={() => setPicking(false)}
+    />
+  );
+
+  return { ready: true, rows, amount: amountUi, onKey, save, valid, sheets, actionUi: action.ui };
 }
 
 const styles = StyleSheet.create({
-  label: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 5 },
-  amountBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderRadius: radius.field, paddingHorizontal: 14 },
-  code: { fontFamily: fonts.sansBold, fontSize: 11 },
-  amountInput: { flex: 1, fontFamily: fonts.mono, fontSize: 17, paddingVertical: 10 },
-  hint: { fontFamily: fonts.sans, fontSize: 11.5, marginTop: 6, paddingHorizontal: 2 },
+  hint: { fontFamily: fonts.sans, fontSize: 11.5, paddingHorizontal: 4 },
   afterRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2 },
   small: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 17 },
   mono: { fontFamily: fonts.monoSemiBold, fontSize: 12 },

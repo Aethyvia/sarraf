@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { Keypad } from '@/components/Keypad';
+import { useKeyboardVisible } from '@/components/KeypadScreen';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { BottomSheet, Button, LinkButton } from '@/components/ui';
@@ -15,7 +17,7 @@ import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useToast } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
-import { MoneyBackForm } from './MoneyBackForm';
+import { useMoneyBack } from './MoneyBackForm';
 
 /** Got it (Spec §10, §15): money back on a reimbursable expense, or Write off the rest. */
 export function GotItSheet({ expenseId, onClose }: { expenseId: string | null; onClose: () => void }) {
@@ -38,11 +40,22 @@ export function GotItSheet({ expenseId, onClose }: { expenseId: string | null; o
     setConfirmingWriteOff(false);
     onClose();
   };
+  // Keyed by the expense so the form starts fresh for each one.
+  const form = useMoneyBack(expenseId ?? '', 'reimbursement', close);
+  const keyboard = useKeyboardVisible();
   const title = info ? (info.t.notes?.split('\n')[0] ?? '') : '';
   const left = info ? <Money value={info.left} currency={info.currency} allowCompact={false} style={styles.mono} /> : null;
 
   return (
-    <BottomSheet visible={!!expenseId && !!info} onClose={close} title={confirmingWriteOff ? s.writeOffTitle : s.gotItTitle}>
+    <BottomSheet
+      visible={!!expenseId && !!info}
+      onClose={close}
+      title={confirmingWriteOff ? s.writeOffTitle : s.gotItTitle}
+      // Pattern B1 (Owner, Nov 12): ✓ beside the title saves.
+      onDone={confirmingWriteOff ? undefined : form.save}
+      doneDisabled={!form.valid}
+      doneLabel={s.save}
+    >
       {info && confirmingWriteOff ? (
         <View style={{ gap: 12 }}>
           {action.ui}
@@ -62,8 +75,12 @@ export function GotItSheet({ expenseId, onClose }: { expenseId: string | null; o
       ) : info ? (
         <View style={{ gap: 12 }}>
           <Text style={[styles.sub, { color: colors.inkMuted }]}>{parts(s.expectedFrom(title || s.uncategorized, left, info.person))}</Text>
-          <MoneyBackForm parentId={info.t.id} kind="reimbursement" onDone={close} />
+          {form.actionUi}
+          {form.rows}
           <LinkButton danger label={s.writeOff} onPress={() => setConfirmingWriteOff(true)} />
+          {form.amount}
+          {keyboard ? null : <Keypad onKey={form.onKey} />}
+          {form.sheets}
         </View>
       ) : null}
     </BottomSheet>
