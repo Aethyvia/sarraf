@@ -119,13 +119,14 @@ export function markSettled(
 }
 
 /**
- * Mark as settled, paid in another currency (Decided Nov 12): John owes you
- * $250 and pays ₨69,500 cash. Money really moves, so it's a transfer between
- * the person and your account in the account's currency, and it clears
- * `clears` of their balance in the owed currency. You owe them → the money
- * goes out of your account instead.
+ * Settle up, paid into an account (Owner, Nov 12): John owes you $250 and pays
+ * ₨69,500 cash. Money really moves, so it's a transfer between the person and
+ * your account in the account's currency, and it clears `clears` of their
+ * balance in the owed currency. You owe them → the money goes out of your
+ * account instead. In the balance's own currency it's a plain transfer of
+ * `clears` (what was paid is what it clears).
  */
-export function settleInOtherCurrency(
+export function settleByPayment(
   db: AppDb,
   input: { personId: string; currency: string; clears: DecimalString; accountId: string; amount: DecimalString; note?: string | null; date?: string },
   today: string = todayDate(),
@@ -134,7 +135,8 @@ export function settleInOtherCurrency(
   if (!isDecimalString(input.amount) || dec(input.amount).lte(0)) throw new DataError('invalid_amount', 'Enter the amount paid, above zero');
   const account = db.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
   if (!account) throw new DataError('not_found', 'No account');
-  if (account.currency === input.currency) throw new DataError('same_currency', 'That account is in the same currency; use Mark as settled');
+  const same = account.currency === input.currency;
+  if (same && !dec(input.amount).eq(dec(input.clears))) throw new DataError('invalid_amount', 'In the same currency, what was paid is what it settles');
   const balance = dec(personBalances(db, input.personId, today).get(input.currency) ?? '0');
   if (balance.isZero()) throw new DataError('nothing_owed', 'Nothing to settle in that currency');
   if (dec(input.clears).gt(balance.abs())) throw new DataError('invalid_amount', 'That’s more than the balance');
@@ -150,10 +152,13 @@ export function settleInOtherCurrency(
     amount: toDecimalString(dec(input.amount)),
     currency: account.currency,
     notes: input.note?.trim() || null,
-    personCurrency: input.currency,
-    personAmount: toDecimalString(dec(input.clears)),
+    personCurrency: same ? null : input.currency,
+    personAmount: same ? null : toDecimalString(dec(input.clears)),
   }).id;
 }
+
+/** The earlier name, for paying in another currency. */
+export const settleInOtherCurrency = settleByPayment;
 
 /**
  * Settles one balance against another (Decided Nov 12): John owes you $250 and

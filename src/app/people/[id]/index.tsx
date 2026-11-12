@@ -8,7 +8,6 @@ import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PersonTrend } from '@/components/people/PersonTrend';
-import { SettleSheet } from '@/components/people/SettleSheet';
 import { ShareSummarySheet } from '@/components/people/ShareSummarySheet';
 import { rowTitle } from '@/components/transaction/TransactionRow';
 import { BottomSheet, Button, Card, Header, IconButton, IconChip, Screen, SectionLabel } from '@/components/ui';
@@ -33,7 +32,6 @@ export default function PersonScreen() {
   const s = strings.people;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const [settling, setSettling] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
 
@@ -167,7 +165,7 @@ export default function PersonScreen() {
         </Pressable>
       ) : null}
 
-      {owed ? <Button kind="secondary" icon="tick" label={s.markSettled} onPress={() => setSettling(true)} /> : null}
+      {owed ? <Button kind="secondary" icon="tick" label={s.markSettled} onPress={() => router.push(`/people/${id}/settle`)} /> : null}
 
       {history.length ? (
         <View>
@@ -219,7 +217,6 @@ export default function PersonScreen() {
         </View>
       </BottomSheet>
 
-      <SettleSheet visible={settling} person={person} balances={balances} onClose={() => setSettling(false)} />
       <ShareSummarySheet visible={sharing} person={person} balances={balances} history={history} onClose={() => setSharing(false)} />
     </Screen>
   );

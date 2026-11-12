@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { personEntries, splitShares, transactions } from '@/db/schema';
 import { accountBalance } from '../balances';
 import { addMoneyBack, refundableLeft, writeOff } from '../money-back';
-import { deleteSettlement, expectedBack, markSettled, offsetBalances, personBalances, personHistory, settleInOtherCurrency, sharesKeptByRefund } from '../owing';
+import { deleteSettlement, expectedBack, markSettled, offsetBalances, personBalances, personHistory, settleByPayment, settleInOtherCurrency, sharesKeptByRefund } from '../owing';
 import { confirmTransaction } from '../review';
 import { equalShares, percentShares, remainingToAssign } from '../splits';
 import { deleteTransaction, restoreTransactions, softDeleteTransactions } from '../transaction-ops';
@@ -190,15 +190,25 @@ describe('a person’s balance', () => {
     expect(accountBalance(w.db, w.pkr, TODAY)).toBe('88880');
   });
 
-  it('refuses more than the balance, the same currency, or nothing owed', async () => {
+  it('refuses more than the balance, a mismatched same-currency payment, or nothing owed', async () => {
     const w = await world();
     w.save({ kind: 'transfer', accountId: w.usd, toPersonId: w.john, amount: '250' });
     const bad = (input: Partial<Parameters<typeof settleInOtherCurrency>[1]>) =>
       () => settleInOtherCurrency(w.db, { personId: w.john, currency: 'USD', clears: '250', accountId: w.pkr, amount: '69500', ...input }, TODAY);
     expect(bad({ clears: '251' })).toThrow(expect.objectContaining({ code: 'invalid_amount' }));
     expect(bad({ amount: '0' })).toThrow(expect.objectContaining({ code: 'invalid_amount' }));
-    expect(bad({ accountId: w.usd })).toThrow(expect.objectContaining({ code: 'same_currency' }));
+    // Same currency: what was paid must be what it settles.
+    expect(bad({ accountId: w.usd })).toThrow(expect.objectContaining({ code: 'invalid_amount' }));
     expect(bad({ currency: 'EUR' })).toThrow(expect.objectContaining({ code: 'nothing_owed' }));
+  });
+
+  it('settles paid into an account in the same currency: a plain transfer (Owner, Nov 12)', async () => {
+    const w = await world();
+    w.save({ kind: 'transfer', accountId: w.usd, toPersonId: w.john, amount: '250' });
+    const id = settleByPayment(w.db, { personId: w.john, currency: 'USD', clears: '100', accountId: w.usd, amount: '100' }, TODAY);
+    expect(w.balance(w.john)).toEqual({ USD: '150' });
+    expect(accountBalance(w.db, w.usd, TODAY)).toBe('850');
+    expect(w.row(id)).toMatchObject({ kind: 'transfer', currency: 'USD', amount: '100', personCurrency: null, personAmount: null });
   });
 
   it('settles one currency against another: no account moves, both balances move toward zero', async () => {
