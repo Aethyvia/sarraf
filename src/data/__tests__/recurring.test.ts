@@ -131,3 +131,22 @@ describe('Home and paying', () => {
     expect(w.made(id)).toHaveLength(1);
   });
 });
+
+describe('recurring in another currency than its account (Owner, Nov 12)', () => {
+  it('keeps its own currency, never auto-adds, and waits for you to confirm what was charged', async () => {
+    const w = await world();
+    const id = createRecurring(w.db, { ...w.base, name: 'Adobe', amount: '54.99', currency: 'USD', accountId: w.pkr, autoAdd: true }, '2026-09-01');
+    expect(w.item(id)).toMatchObject({ currency: 'USD', accountId: w.pkr, autoAdd: false });
+    expect(backfillRecurring(w.db, '2026-12-01')).toHaveLength(0);
+    expect(() => payRecurring(w.db, id, '2026-09-08')).toThrow();
+    expect(remindersDue(w.db, '2026-09-08').map((i) => i.id)).toContain(id);
+  });
+
+  it('defaults to the account currency, and a transfer always uses the From account’s', async () => {
+    const w = await world();
+    const a = createRecurring(w.db, { ...w.base, currency: null }, '2026-09-01');
+    expect(w.item(a)).toMatchObject({ currency: 'USD', autoAdd: true });
+    const t = createRecurring(w.db, { ...w.base, kind: 'transfer', toAccountId: w.pkr, currency: 'EUR' }, '2026-09-01');
+    expect(w.item(t).currency).toBe('USD');
+  });
+});

@@ -969,6 +969,9 @@ export const strings = {
     showOptions: (n: number) => (n === 0 ? 'On the day it’s due' : `${n} ${n === 1 ? 'day' : 'days'} before it’s due`),
     remind: 'Remind me, don’t auto-add',
     remindHint: 'Off means it’s added automatically on the date — you confirm it, or mark it cancelled, in Needs review either way.',
+    otherCurrencyHint: (currency: string, account: string) =>
+      `In ${currency}, charged to ${account}: the rate changes, so you’ll confirm what ${account} was charged each time. It isn’t added automatically.`,
+    aboutAtMarket: 'About, at today’s market rate',
     remindHintTransfer: 'Off means it’s added automatically as In transit on the date — confirm what arrived, or mark it cancelled, in Needs review.',
     billNote: 'Because the amount varies, a bill is never added automatically. It shows on Home until you add the real amount, even after the due date.',
     save: 'Save',

@@ -3,27 +3,30 @@ import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { eq } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { KeypadScreen, useAmountField } from '@/components/KeypadScreen';
+import { Money } from '@/components/Money';
+import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useAccountSections, useCategorySections, usePeopleItems } from '@/components/sheets/pickers';
 import { formatLongDate } from '@/components/transaction/parts';
-import { BottomSheet, Button, Field, Header, IconButton, LinkButton, Screen, Segmented, SelectorRow, SheetOption, ToggleRow } from '@/components/ui';
+import { BottomSheet, Button, Field, Header, IconButton, LinkButton, Segmented, SelectorRow, SheetOption, ToggleRow } from '@/components/ui';
 import { createRecurring, deleteRecurring, SHOW_ON_HOME_DAYS, updateRecurring, type RecurringItem, type RepeatRule } from '@/data/recurring';
 import { db } from '@/db/client';
 import { accounts, categories, people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { today as todayDate } from '@/lib/dates';
-import { parseTypedAmount, toTypedText } from '@/lib/money';
+import { marketRate } from '@/data/rates';
+import { convert, getCurrency } from '@/lib/money';
 import { notificationsAllowed } from '@/services/notifications';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
-import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
 
 type Kind = 'expense' | 'income' | 'transfer';
-type Sheet = 'account' | 'to' | 'category' | 'tag' | 'repeat' | 'ends' | 'show' | 'delete' | null;
+type Sheet = 'currency' | 'account' | 'to' | 'category' | 'tag' | 'repeat' | 'ends' | 'show' | 'delete' | null;
 
 /** How a rule reads: "Monthly, on the 12th". Bills say "around". */
 export function ruleText(rule: RepeatRule, varies = false): string {
@@ -42,7 +45,6 @@ export function ruleText(rule: RepeatRule, varies = false): string {
 export function RecurringForm({ item }: { item?: RecurringItem }) {
   const s = strings.recurring;
   const { colors } = useTheme();
-  const { numberFormat } = useSettings();
   const action = useAction({ itemName: item?.name });
   const today = todayDate();
   const firstAccount = useLive((d) => d.select({ id: accounts.id }).from(accounts).orderBy(accounts.rank).get()?.id ?? null);
@@ -51,7 +53,8 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
   const [kind, setKind] = useState<Kind>(item?.kind ?? 'expense');
   const [type, setType] = useState<'same' | 'varies'>(item?.amountType ?? 'same');
   const [name, setName] = useState(item?.name ?? '');
-  const [amountText, setAmountText] = useState(item?.amount ? toTypedText(item.amount, numberFormat) : '');
+  // The amount's currency (Owner, Nov 12): a recurring item is a transaction, so it can differ from the account's. null = the account's.
+  const [currency, setCurrency] = useState<string | null>(item && item.kind !== 'transfer' ? item.currency : null);
   const [accountId, setAccountId] = useState<string | null>(item?.accountId ?? null);
   const [toAccountId, setToAccountId] = useState<string | null>(item?.toAccountId ?? null);
   const [categoryId, setCategoryId] = useState<string | null>(item?.categoryId ?? null);
@@ -80,7 +83,14 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
   const peopleItems = usePeopleItems();
 
   const varies = kind !== 'transfer' && type === 'varies';
-  const amount = !varies ? parseTypedAmount(amountText, numberFormat) : null;
+  const accountCurrency = names.account?.currency ?? '';
+  const amountCurrency = (kind !== 'transfer' && currency) || accountCurrency;
+  // In another currency than the account, what it was charged is confirmed each time; it never auto-adds.
+  const otherCurrency = kind !== 'transfer' && !!accountCurrency && amountCurrency !== accountCurrency;
+  const field = useAmountField(item?.amount ?? '', getCurrency(amountCurrency || 'USD').minorUnits);
+  const amount = !varies ? field.value : null;
+  const market = useLive((d) => (otherCurrency ? marketRate(d, amountCurrency, accountCurrency) : null), [otherCurrency, amountCurrency, accountCurrency]);
+  const estimate = otherCurrency && amount && market ? convert(amount, market.rate, accountCurrency) : null;
   const crossCurrency = kind === 'transfer' && names.to && names.account && names.to.currency !== names.account.currency;
   const canSave = name.trim() !== '' && !!account && (varies || !!amount) && (kind !== 'transfer' || !!toAccountId);
 
@@ -95,6 +105,7 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
       amountType: varies ? ('varies' as const) : ('same' as const),
       name,
       amount,
+      currency: kind === 'transfer' ? null : amountCurrency,
       accountId: account,
       toAccountId: kind === 'transfer' ? toAccountId : null,
       categoryId: kind === 'transfer' ? null : categoryId,
@@ -102,7 +113,7 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
       ledgerId: item?.ledgerId ?? null,
       rule,
       showOnHomeDays: showDays,
-      autoAdd: !varies && !remind,
+      autoAdd: !varies && !remind && !otherCurrency,
       endsOn,
       maxOccurrences: maxTimes,
     };
@@ -117,14 +128,40 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
   const endsLabel = endsOn ? s.endsOn(formatLongDate(endsOn)) : maxTimes ? s.endsAfter(maxTimes) : s.never;
 
   return (
-    <Screen>
-      <Header
-        title={item ? s.edit : s.add}
-        onBack={goBack}
-        backIcon="close"
-        actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />}
-      />
-      {action.ui}
+    <KeypadScreen
+      header={
+        <>
+          <Header
+            title={item ? s.edit : s.add}
+            onBack={goBack}
+            backIcon="close"
+            actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />}
+          />
+          {action.ui}
+        </>
+      }
+      keypad={!varies}
+      onKey={field.press}
+      amount={
+        <>
+          <AmountBox
+            label={s.amount.toUpperCase()}
+            expression={field.expression}
+            value={field.value}
+            currency={amountCurrency}
+            onCurrency={kind !== 'transfer' ? () => (Keyboard.dismiss(), setSheet('currency')) : undefined}
+            onBackspace={field.back}
+            onClear={field.clear}
+          />
+          {estimate ? (
+            <View style={styles.estimate}>
+              <Text style={[styles.hint, { color: colors.inkSecondary, flex: 1 }]}>{s.aboutAtMarket}</Text>
+              <Money value={estimate} currency={accountCurrency} style={[styles.estimateValue, { color: colors.ink }]} />
+            </View>
+          ) : null}
+        </>
+      }
+    >
       <Segmented
         options={(['expense', 'income', 'transfer'] as const).map((k) => ({ value: k, label: s.kinds[k] }))}
         value={kind}
@@ -144,15 +181,6 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
       <Text style={[styles.hint, { color: colors.inkMuted }]}>{kind === 'transfer' ? s.typeHint.transfer : s.typeHint[type]}</Text>
 
       <Field label={s.name} value={name} onChangeText={setName} placeholder={s.namePlaceholder} />
-      {!varies ? (
-        <View>
-          <Text style={[styles.label, { color: colors.inkMuted }]}>{s.amount}</Text>
-          <View style={[styles.amountBox, { backgroundColor: colors.filled }]}>
-            <Text style={[styles.code, { color: colors.inkSecondary }]}>{names.account?.currency ?? ''}</Text>
-            <AmountTextInput value={amountText} onChangeText={setAmountText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
-          </View>
-        </View>
-      ) : null}
 
       <SelectorRow label={kind === 'transfer' ? s.from : s.account} value={names.account?.name ?? '—'} onPress={() => setSheet('account')} />
       {kind === 'transfer' ? (
@@ -169,14 +197,16 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
         <Text style={[styles.hint, { color: colors.inkMuted }]}>{s.billNote}</Text>
       ) : (
         <>
-          <ToggleRow title={s.remind} value={remind} onChange={setRemind} />
-          <Text style={[styles.hint, { color: colors.inkMuted, marginTop: -8 }]}>{kind === 'transfer' ? s.remindHintTransfer : s.remindHint}</Text>
+          {otherCurrency ? null : <ToggleRow title={s.remind} value={remind} onChange={setRemind} />}
+          <Text style={[styles.hint, { color: colors.inkMuted, marginTop: otherCurrency ? 0 : -8 }]}>
+            {otherCurrency ? s.otherCurrencyHint(amountCurrency, names.account?.name ?? '') : kind === 'transfer' ? s.remindHintTransfer : s.remindHint}
+          </Text>
         </>
       )}
 
-      <Button label={s.save} disabled={!canSave} onPress={save} />
       {item ? <LinkButton danger label={s.delete} onPress={() => setSheet('delete')} /> : null}
 
+      <CurrencySheet visible={sheet === 'currency'} selected={amountCurrency} onSelect={(c) => setCurrency(c === accountCurrency ? null : c)} onClose={() => setSheet(null)} />
       <PickerSheet visible={sheet === 'account'} title={kind === 'transfer' ? strings.add.from : strings.add.account} sections={accountSections} selectedId={account} onSelect={setAccountId} onClose={() => setSheet(null)} />
       <PickerSheet visible={sheet === 'to'} title={strings.add.to} sections={toSections} selectedId={toAccountId} onSelect={setToAccountId} onClose={() => setSheet(null)} />
       <PickerSheet
@@ -322,7 +352,7 @@ export function RecurringForm({ item }: { item?: RecurringItem }) {
           <Button kind="secondary" label={strings.common.cancel} onPress={() => setSheet(null)} />
         </View>
       </BottomSheet>
-    </Screen>
+    </KeypadScreen>
   );
 }
 
@@ -343,9 +373,8 @@ function Chip({ label, on, onPress, small }: { label: string; on: boolean; onPre
 const styles = StyleSheet.create({
   hint: { fontFamily: fonts.sans, fontSize: 11, lineHeight: 15, paddingHorizontal: 2 },
   label: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 5 },
-  amountBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.field, paddingHorizontal: 14 },
-  code: { fontFamily: fonts.sansBold, fontSize: 11 },
-  amountInput: { flex: 1, fontFamily: fonts.mono, fontSize: 20, paddingVertical: 10 },
+  estimate: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  estimateValue: { fontFamily: fonts.monoSemiBold, fontSize: 12 },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stepText: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   stepButtons: { flexDirection: 'row', gap: 8 },

@@ -26,8 +26,14 @@ export interface RecurringInput {
   kind: 'expense' | 'income' | 'transfer';
   amountType: 'same' | 'varies';
   name: string;
-  /** Same amount only. In the account's currency (transfers: the From account's). */
+  /** Same amount only, in `currency`. */
   amount?: DecimalString | null;
+  /**
+   * Expense / income: the amount's currency, default the account's. In another
+   * currency, what the account was charged is confirmed each time it's due, so
+   * it never auto-adds (Owner, Nov 12). Transfers: always the From account's.
+   */
+  currency?: string | null;
   accountId: string;
   toAccountId?: string | null;
   categoryId?: string | null;
@@ -43,7 +49,7 @@ export interface RecurringInput {
   maxOccurrences?: number | null;
 }
 
-function check(db: AppDb, input: RecurringInput): { name: string; currency: string } {
+function check(db: AppDb, input: RecurringInput): { name: string; currency: string; accountCurrency: string } {
   const name = requireName(input.name);
   const account = db.select().from(accounts).where(eq(accounts.id, input.accountId)).get();
   if (!account) throw new DataError('not_found', 'No account');
@@ -61,12 +67,13 @@ function check(db: AppDb, input: RecurringInput): { name: string; currency: stri
   }
   if (!SHOW_ON_HOME_DAYS.includes(input.showOnHomeDays as 0)) throw new DataError('invalid_target', 'Show on Home is 0, 1, 3 or 7 days before');
   if (input.maxOccurrences !== null && input.maxOccurrences !== undefined && input.maxOccurrences < 1) throw new DataError('invalid_target', 'At least once');
-  if (!isCurrencyCode(account.currency)) throw new DataError('invalid_currency', 'Unknown currency');
-  return { name, currency: account.currency };
+  const currency = input.kind !== 'transfer' && input.currency ? input.currency : account.currency;
+  if (!isCurrencyCode(currency)) throw new DataError('invalid_currency', 'Unknown currency');
+  return { name, currency, accountCurrency: account.currency };
 }
 
 function values(db: AppDb, input: RecurringInput, today: string) {
-  const { name, currency } = check(db, input);
+  const { name, currency, accountCurrency } = check(db, input);
   const same = input.amountType === 'same';
   return {
     kind: input.kind,
@@ -82,8 +89,8 @@ function values(db: AppDb, input: RecurringInput, today: string) {
     repeatRule: input.rule,
     nextDueDate: firstDueOnOrAfter(input.rule, input.startOn ?? today),
     showOnHomeDays: input.showOnHomeDays,
-    // A bill is never added automatically (Decided).
-    autoAdd: same && input.autoAdd,
+    // A bill is never added automatically (Decided); nor is one in another currency than its account (Owner, Nov 12).
+    autoAdd: same && input.autoAdd && currency === accountCurrency,
     endsOn: input.endsOn ?? null,
     maxOccurrences: input.maxOccurrences ?? null,
   };
@@ -147,12 +154,13 @@ export function recurringDraft(item: RecurringItem, date: string): TransactionDr
   };
 }
 
-/** True when Paid can add it in one tap (same amount, and a transfer needs no rate). */
+/** True when Paid can add it in one tap: same amount, and no rate needed (same currency as the account it lands in). */
 export function canPayInOneTap(db: AppDb, item: RecurringItem): boolean {
   if (item.amountType !== 'same') return false;
-  if (item.kind !== 'transfer') return true;
-  const to = db.select({ c: accounts.currency }).from(accounts).where(eq(accounts.id, item.toAccountId!)).get();
-  return to?.c === item.currency;
+  const landsIn = item.kind === 'transfer' ? item.toAccountId! : item.accountId;
+  if (!landsIn) return false;
+  const account = db.select({ c: accounts.currency }).from(accounts).where(eq(accounts.id, landsIn)).get();
+  return account?.c === item.currency;
 }
 
 /** Paid / Received from Home: adds it as Cleared today. Confirmed by you, so it doesn't need review. */
