@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   confirmDetail: { fontFamily: fonts.sans, fontSize: 12 },
   section: { gap: 10 },
   groupLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.53, paddingHorizontal: 2 },
-  autoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14 },
+  autoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 22, paddingHorizontal: 16 },
   emptyTitle: { fontFamily: fonts.sansSemiBold, fontSize: 13.5 },
