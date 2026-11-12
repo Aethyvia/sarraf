@@ -648,6 +648,7 @@ export const strings = {
     shows: (account: string, amount: ReactNode): ReactNode[] => [`${account} · Sarraf shows `, amount],
     whatShows: (institution: string) => `WHAT ${institution.toUpperCase()} SHOWS NOW`,
     difference: 'Difference',
+    adjustmentLine: 'Balance adjustment (not income or spending)',
     date: 'Date',
     today: (date: string) => `Today · ${date}`,
     pending: (n: number, institution: string) => `${n} pending ${n === 1 ? 'item' : 'items'} on this account. Check whether ${institution}’s number already includes ${n === 1 ? 'it' : 'them'}.`,

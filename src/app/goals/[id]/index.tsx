@@ -3,7 +3,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { Keypad } from '@/components/Keypad';
+import { useAmountField, useKeyboardVisible } from '@/components/KeypadScreen';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
@@ -13,13 +15,12 @@ import { db } from '@/db/client';
 import { accounts, savingsGoals } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
-import { Decimal, dec, parseTypedAmount, toDecimalString } from '@/lib/money';
+import { Decimal, dec, getCurrency, toDecimalString } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
-import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
-import { fonts, radius, useTheme } from '@/theme';
+import { fonts, useTheme } from '@/theme';
 
 /**
  * Goal page (Decided Nov 6): what it holds of its target, Add money, Take money
@@ -156,21 +157,22 @@ function TakeOutSheet({
 }) {
   const s = strings.goals;
   const { colors } = useTheme();
-  const { numberFormat } = useSettings();
   const action = useAction();
   const toast = useToast();
   const [accountId, setAccountId] = useState<string | null>(null);
-  const [text, setText] = useState('');
+  // Typed on the keypad inside the sheet (pattern B1, Owner Nov 12); ✓ beside the title saves. In the goal's currency (no ▾).
+  const field = useAmountField('', getCurrency(currency).minorUnits);
+  const keyboard = useKeyboardVisible();
   const [note, setNote] = useState('');
   const [picking, setPicking] = useState(false);
   const from = byAccount.find((a) => a.accountId === accountId) ?? byAccount[0];
   if (!from) return null;
-  const amount = parseTypedAmount(text, numberFormat);
+  const amount = field.value;
   const valid = !!amount && dec(amount).gt(0) && dec(amount).lte(dec(from.amount));
   const left = toDecimalString(Decimal.max(dec(held).minus(dec(amount ?? '0')), 0));
   const money = (v: string, style?: object) => <Money value={v} currency={currency} allowCompact={false} style={[styles.mono, style]} />;
   const close = () => {
-    setText('');
+    field.clear();
     setNote('');
     setAccountId(null);
     onClose();
@@ -183,8 +185,8 @@ function TakeOutSheet({
     }
   };
   return (
-    <BottomSheet visible={visible} onClose={close} title={s.takeOutTitle}>
-      <View style={{ gap: 14 }}>
+    <BottomSheet visible={visible} onClose={close} title={s.takeOutTitle} onDone={save} doneDisabled={!valid} doneLabel={s.takeOut}>
+      <View style={{ gap: 10 }}>
         {action.ui}
         <Text style={[styles.small, { color: colors.inkMuted, marginTop: -8 }]}>{parts(s.takeOutSub(name, money(held, { fontSize: 12.5 })))}</Text>
         <SelectorRow
@@ -192,23 +194,24 @@ function TakeOutSheet({
           value={parts(s.inThisGoal(names.get(from.accountId) ?? '', money(from.amount, { fontSize: 13.5 })))}
           onPress={byAccount.length > 1 ? () => setPicking(true) : undefined}
         />
-        <View>
-          <Text style={[styles.fieldLabel, { color: colors.inkMuted }]}>{s.amount}</Text>
-          <View style={[styles.amountBox, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
-            <Text style={[styles.code, { color: colors.inkSecondary }]}>{currency}</Text>
-            <AmountTextInput value={text} onChangeText={setText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
-            <Text onPress={() => setText(from.amount)} style={[styles.all, { color: colors.accent }]}>
-              {parts(s.all(money(from.amount, { fontSize: 12, color: colors.accent })))}
-            </Text>
-          </View>
-          <View style={styles.leftRow}>
-            <Text style={[styles.small, { color: colors.inkMuted }]}>{s.leftAfter}</Text>
-            {money(left, { fontSize: 12 })}
-          </View>
-        </View>
         <Field label={s.note} optional value={note} onChangeText={setNote} placeholder={s.notePlaceholder} />
-        {amount && valid ? <Text style={[styles.small, { color: colors.inkMuted, lineHeight: 17 }]}>{parts(s.takeOutExplain(money(amount, { fontSize: 11.5 }), currency))}</Text> : null}
-        <Button label={valid ? parts(s.takeOutButton(money(amount!, { fontSize: 13.5, color: colors.onAccent }))) : s.takeOut} disabled={!valid} onPress={save} />
+        <AmountBox
+          label={s.amount.toUpperCase()}
+          expression={field.expression}
+          value={field.value}
+          currency={currency}
+          onBackspace={field.back}
+          onClear={field.clear}
+        />
+        <View style={styles.leftRow}>
+          <Text onPress={() => field.set(from.amount)} style={[styles.all, { color: colors.accent }]} suppressHighlighting>
+            {parts(s.all(money(from.amount, { fontSize: 12, color: colors.accent })))}
+          </Text>
+          <Text style={[styles.small, { color: colors.inkMuted }]}>
+            {s.leftAfter} {money(left, { fontSize: 12 })}
+          </Text>
+        </View>
+        {keyboard ? null : <Keypad onKey={field.press} />}
       </View>
       <PickerSheet
         visible={picking}
@@ -240,9 +243,6 @@ const styles = StyleSheet.create({
   note: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 18, paddingHorizontal: 4 },
   body: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
   fieldLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 5 },
-  amountBox: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: radius.field, paddingHorizontal: 14 },
-  code: { fontFamily: fonts.sansBold, fontSize: 11 },
-  amountInput: { flex: 1, fontFamily: fonts.mono, fontSize: 17, paddingVertical: 10 },
   all: { fontFamily: fonts.sansBold, fontSize: 12, textDecorationLine: 'underline' },
   leftRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 7, paddingHorizontal: 2 },
 });

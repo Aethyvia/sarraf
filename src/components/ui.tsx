@@ -404,11 +404,18 @@ export function BottomSheet({
   onClose,
   title,
   children,
+  onDone,
+  doneDisabled,
+  doneLabel,
 }: {
   visible: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
+  /** Pattern B1 (Owner, Nov 12): a ✓ beside the title saves; no button under the keypad. */
+  onDone?: () => void;
+  doneDisabled?: boolean;
+  doneLabel?: string;
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -434,7 +441,16 @@ export function BottomSheet({
           ]}
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          {title ? <Text style={[styles.sheetTitle, { color: colors.ink }]}>{title}</Text> : null}
+          {title && onDone ? (
+            <View style={styles.sheetHead}>
+              <Text style={[styles.sheetTitle, { color: colors.ink, flex: 1, paddingBottom: 0 }]} numberOfLines={1}>
+                {title}
+              </Text>
+              <IconButton icon="tick" filled label={doneLabel ?? 'Save'} onPress={onDone} disabled={doneDisabled} />
+            </View>
+          ) : title ? (
+            <Text style={[styles.sheetTitle, { color: colors.ink }]}>{title}</Text>
+          ) : null}
           {children}
         </Animated.View>
       </KeyboardAvoidingView>
@@ -557,6 +573,7 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
   },
   handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.pill, marginBottom: 12 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   sheetTitle: { fontFamily: fonts.serif, fontSize: 18, paddingHorizontal: 4, paddingBottom: 8 },
   sheetOption: {
     flexDirection: 'row',
