@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
 import { BackspaceButton } from '@/components/Keypad';
+import { strings } from '@/i18n/strings';
 import { hasOperator } from '@/lib/calc';
 import { Decimal, dec, formatAmount, formatTyped } from '@/lib/money';
 import { useSettings } from '@/state/settings';
@@ -191,6 +192,8 @@ export function ConversionTrio({
   const rateShown = rate.worked ? (rate.value ? trimRateText(rate.value) : '?') : rate.expression ? formatTyped(rate.expression, 'XXX', '1,000.00') : '?';
   return (
     <View style={[styles.trio, { backgroundColor: colors.surface, borderColor: colors.outline }]}>
+      {/* The instruction (Owner, Nov 12): three numbers would otherwise read as three answers. */}
+      <Text style={[styles.instruction, { color: colors.inkMuted }]}>{strings.add.trioHint}</Text>
       {moneySlot('amount', amount)}
       <Pressable
         onPress={() => onFocus('rate')}
@@ -246,6 +249,7 @@ const styles = StyleSheet.create({
   rateSlot: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rateField: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   rate: { fontFamily: fonts.mono, fontSize: 13.5, flex: 1 },
+  instruction: { fontFamily: fonts.sans, fontSize: 11, paddingHorizontal: 9, paddingTop: 2 },
   worked: { fontFamily: fonts.sansBold, fontSize: 8.5, letterSpacing: 0.5 },
   foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8, paddingTop: 2, paddingBottom: 3 },
   market: { fontFamily: fonts.sansBold, fontSize: 11, textDecorationLine: 'underline' },

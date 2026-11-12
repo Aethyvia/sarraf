@@ -28,6 +28,7 @@ import { vsMarketPercent, type AmountResult } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
+import { personBalances } from '@/data/owing';
 import { marketRate } from '@/data/rates';
 import { CHARGE_TYPES, NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft, type ChargeType } from '@/data/transactions';
 import { budgetWarning } from '@/data/budgets';
@@ -122,6 +123,10 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const toAccount = form.to?.type === 'account' ? (ref.accounts.get(form.to.id) ?? null) : null;
   const fromPerson = form.from?.type === 'person' ? (ref.people.get(form.from.id) ?? null) : null;
   const toPerson = form.to?.type === 'person' ? (ref.people.get(form.to.id) ?? null) : null;
+  // A transfer with a person moves their balance in this currency only (Nov 7). When they owe only in
+  // other currencies, this would start a new balance instead of clearing theirs: point to Settle up.
+  const transferPerson = form.kind === 'transfer' && !form.personSettle ? (fromPerson ?? toPerson) : null;
+  const personBalancesNow = useLive((d) => (transferPerson ? [...personBalances(d, transferPerson.id).entries()].filter(([, b]) => !dec(b).isZero()) : []), [transferPerson?.id]);
   const goalAccount = form.goalAccountId ? (ref.accounts.get(form.goalAccountId) ?? null) : null;
 
   // ── Currencies and amounts ──
@@ -599,6 +604,14 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           />
           {toPerson && amount ? <RowNote>{s.lendHint(toPerson.name)}</RowNote> : null}
           {fromPerson ? <RowNote>{s.borrowHint(fromPerson.name)}</RowNote> : null}
+          {transferPerson && personBalancesNow.length > 0 && !personBalancesNow.some(([c]) => c === mainCurrency) ? (
+            <RowNote tone="warning" icon="bolt">
+              {s.otherCurrencyPerson(transferPerson.name, personBalancesNow.map(([c]) => c).join(', '), mainCurrency)}{' '}
+              <Text style={{ color: colors.accent, fontFamily: fonts.sansBold }} onPress={() => router.push(`/people/${transferPerson.id}/settle`)}>
+                {s.settleInstead}
+              </Text>
+            </RowNote>
+          ) : null}
           {tagRow}
           {statusRows}
         </>

@@ -65,12 +65,13 @@ export function needsReview(db: AppDb, today: string = todayDate()): NeedsReview
 }
 
 /**
- * Which button an item gets (Decided Nov 7): Paid for recurring expenses,
- * Received for everything else — pending items, transfers in transit,
- * recurring income and transfers. An Upcoming expense gets Paid on its date (§9d).
+ * Which button an item gets: Paid for any expense (recurring, upcoming or
+ * pending — Owner Nov 12, replacing "Received" on pending expenses), Received
+ * for income and transfers.
  */
 export function confirmLabel(t: Pick<TransactionRow, 'kind' | 'recurringId' | 'autoAdded' | 'scheduled'>): 'paid' | 'received' {
-  return t.kind === 'expense' && (t.recurringId || t.autoAdded || t.scheduled) ? 'paid' : 'received';
+  // Owner, Nov 12: an expense is Paid (pending ones too); income and transfers are Received.
+  return t.kind === 'expense' ? 'paid' : 'received';
 }
 
 function getRow(db: AppDb, id: string): TransactionRow {

@@ -201,10 +201,10 @@ describe('editing', () => {
 describe('the confirm button', () => {
   const t = (kind: 'expense' | 'income' | 'transfer', extra: Partial<{ recurringId: string; autoAdded: boolean; scheduled: boolean }> = {}) =>
     confirmLabel({ kind, recurringId: null, autoAdded: false, scheduled: false, ...extra });
-  it('is Paid for recurring and upcoming expenses, Received for everything else', () => {
+  it('is Paid for every expense (pending ones too, Owner Nov 12), Received for income and transfers', () => {
     expect(t('expense', { autoAdded: true, recurringId: 'r' })).toBe('paid');
     expect(t('expense', { scheduled: true })).toBe('paid');
-    expect(t('expense')).toBe('received');
+    expect(t('expense')).toBe('paid');
     expect(t('income', { autoAdded: true })).toBe('received');
     expect(t('transfer')).toBe('received');
   });
