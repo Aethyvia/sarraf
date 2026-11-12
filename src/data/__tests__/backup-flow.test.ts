@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData } from '@/db/sample';
-import { attachments, settings } from '@/db/schema';
+import { attachments, deviceState, settings } from '@/db/schema';
 import { WrongSecretError } from '@/lib/backup-crypto';
 import { fakeCloud, memoryStore } from '@/services/cloud/fake';
 import { createTestDb } from '@/test/db';
@@ -107,6 +107,22 @@ describe('backup and restore across phones', () => {
     expect(await p.keyStore.get()).toBeNull();
     expect(getDeviceState(p.db)).toMatchObject({ backupEnabled: false, driveEmail: null, lastBackupAt: null });
     expect(await backupNow(p)).toEqual({ ok: false, reason: 'off' });
+  });
+
+  it('signing in ends an earlier sign-out, and a restored phone is always set up', async () => {
+    const cloud = fakeCloud(memoryStore());
+    const old = await phone('Pixel 7', cloud, true);
+    await turnOnBackup(old, 'pw-12345678');
+    // A backup whose settings say "not set up yet" (an older or unusual backup).
+    old.db.update(settings).set({ onboardingCompletedAt: null }).where(eq(settings.id, 1)).run();
+    await backupNow(old);
+    const fresh = await phone('Pixel 9', cloud);
+    fresh.db.update(deviceState).set({ signedOutAt: '2026-11-01T00:00:00Z' }).run();
+    rememberSignIn(fresh.db, await cloud.signIn('google'));
+    expect(getDeviceState(fresh.db).signedOutAt).toBeNull();
+    await lookInDrive(fresh);
+    await restoreFromDrive(fresh, 'pw-12345678');
+    expect(fresh.db.select().from(settings).get()!.onboardingCompletedAt).not.toBeNull();
   });
 
   it('an interrupted download changes nothing on the phone', async () => {

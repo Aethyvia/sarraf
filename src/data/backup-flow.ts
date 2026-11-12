@@ -2,6 +2,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 
 import { attachments, deviceState, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
+import { nowIso } from '@/lib/dates';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
 import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
@@ -102,8 +103,13 @@ export function currentUser(db: AppDb): CloudUser | null {
   return s.userId && s.userEmail && s.signInMethod ? { id: s.userId, email: s.userEmail, method: s.signInMethod } : null;
 }
 
+/**
+ * Records who is signed in on this phone. Signing in also ends any earlier
+ * Sign out, so the app never sends a signed-in person back to Welcome
+ * (owner, Nov 12: "Go to Home" after a restore landed on Welcome).
+ */
 export function rememberSignIn(db: AppDb, user: CloudUser): void {
-  setDeviceState(db, { userId: user.id, userEmail: user.email, signInMethod: user.method });
+  setDeviceState(db, { userId: user.id, userEmail: user.email, signInMethod: user.method, signedOutAt: null, signedOutUserId: null });
 }
 
 /**
@@ -269,6 +275,8 @@ export async function applyRestore(
   onProgress?.('replace', 0, 1);
   const me = deviceId(db);
   restoreSnapshot(db, opened.data, { deviceId: me });
+  // A restored phone is set up, whatever the backup's settings row says.
+  db.update(settings).set({ onboardingCompletedAt: nowIso() }).where(and(eq(settings.id, 1), isNull(settings.onboardingCompletedAt))).run();
   await downloadAttachments(deps, opened.dataKey, (done, total) => onProgress?.('attachments', done, total));
   await deps.keyStore.set({ dataKey: b64(opened.dataKey), keys: opened.header.keys });
   const now = deps.now?.() ?? new Date().toISOString();

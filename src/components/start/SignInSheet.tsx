@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
 import { BottomSheet, Button } from '@/components/ui';
 import { strings } from '@/i18n/strings';
 import { fonts, useTheme } from '@/theme';
+import { GitHubLogo, GoogleLogo } from './BrandLogos';
 import { Note } from './StartPage';
 
 /**
@@ -27,9 +29,9 @@ export function SignInSheet({
 }) {
   const s = strings.start;
   const { colors } = useTheme();
-  const row = (icon: string, label: string) => (
+  const row = (logo: ReactNode, label: string) => (
     <View style={styles.row}>
-      <Icon name={icon} size={16} color={colors.ink} strokeWidth={1.9} />
+      {logo}
       <Text style={[styles.label, { color: colors.ink }]}>{label}</Text>
     </View>
   );
@@ -41,19 +43,14 @@ export function SignInSheet({
           <Text style={[styles.body, { color: colors.inkSecondary }]}>{mode === 'returning' ? s.welcomeBackBody : s.createBody}</Text>
         </View>
         <Button
-          label={
-            <Text>
-              <Text style={{ color: '#4285F4', fontFamily: fonts.sansExtraBold }}>G </Text>
-              {s.google}
-            </Text>
-          }
+          label={row(<GoogleLogo />, s.google)}
           kind="secondary"
           disabled={busy}
           style={[styles.google, { borderColor: colors.ink }]}
           onPress={() => onPick('google')}
         />
-        <Button label={row('code', s.github)} kind="secondary" disabled={busy} onPress={() => onPick('github')} />
-        <Button label={row('mail', s.email)} kind="secondary" disabled={busy} onPress={() => onPick('email')} />
+        <Button label={row(<GitHubLogo color={colors.ink} />, s.github)} kind="secondary" disabled={busy} onPress={() => onPick('github')} />
+        <Button label={row(<Icon name="mail" size={18} color={colors.ink} strokeWidth={1.9} />, s.email)} kind="secondary" disabled={busy} onPress={() => onPick('email')} />
         <Note tone="teal" icon="cloud">
           {s.driveNote}
         </Note>
