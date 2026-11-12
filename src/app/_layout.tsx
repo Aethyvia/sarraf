@@ -9,7 +9,7 @@ import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
@@ -20,6 +20,10 @@ import { ensureBaseData } from '@/db/base-data';
 import { db } from '@/db/client';
 import { seedSampleData } from '@/db/seed';
 import { purgeSoftDeleted } from '@/data/transaction-ops';
+import { needsPlanChoice } from '@/data/plan-ended';
+import { planChoiceDismissed } from '@/state/plan-ended';
+import { usePlan } from '@/state/plan';
+import { useLive } from '@/state/live';
 import { backfillRecurring } from '@/data/recurring';
 import type { TransactionRow } from '@/data/transactions';
 import { LockGate } from '@/components/lock/LockGate';
@@ -118,9 +122,27 @@ function ThemedStack({ added }: { added: TransactionRow[] }) {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
       <AwaySheet added={added} accountName={accountName} />
+      <PlanEndedPrompt />
       <LockGate />
     </>
   );
+}
+
+/**
+ * After Sarraf Plus ends and its 7-day grace runs out, someone over the free
+ * limits is asked once per app open to renew or choose what stays active
+ * (Owner, Nov 12). Closing it archives nothing.
+ */
+function PlanEndedPrompt() {
+  const plan = usePlan();
+  const needs = useLive((d) => needsPlanChoice(d, plan), [plan]);
+  useEffect(() => {
+    if (!needs || planChoiceDismissed()) return;
+    // Let the first screen mount before stacking this one on top.
+    const t = setTimeout(() => router.push('/plan-ended'), 600);
+    return () => clearTimeout(t);
+  }, [needs]);
+  return null;
 }
 
 const styles = StyleSheet.create({

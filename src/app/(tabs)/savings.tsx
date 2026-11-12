@@ -23,11 +23,12 @@ export default function SavingsScreen() {
       .from(savingsGoals)
       .orderBy(savingsGoals.priority)
       .all()
-      .filter((x) => !x.archivedAt)
       .map((x) => ({ ...x, held: goalTotal(db, x.id) })),
   );
-  const open = goals.filter((x) => !x.completedAt);
-  const done = goals.filter((x) => x.completedAt);
+  // Archived goals (e.g. when Sarraf Plus ended) are listed last so they can come back.
+  const archived = goals.filter((x) => x.archivedAt);
+  const open = goals.filter((x) => !x.completedAt && !x.archivedAt);
+  const done = goals.filter((x) => x.completedAt && !x.archivedAt);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -36,22 +37,22 @@ export default function SavingsScreen() {
           <Text style={[styles.title, { color: colors.ink }]}>{s.title}</Text>
           <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />
         </View>
-        {goals.length === 0 ? (
+        {open.length + done.length === 0 && archived.length === 0 ? (
           <Card style={styles.empty}>
             <Icon name="piggy" size={30} color={colors.border} strokeWidth={1.6} />
             <Text style={[styles.emptyTitle, { color: colors.inkSecondary }]}>{g.emptyTitle}</Text>
             <Text style={[styles.emptyBody, { color: colors.inkMuted }]}>{g.emptyBody}</Text>
           </Card>
         ) : null}
-        {[...open, ...done].map((x) => {
+        {[...open, ...done, ...archived].map((x) => {
           const pct = dec(x.targetAmount).gt(0) ? Decimal.min(dec(x.held).dividedBy(dec(x.targetAmount)), 1).times(100).toNumber() : 0;
           return (
             <Pressable key={x.id} onPress={() => router.push(`/goals/${x.id}`)} accessibilityRole="button">
-              <Card style={[styles.card, x.completedAt ? { opacity: 0.6 } : null]}>
+              <Card style={[styles.card, x.completedAt || x.archivedAt ? { opacity: 0.6 } : null]}>
                 <View style={styles.cardTop}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.name, { color: colors.ink }]}>{x.name}</Text>
-                    <Text style={[styles.meta, { color: colors.inkMuted }]}>{x.completedAt ? `${x.currency} · ${g.completed}` : `${x.currency} · ${s.priority(x.priority)}`}</Text>
+                    <Text style={[styles.meta, { color: colors.inkMuted }]}>{x.archivedAt ? `${x.currency} · ${g.archived}` : x.completedAt ? `${x.currency} · ${g.completed}` : `${x.currency} · ${s.priority(x.priority)}`}</Text>
                   </View>
                   <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
                 </View>

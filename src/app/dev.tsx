@@ -8,7 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { Money } from '@/components/Money';
 import { db } from '@/db/client';
-import { accounts, settings } from '@/db/schema';
+import { accounts, deviceState, settings } from '@/db/schema';
 import { SAMPLE_TODAY } from '@/db/sample';
 import { resetSampleData, wipeAsNewPhone } from '@/db/seed';
 import { backupDeps, cloud, DEV_REAL_CLOUD_KEY, keyStore, usingRealCloud } from '@/services/cloud';
@@ -76,6 +76,15 @@ export default function DevPreview() {
             }}
           />
           <Toggle label="Reset sample data" onPress={() => resetSampleData(db)} />
+          {/* Sarraf Plus ending (Owner, Nov 12): past its 7-day grace, or active for a year. */}
+          <Toggle
+            label="Plus: ended 10 days ago"
+            onPress={() => db.update(deviceState).set({ plan: 'plus', planRenewsAt: new Date(Date.now() - 10 * 86400000).toISOString() }).where(eq(deviceState.id, 1)).run()}
+          />
+          <Toggle
+            label="Plus: active for a year"
+            onPress={() => db.update(deviceState).set({ plan: 'plus', planRenewsAt: new Date(Date.now() + 365 * 86400000).toISOString() }).where(eq(deviceState.id, 1)).run()}
+          />
           <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
           <Toggle
             label={`Cloud: ${usingRealCloud ? 'real (Supabase + Drive)' : 'stand-in'}`}

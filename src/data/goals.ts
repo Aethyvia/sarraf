@@ -150,6 +150,35 @@ export function completeGoal(db: AppDb, goalId: string, date: string = todayDate
   });
 }
 
+/**
+ * Archives a goal (Owner, Nov 12: what's over the free plan when Plus ends is
+ * archived, and archive rules apply). Like completing it, everything it held
+ * goes back to Usable (a permanent `release` row per account) and it frees a
+ * slot; its history stays.
+ */
+export function archiveGoal(db: AppDb, goalId: string, date: string = todayDate()): void {
+  db.transaction((tx) => {
+    const goal = tx.select().from(savingsGoals).where(eq(savingsGoals.id, goalId)).get();
+    if (!goal) throw new DataError('not_found', 'No goal');
+    if (goal.archivedAt) return;
+    for (const { accountId, amount } of goalByAccount(tx, goalId)) {
+      tx.insert(goalAllocations).values({ id: newId(), goalId, accountId, kind: 'release', amount: toDecimalString(dec(amount).negated()), date }).run();
+    }
+    tx.update(savingsGoals).set({ archivedAt: nowIso(), updatedAt: nowIso() }).where(eq(savingsGoals.id, goalId)).run();
+  });
+}
+
+/** Unarchiving counts like adding one, so the free-plan limit applies. It starts empty (its money was released). */
+export function unarchiveGoal(db: AppDb, goalId: string, plan: Plan): void {
+  db.transaction((tx) => {
+    const goal = tx.select().from(savingsGoals).where(eq(savingsGoals.id, goalId)).get();
+    if (!goal) throw new DataError('not_found', 'No goal');
+    if (!goal.archivedAt) return;
+    if (!goal.completedAt) assertCanAdd(tx, 'goals', plan);
+    tx.update(savingsGoals).set({ archivedAt: null, updatedAt: nowIso() }).where(eq(savingsGoals.id, goalId)).run();
+  });
+}
+
 /** Deletes a goal and its history. The money it held goes back to Usable. */
 export function deleteGoal(db: AppDb, goalId: string): void {
   db.delete(savingsGoals).where(eq(savingsGoals.id, goalId)).run();

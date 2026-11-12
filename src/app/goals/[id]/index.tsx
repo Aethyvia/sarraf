@@ -10,7 +10,7 @@ import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { BottomSheet, Button, Card, Field, Header, Screen, SectionLabel, SelectorRow } from '@/components/ui';
-import { completeGoal, goalByAccount, goalHistory, goalTotal, stillToGo, takeOutOfGoal } from '@/data/goals';
+import { completeGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, stillToGo, takeOutOfGoal } from '@/data/goals';
 import { db } from '@/db/client';
 import { accounts, savingsGoals } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -19,6 +19,7 @@ import { Decimal, dec, getCurrency, toDecimalString } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
+import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
 
@@ -30,6 +31,7 @@ export default function GoalScreen() {
   const s = strings.goals;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const plan = usePlan();
   const toast = useToast();
   const action = useAction();
   const [sheet, setSheet] = useState<'takeOut' | 'complete' | null>(null);
@@ -47,7 +49,7 @@ export default function GoalScreen() {
   const money = (v: string, style?: object) => <Money value={v} currency={goal.currency} allowCompact={false} style={style} />;
   const pct = dec(goal.targetAmount).gt(0) ? Math.min(100, Math.floor(dec(held).dividedBy(dec(goal.targetAmount)).times(100).toNumber())) : 0;
   const rest = stillToGo(goal.targetAmount, held);
-  const open = !goal.completedAt;
+  const open = !goal.completedAt && !goal.archivedAt;
 
   return (
     <Screen>
@@ -67,6 +69,13 @@ export default function GoalScreen() {
         </View>
       </Card>
 
+      {goal.archivedAt ? (
+        <>
+          <Text style={[styles.small, { color: colors.inkMuted }]}>{s.archivedNote}</Text>
+          {/* Coming back counts like adding a goal (free plan: 3). */}
+          <Button label={s.unarchive} onPress={() => action.run(() => (unarchiveGoal(db, id, plan), true))} />
+        </>
+      ) : null}
       {open ? (
         <>
           <View style={styles.buttons}>
