@@ -164,6 +164,12 @@ export default function SettingsScreen() {
         />
       </View>
 
+      <SectionLabel style={styles.section}>{s.about}</SectionLabel>
+      <View>
+        <Row icon="document" title={s.terms} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })} />
+        <Row icon="shield" title={s.privacy} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })} last />
+      </View>
+
       {user ? (
         <View style={{ gap: 8, marginTop: 10 }}>
           <Button label={s.signOut} kind="danger" onPress={() => setSheet('signout')} />

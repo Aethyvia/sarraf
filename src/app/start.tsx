@@ -367,7 +367,16 @@ export default function StartScreen() {
             <Button label={s.getStarted} onPress={() => ((returning.current = false), setSheet('new'))} />
             <Button label={s.alreadyUse} kind="secondary" onPress={() => ((returning.current = true), setSheet('returning'))} />
           </View>
-          <SignInSheet mode={sheet} busy={busy} onClose={() => setSheet(null)} onPick={pickSignIn} />
+          <SignInSheet
+            mode={sheet}
+            busy={busy}
+            onClose={() => setSheet(null)}
+            onPick={pickSignIn}
+            onLegal={(doc) => {
+              setSheet(null);
+              router.push({ pathname: '/legal/[doc]', params: { doc } });
+            }}
+          />
         </SafeAreaView>
       );
 

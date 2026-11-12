@@ -28,6 +28,9 @@ export default function PlansScreen() {
     setBusy(true);
     try {
       if (await store.purchase(kind)) toast({ message: s.bought });
+      else toast({ message: s.notReady });
+    } catch (e) {
+      toast({ message: (e as Error).message || strings.start.failed });
     } finally {
       setBusy(false);
     }

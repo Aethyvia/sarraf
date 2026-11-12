@@ -1,21 +1,21 @@
 import { currentUser } from '@/data/backup-flow';
 import { refreshPlan } from '@/data/plan';
 import { db } from '@/db/client';
-import { cloud, devStore } from './cloud';
-import { grantFakePlus } from './cloud/fake';
+import { cloud } from './cloud';
 
 /**
- * In-app purchase of Sarraf Plus (Google Play Billing). Until the store
- * products exist, dev builds use a stand-in that grants Plus for a month;
- * release builds say purchases aren't set up.
+ * Sarraf Plus. Until Google Play Billing is wired up (owner, Nov 12), Subscribe
+ * records the subscription on the user's Sarraf account directly (Supabase
+ * `test_subscribe`), then the plan is read back like any other.
  */
 export const store = {
-  ready: devStore !== null,
+  get ready() {
+    return cloud.ready;
+  },
   async purchase(kind: 'monthly' | 'yearly'): Promise<boolean> {
     const user = currentUser(db);
-    if (!devStore || !user) return false;
-    const renews = new Date(Date.now() + (kind === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
-    grantFakePlus(devStore, renews);
+    if (!user) return false;
+    await cloud.testSubscribe(user, kind);
     return (await refreshPlan(db, cloud, user, new Date())) === 'plus';
   },
   async restore(): Promise<boolean> {

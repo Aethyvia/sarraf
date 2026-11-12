@@ -15,11 +15,14 @@ export function SignInSheet({
   mode,
   onClose,
   onPick,
+  onLegal,
   busy,
 }: {
   mode: 'new' | 'returning' | null;
   onClose: () => void;
   onPick: (method: 'google' | 'github' | 'email') => void;
+  /** Opens the Terms or Privacy page (the sheet closes first). */
+  onLegal: (doc: 'terms' | 'privacy') => void;
   busy: boolean;
 }) {
   const s = strings.start;
@@ -54,7 +57,17 @@ export function SignInSheet({
         <Note tone="teal" icon="cloud">
           {s.driveNote}
         </Note>
-        <Text style={[styles.small, { color: colors.inkMuted }]}>{s.terms}</Text>
+        <Text style={[styles.small, { color: colors.inkMuted }]}>
+          {s.termsBefore}
+          <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }} onPress={() => onLegal('terms')}>
+            {s.termsLink}
+          </Text>
+          {s.termsAnd}
+          <Text style={{ color: colors.accent, fontFamily: fonts.sansSemiBold }} onPress={() => onLegal('privacy')}>
+            {s.privacyLink}
+          </Text>
+          .
+        </Text>
       </View>
     </BottomSheet>
   );

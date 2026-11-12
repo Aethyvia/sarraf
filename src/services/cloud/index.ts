@@ -42,11 +42,14 @@ const config = {
 };
 const configured = !!(config.supabaseUrl && config.supabaseKey && config.googleWebClientId);
 
-/** Dev builds use the stand-in unless "Real cloud" is switched on in /dev (takes effect after a reload). */
+/**
+ * Dev builds use the real Supabase and Drive whenever they're configured (owner, Nov 12: Google
+ * sign-in must be real). The stand-in only when /dev switches to it ('0'), or nothing is configured.
+ */
 export const DEV_REAL_CLOUD_KEY = 'sarraf.dev.real-cloud';
-const devWantsReal = __DEV__ && SecureStore.getItem(DEV_REAL_CLOUD_KEY) === '1';
+const devWantsStandIn = __DEV__ && (!configured || SecureStore.getItem(DEV_REAL_CLOUD_KEY) === '0');
 
-export const devStore: FakeStore | null = __DEV__ && !devWantsReal ? fileStore() : null;
+export const devStore: FakeStore | null = devWantsStandIn ? fileStore() : null;
 export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = devStore
   ? fakeCloud(devStore)
   : configured

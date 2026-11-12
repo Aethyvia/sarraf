@@ -113,6 +113,10 @@ export function fakeCloud(store: FakeStore, knobs: FakeKnobs = { offline: false,
       online();
       return store.read(`${driveFile()}.att.${name}`);
     },
+    async testSubscribe(_u, kind) {
+      online();
+      grantFakePlus(store, new Date(Date.now() + (kind === 'yearly' ? 365 : 30) * 86400000).toISOString());
+    },
     async getSubscription() {
       online();
       const raw = store.read('subscription.json');

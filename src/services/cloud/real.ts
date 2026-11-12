@@ -286,6 +286,11 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
     deleteAttachment: (name) => removeFile(ATTACHMENT_PREFIX + name),
 
+    async testSubscribe(_user, kind) {
+      const { error } = await online(async () => supabase.rpc('test_subscribe', { kind }));
+      if (error) throw error;
+    },
+
     async getSubscription(user) {
       const { data, error } = await online(async () => supabase.from('subscriptions').select('plan, renews_at').eq('user_id', user.id).maybeSingle());
       if (error) throw error;

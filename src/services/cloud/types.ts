@@ -47,6 +47,8 @@ export interface Cloud {
   deleteAttachment(name: string): Promise<void>;
   /** The Sarraf Plus subscription on record (Supabase), or null for Free. */
   getSubscription(user: CloudUser): Promise<{ plan: 'plus'; renewsAt: string | null } | null>;
+  /** Until Play Billing (owner, Nov 12): Subscribe records Plus for this user directly. */
+  testSubscribe(user: CloudUser, kind: 'monthly' | 'yearly'): Promise<void>;
   /** Delete Sarraf account: the backup file and attachments in Drive. */
   deleteBackup(): Promise<void>;
   /** Delete Sarraf account: the sign-in, backup record and subscription row. */
