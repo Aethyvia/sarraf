@@ -16,6 +16,7 @@ import { consumeLockPause, pauseLockFor } from '@/state/lock-pause';
 import { useSettings } from '@/state/settings';
 import { fonts, useTheme } from '@/theme';
 import { CreatePin } from './CreatePin';
+import { setLockedNow } from '@/state/lock-state';
 import { PinDots, PinPad } from './PinPad';
 
 function waitText(seconds: number): string {
@@ -34,6 +35,7 @@ export function LockGate() {
   const { colors } = useTheme();
   const set = useSettings();
   const [locked, setLocked] = useState(() => set.appLockEnabled && !!set.pinHash);
+  setLockedNow(locked);
   const background = useRef<number | null>(null);
   const [pin, setPinText] = useState('');
   const [error, setError] = useState(false);

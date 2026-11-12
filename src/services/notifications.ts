@@ -6,6 +6,7 @@ import { budgetAlertsDue, markBudgetAlerted, planNotifications } from '@/data/re
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { today } from '@/lib/dates';
+import { pauseLockFor } from '@/state/lock-pause';
 
 const CHANNEL = 'reminders';
 /** Re-plan a moment after data stops changing, not on every write. */
@@ -48,6 +49,8 @@ export async function notificationsAllowed(ask = false): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   if (!ask || !current.canAskAgain) return false;
+  // The system prompt sends Sarraf to the background; that trip mustn't lock it.
+  pauseLockFor(2 * 60 * 1000);
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
@@ -84,5 +87,21 @@ export async function syncNotifications(): Promise<void> {
   } catch (e) {
     // Scheduling is best effort; the app works the same without it.
     console.warn('Could not schedule notifications', e);
+  }
+}
+
+/**
+ * Asked once sign-in or setup is done (owner, Nov 12), not on the
+ * Notifications screen. Android's prompt sends Sarraf to the background, so
+ * the app lock is paused for it.
+ */
+export async function askForNotificationsAfterSignIn(): Promise<void> {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted || !current.canAskAgain) return;
+    pauseLockFor(2 * 60 * 1000);
+    if ((await Notifications.requestPermissionsAsync()).granted) void syncNotifications();
+  } catch {
+    // Not asking is fine; the Notifications screen can ask later.
   }
 }

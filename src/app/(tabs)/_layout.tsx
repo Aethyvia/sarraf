@@ -10,6 +10,7 @@ import { isSignedOut } from '@/data/sarraf-account';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { useSetToastInset } from '@/state/toast';
+import { TourTarget } from '@/components/tour/Tour';
 import { fonts, useTheme } from '@/theme';
 
 const TABS = [
@@ -64,7 +65,9 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
     >
       {WITH_ADD_BAR.has(active) ? (
         <View style={styles.addBar}>
-          <Button label={strings.home.addTransaction} icon="plus" onPress={() => router.push('/transaction/new')} />
+          <TourTarget id="home.add">
+            <Button label={strings.home.addTransaction} icon="plus" onPress={() => router.push('/transaction/new')} />
+          </TourTarget>
         </View>
       ) : null}
       <View style={[styles.bar, { paddingTop: WITH_ADD_BAR.has(active) ? 6 : 10, paddingBottom: 8 + insets.bottom }]}>

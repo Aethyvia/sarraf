@@ -4,11 +4,14 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Money } from '@/components/Money';
-import { BottomSheet, Card, Header, IconButton, IconChip, LinkButton, ListRow, Screen, SheetOption } from '@/components/ui';
+import { Icon } from '@/components/icons/Icon';
+import { Note } from '@/components/start/StartPage';
+import { BottomSheet, Button, Card, Header, IconButton, IconChip, LinkButton, ListRow, Screen, SheetOption } from '@/components/ui';
 import { accountBalances } from '@/data/balances';
 import { accounts } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { compare } from '@/lib/money';
+import { Tour, TourTarget } from '@/components/tour/Tour';
 import { useLive } from '@/state/live';
 import { fonts, useTheme } from '@/theme';
 
@@ -19,7 +22,9 @@ export default function AccountsScreen() {
   const s = strings.accounts;
   const { colors } = useTheme();
   // Opened from a Home tile: just that currency's accounts.
-  const { currency } = useLocalSearchParams<{ currency?: string }>();
+  const { currency, from } = useLocalSearchParams<{ currency?: string; from?: string }>();
+  // Where first-run setup ends (owner, Nov 12): add the rest, with institutions and opening balances.
+  const fromSetup = from === 'setup';
   const [sort, setSort] = useState<Sort>('custom');
   const [sorting, setSorting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -92,13 +97,26 @@ export default function AccountsScreen() {
         }
       />
 
+      {fromSetup ? <Note tone="teal" icon="accounts">{s.afterSetup}</Note> : null}
       {groups.institutions.map(([institution, list]) => (
         <Card key={institution}>
-          <Text style={[styles.institution, { color: colors.inkMuted }]}>{institution.toUpperCase()}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingStart: 18, paddingTop: 10, paddingBottom: 2 }}>
+            <Icon name="bank" size={12} color={colors.inkMuted} strokeWidth={2} />
+            <Text style={[styles.institution, { color: colors.inkMuted, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 }]}>{institution.toUpperCase()}</Text>
+          </View>
           {list.map((a, i) => row(a, i === list.length - 1))}
         </Card>
       ))}
-      {groups.plain.length > 0 ? <Card>{groups.plain.map((a, i) => row(a, i === groups.plain.length - 1))}</Card> : null}
+      {groups.plain.length > 0 ? (
+        <Card>
+          {groups.institutions.length > 0 ? <Text style={[styles.institution, { color: colors.inkMuted }]}>{strings.accounts.otherAccounts}</Text> : null}
+          {groups.plain.map((a, i) => row(a, i === groups.plain.length - 1))}
+        </Card>
+      ) : null}
+      <TourTarget id="accounts.add">
+        <Button label={s.addAnother} icon="plus" kind="secondary" onPress={() => router.push('/accounts/new')} />
+      </TourTarget>
+      <Tour id="accounts" steps={strings.tour.accounts} enabled={fromSetup} />
 
       {groups.archived.length > 0 ? (
         showArchived ? (

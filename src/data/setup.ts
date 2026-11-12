@@ -7,11 +7,10 @@ import { defaultAccountLook, createAccount } from './accounts';
 import { createLedger } from './ledgers';
 import { FREE_LIMITS, type Plan } from './limits';
 import { moveCurrency } from './currency-order';
+import { addDefaultCategories } from './default-categories';
 
 /** Setup step 1's chips: common currencies for people paid from abroad. */
 export const ALSO_CHOICES = ['USD', 'EUR', 'AED', 'SAR', 'GBP'] as const;
-/** Currencies usually held in a Payoneer-style balance; others are suggested as cash. */
-const WALLET_CURRENCIES = new Set(['USD', 'EUR', 'GBP']);
 
 export interface SuggestedAccount {
   key: string;
@@ -26,22 +25,23 @@ export interface SuggestedAccount {
 }
 
 /**
- * Setup step 2's templates (First run — Decided Nov 7): Payoneer for USD/EUR/GBP,
- * Bank and Cash for the everyday currency (ticked), cash for other currencies
- * (unticked). E.g. PKR + USD, EUR, AED → Payoneer USD, Payoneer EUR, Bank PKR,
- * Cash PKR, Cash AED (unticked).
+ * Setup step 2 (owner, Nov 12 — replaces the Payoneer templates): plain
+ * defaults, a Bank and a Cash account for each chosen currency, no
+ * institution. Everyday currency ticked; the others unticked. Anything else
+ * (Payoneer, Wise, institutions, opening balances) is added on the Accounts
+ * screen, where setup ends. E.g. PKR + USD → Bank PKR, Cash PKR (ticked),
+ * Bank USD, Cash USD.
  */
 export function suggestedAccounts(everyday: string, also: string[]): SuggestedAccount[] {
   const out: SuggestedAccount[] = [];
-  const add = (name: string, currency: string, institution: string | null, ticked: boolean, renameHint = false) => {
-    const look = defaultAccountLook(name, institution);
-    out.push({ key: `${name}`, name, currency, institution, ...look, ticked, renameHint });
+  const add = (name: string, currency: string, ticked: boolean, renameHint = false) => {
+    const look = defaultAccountLook(name, null);
+    out.push({ key: name, name, currency, institution: null, ...look, ticked, renameHint });
   };
-  const others = also.filter((c) => c !== everyday);
-  for (const c of others) if (WALLET_CURRENCIES.has(c)) add(`Payoneer ${c}`, c, 'Payoneer', true);
-  add(`Bank ${everyday}`, everyday, null, true, true);
-  add(`Cash ${everyday}`, everyday, null, true);
-  for (const c of others) if (!WALLET_CURRENCIES.has(c)) add(`Cash ${c}`, c, null, false);
+  for (const c of [everyday, ...also.filter((x) => x !== everyday)]) {
+    add(`Bank ${c}`, c, c === everyday, true);
+    add(`Cash ${c}`, c, c === everyday);
+  }
   // Never more ticked than Free covers.
   let n = 0;
   for (const a of out) if (a.ticked && ++n > FREE_LIMITS.accounts) a.ticked = false;
@@ -50,8 +50,8 @@ export function suggestedAccounts(everyday: string, also: string[]): SuggestedAc
 
 /**
  * Finishes setup: the everyday currency, the Personal ledger (default), the
- * chosen accounts (checked against the plan), Home's currency order, and the
- * onboarding date. Balances are entered later.
+ * chosen accounts (checked against the plan), the default categories, Home's
+ * currency order, and the onboarding date. Balances are entered later.
  */
 export function finishSetup(
   db: AppDb,
@@ -63,6 +63,7 @@ export function finishSetup(
     tx.update(settings).set({ defaultCurrency: input.everyday, updatedAt: nowIso() }).where(eq(settings.id, 1)).run();
     if (!tx.select({ id: ledgers.id }).from(ledgers).get()) createLedger(tx, { name: 'Personal' }, plan);
     for (const a of input.accounts) ids.push(createAccount(tx, a, plan));
+    addDefaultCategories(tx);
     const order = [input.everyday, ...input.also.filter((c) => c !== input.everyday)];
     order.forEach((c, i) => moveCurrency(tx, order.slice(0, i), c, i));
     tx.update(settings).set({ onboardingCompletedAt: nowIso() }).where(eq(settings.id, 1)).run();

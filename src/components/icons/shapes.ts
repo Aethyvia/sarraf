@@ -114,3 +114,16 @@ export const ICON_SHAPES = {
 
 /** The icons people can pick for an account, category or ledger, in the picker's order. */
 export const PICKABLE_ICONS = ["bank", "basket", "briefcase", "list", "glass", "user", "star", "cart", "car", "home", "hammer", "coffee", "office", "tv", "phone", "document", "heart", "cycle", "work", "check", "dollar", "scooter", "card", "family", "pin", "fuel", "bus", "tire", "umbrella", "pill", "tooth", "music", "gamepad", "suitcase", "bed", "cloud", "laptop", "bulb", "drop", "scissors", "washer", "tool", "sofa", "percent", "scale", "school", "handshake", "trend", "code", "more", "bag", "camera", "palette", "tree", "sun", "key", "trophy", "backpack", "stethoscope", "charity", "mail"] as const;
+
+/** The icon sheet's groups (owner, Nov 12: "categorize the icons so they're easy to find"). Every pickable icon is in exactly one. */
+export const ICON_GROUPS: { key: 'money' | 'food' | 'home' | 'transport' | 'health' | 'work' | 'fun' | 'people' | 'other'; icons: (typeof PICKABLE_ICONS)[number][] }[] = [
+  { key: 'money', icons: ['dollar', 'bank', 'card', 'percent', 'trend', 'scale', 'handshake', 'charity', 'briefcase', 'document'] },
+  { key: 'food', icons: ['basket', 'cart', 'coffee', 'glass', 'bag'] },
+  { key: 'home', icons: ['home', 'sofa', 'bed', 'washer', 'bulb', 'drop', 'key', 'hammer', 'tool', 'tree', 'sun', 'scissors'] },
+  { key: 'transport', icons: ['car', 'bus', 'scooter', 'cycle', 'fuel', 'tire', 'suitcase', 'pin', 'umbrella'] },
+  { key: 'health', icons: ['heart', 'pill', 'tooth', 'stethoscope'] },
+  { key: 'work', icons: ['work', 'office', 'laptop', 'code', 'phone', 'mail', 'cloud', 'camera', 'palette', 'school', 'backpack'] },
+  { key: 'fun', icons: ['tv', 'music', 'gamepad', 'trophy', 'star'] },
+  { key: 'people', icons: ['user', 'family'] },
+  { key: 'other', icons: ['list', 'check', 'more'] },
+];

@@ -232,6 +232,11 @@ export function realCloud(config: RealCloudConfig): Cloud {
       if (error) throw error;
     },
 
+    async deleteRecord(user) {
+      const { error } = await online(async () => supabase.from('backup_records').delete().eq('user_id', user.id));
+      if (error) throw error;
+    },
+
     async connectDrive(options) {
       const { GoogleSignin } = g();
       if (options?.another) {

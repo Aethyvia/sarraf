@@ -65,6 +65,10 @@ export function fakeCloud(store: FakeStore, knobs: FakeKnobs = { offline: false,
       online();
       store.write('record.json', enc.encode(JSON.stringify(record)));
     },
+    async deleteRecord() {
+      online();
+      store.delete?.('record.json');
+    },
     async connectDrive(options) {
       online();
       if (knobs.refuseDrive) throw new DriveRefusedError();

@@ -33,6 +33,8 @@ export interface Cloud {
   signOut(): Promise<void>;
   getRecord(user: CloudUser): Promise<BackupRecord | null>;
   putRecord(user: CloudUser, record: BackupRecord): Promise<void>;
+  /** Deleting only the Drive backup: its record goes too, so no phone is offered a backup that's gone. */
+  deleteRecord(user: CloudUser): Promise<void>;
   /** Asks for Drive access (app-data folder only). `another` picks a different Google account. */
   connectDrive(options?: { another?: boolean }): Promise<{ email: string }>;
   findBackup(): Promise<{ modifiedAt: string; sizeBytes: number } | null>;

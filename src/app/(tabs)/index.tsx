@@ -22,6 +22,7 @@ import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
+import { Tour, TourTarget } from '@/components/tour/Tour';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -76,6 +77,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
+      <Tour id="home" steps={strings.tour.home} enabled={tiles.length > 0} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.ink }]}>{s.title}</Text>
@@ -84,6 +86,7 @@ export default function HomeScreen() {
 
         {tiles.length > 0 ? (
           estimate.total !== null ? (
+            <TourTarget id="home.estimate">
             <Card style={styles.estimate}>
               <Text style={[styles.estimateLabel, { color: colors.inkMuted }]}>{s.estimated(estimate.currency)}</Text>
               <Text style={[styles.estimateValue, { color: colors.ink }]}>
@@ -94,6 +97,7 @@ export default function HomeScreen() {
               ) : null}
               {ratesAge > RATES_WARN_AFTER_DAYS ? <Text style={[styles.ratesWarn, { color: colors.warning }]}>{s.ratesOld(ratesAge)}</Text> : null}
             </Card>
+            </TourTarget>
           ) : (
             <Text style={[styles.hidden, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{s.totalHidden}</Text>
           )
@@ -101,11 +105,11 @@ export default function HomeScreen() {
           <Text style={[styles.hidden, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{s.noAccounts}</Text>
         )}
 
-        <View style={styles.grid}>
+        <TourTarget id="home.tiles" style={styles.grid}>
           {tiles.slice(0, HOME_TILES).map((t) => (
             <Tile key={t.currency} tile={t} estimate={estimate.perCurrency.get(t.currency) ?? null} defaultCurrency={defaultCurrency} />
           ))}
-        </View>
+        </TourTarget>
         {tiles.length > HOME_TILES ? (
           <View style={{ marginTop: -12, marginBottom: -8 }}>
             <LinkButton label={s.seeAll(tiles.length)} onPress={() => router.push('/currencies')} />

@@ -19,13 +19,21 @@ export function useCategorySections(kind: 'expense' | 'income'): PickerSection[]
     (db) => {
       const all = db.select().from(categories).where(and(eq(categories.kind, kind), isNull(categories.archivedAt))).orderBy(categories.name).all();
       const byId = new Map(all.map((c) => [c.id, c]));
-      const item = (c: (typeof all)[number], indent = false): PickerItem => ({
-        id: c.id,
-        title: c.name,
-        indent,
-        leading: indent ? undefined : <IconChip icon={c.icon} color={c.color} size={30} />,
-        trailing: c.isSystem ? <Badge label={strings.common.builtIn} tone="neutral" /> : undefined,
-      });
+      const subCount = (id: string) => all.filter((x) => x.parentId === id).length;
+      const item = (c: (typeof all)[number], indent = false): PickerItem => {
+        const parent = c.parentId ? byId.get(c.parentId) : undefined;
+        const n = subCount(c.id);
+        return {
+          id: c.id,
+          title: c.name,
+          indent,
+          // Subcategories carry their parent's look, smaller, so they read as part of it.
+          leading: <IconChip icon={c.icon} color={parent?.color ?? c.color} size={indent ? 24 : 30} />,
+          detail: indent ? undefined : n > 0 ? strings.categories.subCount(n) : undefined,
+          searchDetail: parent ? strings.categories.inParent(parent.name) : undefined,
+          trailing: c.isSystem ? <Badge label={strings.common.builtIn} tone="neutral" /> : undefined,
+        };
+      };
       const recentIds: string[] = [];
       for (const r of db
         .select({ id: transactions.categoryId })
@@ -112,9 +120,11 @@ export function useAccountSections(options: { currency?: string | null; excludeI
       });
       const groups = new Map<string, AccountRow[]>();
       for (const a of pick.filter((x) => x.institution)) groups.set(a.institution!, [...(groups.get(a.institution!) ?? []), a]);
+      const loose = pick.filter((a) => !a.institution);
       return [
-        ...[...groups].map(([label, list]) => ({ label: label.toUpperCase(), items: list.map(item) })),
-        { items: pick.filter((a) => !a.institution).map(item) },
+        ...[...groups].map(([label, list]) => ({ label: label.toUpperCase(), groupIcon: 'bank', items: list.map(item) })),
+        // With institution groups above, the rest get a label so the split is clear.
+        { label: groups.size && loose.length ? strings.accounts.otherAccounts : undefined, items: loose.map(item) },
       ];
     },
     [currency, excludeId, showFree],

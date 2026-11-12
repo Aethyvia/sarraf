@@ -15,7 +15,8 @@ export function ensureBaseData(db: AppDb): boolean {
   // Drizzle's SQLite transactions are synchronous: use .get()/.run(), never await, inside them.
   db.transaction((tx) => {
     if (!tx.select({ id: settings.id }).from(settings).where(eq(settings.id, 1)).get()) {
-      tx.insert(settings).values({ id: 1, defaultCurrency: 'USD', deviceId: randomUUID() }).run();
+      // Lock after 1 minute in the background by default (App lock board; owner Nov 12: a grace period).
+      tx.insert(settings).values({ id: 1, defaultCurrency: 'USD', deviceId: randomUUID(), lockAfterSeconds: 60 }).run();
       created = true;
     }
     if (!tx.select({ id: deviceState.id }).from(deviceState).where(eq(deviceState.id, 1)).get()) {

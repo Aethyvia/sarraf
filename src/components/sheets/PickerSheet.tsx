@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Icon } from '@/components/icons/Icon';
 import { BottomSheet, LinkButton, SheetOption } from '@/components/ui';
 import { fonts, radius, useTheme } from '@/theme';
 
@@ -11,16 +12,20 @@ export interface PickerItem {
   leading?: ReactNode;
   trailing?: ReactNode;
   disabled?: boolean;
-  /** Indents a subcategory under its parent. */
+  /** Indents a subcategory under its parent (with a rail, so it reads as part of it). */
   indent?: boolean;
+  /** Shown instead of `detail` while searching (e.g. "in Food" for a subcategory). */
+  searchDetail?: string;
 }
 
 export interface PickerSection {
   label?: string;
+  /** A group (an institution): the label gets this icon and the items sit on a rail under it. */
+  groupIcon?: string;
   items: PickerItem[];
 }
 
-type Row = { type: 'label'; text: string } | { type: 'item'; item: PickerItem };
+type Row = { type: 'label'; text: string; icon?: string; count?: number } | { type: 'item'; item: PickerItem; grouped: boolean; searching: boolean };
 
 /**
  * One list-picking bottom sheet for categories, people, ledgers, goals and the
@@ -67,8 +72,8 @@ export function PickerSheet({
     for (const s of sections) {
       const items = q ? s.items.filter((i) => i.title.toLowerCase().includes(q) || (searchDetails && !!i.detail?.toLowerCase().includes(q))) : s.items;
       if (!items.length) continue;
-      if (s.label && !q) out.push({ type: 'label', text: s.label });
-      for (const item of items) out.push({ type: 'item', item });
+      if (s.label && !q) out.push({ type: 'label', text: s.label, icon: s.groupIcon, count: s.groupIcon ? items.length : undefined });
+      for (const item of items) out.push({ type: 'item', item, grouped: !!s.groupIcon && !q, searching: !!q });
     }
     return out;
   }, [query, sections, searchDetails]);
@@ -112,12 +117,22 @@ export function PickerSheet({
         }
         renderItem={({ item: row }) =>
           row.type === 'label' ? (
-            <Text style={[styles.label, { color: colors.inkMuted }]}>{row.text}</Text>
+            <View style={styles.labelRow}>
+              {row.icon ? <Icon name={row.icon} size={13} color={colors.inkMuted} strokeWidth={2} /> : null}
+              <Text style={[styles.label, { color: colors.inkMuted }]}>{row.text}</Text>
+              {row.count !== undefined ? <Text style={[styles.label, { color: colors.inkMuted, fontFamily: fonts.sans }]}>· {row.count}</Text> : null}
+            </View>
           ) : (
-            <View style={row.item.indent ? { paddingStart: 28 } : undefined}>
+            <View
+              style={
+                (row.item.indent && !row.searching) || row.grouped
+                  ? [styles.rail, { borderStartColor: colors.line, marginStart: row.item.indent ? 22 : 8 }]
+                  : undefined
+              }
+            >
               <SheetOption
                 title={row.item.title}
-                detail={row.item.detail}
+                detail={row.searching && row.item.searchDetail ? row.item.searchDetail : row.item.detail}
                 leading={row.item.leading}
                 trailing={row.item.trailing}
                 disabled={row.item.disabled}
@@ -155,5 +170,7 @@ export function PickerSheet({
 
 const styles = StyleSheet.create({
   search: { borderRadius: radius.field, paddingHorizontal: 14, paddingVertical: 11, fontFamily: fonts.sans, fontSize: 14.5, marginBottom: 6 },
-  label: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.7, paddingTop: 14, paddingBottom: 4, paddingHorizontal: 4 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 14, paddingBottom: 4, paddingHorizontal: 4 },
+  label: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.7 },
+  rail: { borderStartWidth: 2, paddingStart: 10 },
 });

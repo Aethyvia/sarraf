@@ -87,6 +87,8 @@ export const settings = sqliteTable(
     biometricsEnabled: bool('biometrics_enabled').notNull().default(false),
     lockAfterSeconds: integer('lock_after_seconds').notNull().default(0),
     hideInRecents: bool('hide_in_recents').notNull().default(false),
+    /** First-visit tours already shown or skipped (JSON list of tour ids). */
+    toursSeen: text('tours_seen').notNull().default('[]'),
     failedPinAttempts: integer('failed_pin_attempts').notNull().default(0),
     pinLockedUntil: text('pin_locked_until'),
     backupFrequency: text('backup_frequency', { enum: ['daily', 'weekly', 'manual'] })

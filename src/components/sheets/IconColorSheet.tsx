@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
-import { PICKABLE_ICONS } from '@/components/icons/shapes';
+import { ICON_GROUPS, PICKABLE_ICONS } from '@/components/icons/shapes';
 import { BottomSheet, Button, IconChip, LinkButton } from '@/components/ui';
 import { strings } from '@/i18n/strings';
 import { SWATCH_KEYS, fonts, radius, useTheme } from '@/theme';
@@ -59,22 +59,29 @@ export function IconColorSheet({
       <Text style={[styles.label, { color: colors.inkMuted }]}>
         {s.icon} · {s.options(PICKABLE_ICONS.length)}
       </Text>
-      <ScrollView style={{ maxHeight: 250 }} contentContainerStyle={styles.grid}>
-        {PICKABLE_ICONS.map((name) => {
-          const on = draft.icon === name;
-          return (
-            <Pressable
-              key={name}
-              onPress={() => setDraft((d) => ({ ...d, icon: name }))}
-              accessibilityRole="button"
-              accessibilityLabel={name}
-              accessibilityState={{ selected: on }}
-              style={[styles.cell, { backgroundColor: on ? swatch(draft.color).bg : colors.filled }, on && { borderColor: swatch(draft.color).fg, borderWidth: 1.5 }]}
-            >
-              <Icon name={name} size={19} color={on ? swatch(draft.color).fg : colors.inkSecondary} />
-            </Pressable>
-          );
-        })}
+      <ScrollView style={{ maxHeight: 300 }}>
+        {ICON_GROUPS.map((g) => (
+          <View key={g.key}>
+            <Text style={[styles.group, { color: colors.inkMuted }]}>{s.iconGroups[g.key]}</Text>
+            <View style={styles.grid}>
+              {g.icons.map((name) => {
+                const on = draft.icon === name;
+                return (
+                  <Pressable
+                    key={name}
+                    onPress={() => setDraft((d) => ({ ...d, icon: name }))}
+                    accessibilityRole="button"
+                    accessibilityLabel={name}
+                    accessibilityState={{ selected: on }}
+                    style={[styles.cell, { backgroundColor: on ? swatch(draft.color).bg : colors.filled }, on && { borderColor: swatch(draft.color).fg, borderWidth: 1.5 }]}
+                  >
+                    <Icon name={name} size={19} color={on ? swatch(draft.color).fg : colors.inkSecondary} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ))}
       </ScrollView>
       <View style={{ gap: 4, marginTop: 12 }}>
         <Button
@@ -97,5 +104,6 @@ const styles = StyleSheet.create({
   colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 4 },
   swatch: { width: 34, height: 34, borderRadius: radius.pill, borderColor: 'transparent', borderWidth: 0 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 2 },
+  group: { fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 0.5, paddingHorizontal: 4, paddingTop: 10, paddingBottom: 6 },
   cell: { width: 44, height: 44, borderRadius: radius.field, alignItems: 'center', justifyContent: 'center' },
 });

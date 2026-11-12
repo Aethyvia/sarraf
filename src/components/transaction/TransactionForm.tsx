@@ -65,6 +65,7 @@ import { RATE_MAX_DECIMALS, applyKey, draftFromForm, focusConversion, splitForTo
 import { fonts, useTheme } from '@/theme';
 import { ChargeEditor, ChargeEditorHint } from './ChargeEditor';
 import { SplitEditor } from './SplitEditor';
+import { Tour, TourTarget } from '@/components/tour/Tour';
 import { AmountCard, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
 
 type Sheet =
@@ -539,7 +540,9 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     );
     const statusRows = (
       <>
-        <FormRow label={s.status} icon={plainChip('clock', colors.inkSecondary)} value={s.statuses[form.status]} onPress={() => setSheet('status')} />
+        <TourTarget id="add.status">
+          <FormRow label={s.status} icon={plainChip('clock', colors.inkSecondary)} value={s.statuses[form.status]} onPress={() => setSheet('status')} />
+        </TourTarget>
         {form.status === 'pending' ? (
           <FormRow
             label={s.expected}
@@ -561,13 +564,15 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         </RowNote>
       ) : null;
     const categoryRow = (
-      <FormRow
-        label={s.category}
-        icon={category ? accountChip(category) : undefined}
-        value={category?.name}
-        placeholder={s.noCategory}
-        onPress={() => setSheet('category')}
-      />
+      <TourTarget id="add.category">
+        <FormRow
+          label={s.category}
+          icon={category ? accountChip(category) : undefined}
+          value={category?.name}
+          placeholder={s.noCategory}
+          onPress={() => setSheet('category')}
+        />
+      </TourTarget>
     );
     // Editing a transaction in a year already sent to Tax export (Spec: one-line warning, no change log).
     const exportedMonth = editId ? exportedPeriodFor(db, form.date) : null;
@@ -688,6 +693,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave || saving} />}
         />
         {!editId ? (
+          <TourTarget id="add.kinds">
           <Segmented
             options={(['expense', 'income', 'transfer', 'savings'] as const).map((k) => ({ value: k, label: s.kinds[k] }))}
             value={form.kind}
@@ -695,6 +701,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             small
             tint={{ expense: colors.expense, income: colors.income, transfer: colors.accent, savings: colors.accent }}
           />
+          </TourTarget>
         ) : null}
         {action.ui}
       </View>
@@ -703,7 +710,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         {rows}
       </ScrollView>
 
-      <View style={styles.bottom}>
+      <TourTarget id="add.amount" style={styles.bottom}>
         {converts ? (
           <ConversionTrio
             amount={{
@@ -777,7 +784,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           </View>
         ) : null}
         <Keypad onKey={onKey} />
-      </View>
+      </TourTarget>
+      {!editId ? <Tour id="add" steps={strings.tour.add} delay={800} /> : null}
 
       {/* ── Sheets ── */}
       <AccountOrPersonSheet

@@ -4,7 +4,7 @@ import { ensureBaseData } from '@/db/base-data';
 import { deviceState } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import type { BackupDeps } from './backup-flow';
-import { currentUser } from './backup-flow';
+import { currentUser, detachPreviousBackup, rememberSignIn } from './backup-flow';
 
 /**
  * Sign out (Settings board): the data stays on this phone; Sarraf asks to sign
@@ -45,16 +45,45 @@ export function wipeLocalData(db: AppDb): void {
   ensureBaseData(db);
 }
 
+export interface DeleteChoice {
+  /** The sign-in, the backup record and the subscription row (Supabase). */
+  account: boolean;
+  /** Everything Sarraf keeps on this phone. */
+  phone: boolean;
+  /** The backup file and attachments in Google Drive. */
+  drive: boolean;
+}
+
 /**
- * Delete Sarraf account (Spec §5 — Decided): always the sign-in, the backup
- * record and everything on this phone; the Drive backup only when ticked.
+ * Delete (owner, Nov 12 — replaces "account and phone always go together",
+ * Spec §5): each part is chosen on its own.
+ * - Account only: this phone's data stays, signed out; its backup keys and
+ *   Drive go (they belonged to that account). Signing in again offers Keep.
+ * - Phone only: the data is erased; still signed in, so setup (or restore) follows.
+ * - Drive only: the backup and its record go; backup turns off on this phone.
  * Doesn't cancel a store subscription (the sheet says so).
  */
-export async function deleteSarrafAccount(deps: BackupDeps, options: { deleteDriveBackup: boolean; deleteFiles: () => void }): Promise<void> {
+export async function deleteChosen(deps: BackupDeps, choice: DeleteChoice, options: { deleteFiles: () => void; now: string }): Promise<void> {
   const user = currentUser(deps.db);
-  if (options.deleteDriveBackup) await deps.cloud.deleteBackup();
-  if (user) await deps.cloud.deleteAccount(user);
-  await deps.keyStore.clear();
-  options.deleteFiles();
-  wipeLocalData(deps.db);
+  if (choice.drive) {
+    await deps.cloud.deleteBackup();
+    if (user && !choice.account) await deps.cloud.deleteRecord(user);
+  }
+  if (choice.account && user) await deps.cloud.deleteAccount(user);
+  if (choice.phone) {
+    await deps.keyStore.clear();
+    options.deleteFiles();
+    wipeLocalData(deps.db);
+    // Keeping the account: stay signed in on the emptied phone.
+    if (!choice.account && user) rememberSignIn(deps.db, user);
+    return;
+  }
+  if (choice.account || choice.drive) await detachPreviousBackup(deps);
+  if (choice.account) {
+    deps.db
+      .update(deviceState)
+      .set({ signedOutUserId: user?.id ?? null, userId: null, userEmail: null, signInMethod: null, signedOutAt: options.now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
+      .where(eq(deviceState.id, 1))
+      .run();
+  }
 }

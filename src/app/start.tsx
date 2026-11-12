@@ -24,6 +24,7 @@ import { isCurrencyCode } from '@/lib/money';
 import { backupDeps, cloud, usingRealCloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
 import { store } from '@/services/store';
+import { askForNotificationsAfterSignIn } from '@/services/notifications';
 import { refreshPlan } from '@/data/plan';
 import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
@@ -127,6 +128,14 @@ export default function StartScreen() {
   const [accountCount, setAccountCount] = useState(0);
   const [offerBio, setOfferBio] = useState(true);
 
+  // Still signed in on an emptied phone (Delete → this phone's data): carry on from sign-in, no Welcome.
+  useEffect(() => {
+    const u = currentUser(db);
+    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
+    if (u && !hasData && !isSignedOut(db)) void online(() => afterSignIn(u));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Android back walks back through the steps; nothing to go back to past Welcome.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -173,6 +182,7 @@ export default function StartScreen() {
     switch (decideAfterSignIn({ hasData, prevUserId, userId: u.id, record, thisDeviceId })) {
       case 'home':
         clearSignedOut(db);
+        void askForNotificationsAfterSignIn();
         router.replace('/');
         return;
       case 'hasData':
@@ -191,6 +201,7 @@ export default function StartScreen() {
       if (switched) await detachPreviousBackup(backupDeps());
       clearSignedOut(db);
       setKeepSheet(false);
+      void askForNotificationsAfterSignIn();
       // The user confirmed replacing the backup in Drive.
       const on = getDeviceState(db).backupEnabled;
       if (f && on) void makeThisTheBackupPhone(backupDeps()).catch(() => {});
@@ -257,6 +268,7 @@ export default function StartScreen() {
         );
         const over = plan === 'free' && usage(db, 'accounts') > FREE_LIMITS.accounts;
         setHistory([{ k: 'welcome' }, over ? { k: 'over', header } : { k: 'restored', header }]);
+        void askForNotificationsAfterSignIn();
       } catch (e) {
         if (e instanceof WrongSecretError) {
           const n = tries + 1;
@@ -308,6 +320,7 @@ export default function StartScreen() {
       setPassword('');
       setPassword2('');
       setHistory([{ k: 'done' }]);
+      void askForNotificationsAfterSignIn();
       if (withBackup) {
         backupNow(backupDeps(), { replaceExisting: replaceOk.current })
           .then((r) => (r.ok ? undefined : toast({ message: s.failed })))
@@ -985,7 +998,7 @@ export default function StartScreen() {
                 label={s.logWithdrawal}
                 onPress={() => {
                   router.replace('/');
-                  router.push({ pathname: '/transaction/new', params: { kind: 'transfer' } });
+                  router.push({ pathname: '/accounts', params: { from: 'setup' } });
                 }}
               />
               <Button label={s.goHome} kind="secondary" onPress={() => router.replace('/')} />

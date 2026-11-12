@@ -7,8 +7,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { BottomSheet, Button, Field, Header, LinkButton, Screen, SectionLabel, SheetOption, ToggleRow } from '@/components/ui';
+import { Note } from '@/components/start/StartPage';
 import { FREE_LIMITS, usage } from '@/data/limits';
-import { deleteSarrafAccount, signOut } from '@/data/sarraf-account';
+import { deleteChosen, signOut, type DeleteChoice } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
 import { backupDeps } from '@/services/cloud';
 import { usePlan } from '@/state/plan';
@@ -49,9 +50,11 @@ export default function SettingsScreen() {
   const s = strings.settings;
   const current = useSettings();
   const { colors } = useTheme();
-  const [sheet, setSheet] = useState<'currency' | 'format' | 'theme' | 'fiscal' | 'signout' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<'currency' | 'format' | 'theme' | 'fiscal' | 'signout' | 'delete' | 'profile' | null>(null);
   const [deleteText, setDeleteText] = useState('');
-  const [deleteDrive, setDeleteDrive] = useState(false);
+  // Each part is chosen on its own (owner, Nov 12). Starts with just the account ticked.
+  const [deleting, setDeleting] = useState<DeleteChoice>({ account: true, phone: false, drive: false });
+  const openDelete = () => (setDeleteText(''), setDeleting({ account: true, phone: false, drive: false }), setSheet('delete'));
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const plan = usePlan();
@@ -70,7 +73,7 @@ export default function SettingsScreen() {
           icon="user"
           title={user?.email ?? s.notSignedIn}
           hint={user ? s.signedInWith(strings.start.methods[user.method]) : undefined}
-          onPress={() => (user ? undefined : router.push('/start'))}
+          onPress={() => (user ? setSheet('profile') : router.push('/start'))}
         />
         <Row
           icon="star"
@@ -165,7 +168,7 @@ export default function SettingsScreen() {
         <View style={{ gap: 8, marginTop: 10 }}>
           <Button label={s.signOut} kind="danger" onPress={() => setSheet('signout')} />
           <Text style={[styles.sheetNote, { color: colors.inkMuted, textAlign: 'center', paddingTop: 0 }]}>{s.signOutNote}</Text>
-          <LinkButton label={s.deleteAccount} danger onPress={() => (setDeleteText(''), setDeleteDrive(false), setSheet('delete'))} />
+          <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
         </View>
       ) : null}
 
@@ -202,35 +205,56 @@ export default function SettingsScreen() {
         </View>
       </BottomSheet>
 
-      <BottomSheet visible={sheet === 'delete'} onClose={() => setSheet(null)} title={s.deleteTitle}>
+      <BottomSheet visible={sheet === 'profile'} onClose={() => setSheet(null)} title={s.sarrafAccount}>
+        <View style={{ gap: 12 }}>
+          <View style={{ paddingHorizontal: 4, gap: 2 }}>
+            <Text style={[styles.checkTitle, { color: colors.ink }]}>{user?.email}</Text>
+            <Text style={[styles.sheetNote, { color: colors.inkMuted, paddingHorizontal: 0, paddingTop: 0 }]}>
+              {user ? s.signedInWith(strings.start.methods[user.method]) : ''}
+            </Text>
+          </View>
+          <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.accountExplain}</Text>
+          <SheetOption title={s.backup} detail={device.backupEnabled ? (device.driveEmail ?? s.backupOn) : s.backupOff} onPress={() => (setSheet(null), go('/backup'))} />
+          <SheetOption title={s.subscription} detail={plan === 'plus' ? strings.plans.plus : strings.plans.free} onPress={() => (setSheet(null), go('/plans'))} />
+          <Button label={s.signOut} kind="secondary" onPress={() => setSheet('signout')} />
+          <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={sheet === 'delete'} onClose={() => setSheet(null)} title={s.deleteWhatTitle}>
         <ScrollView style={{ maxHeight: 620 }} keyboardShouldPersistTaps="handled">
           <View style={{ gap: 12 }}>
-            <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.deleteBody}</Text>
-            {[
-              { on: true, title: s.deleteAccountItem, detail: s.deleteAccountDetail(user?.email ?? '') },
-              { on: true, title: s.deletePhoneItem, detail: s.deletePhoneDetail },
-            ].map((it) => (
-              <Check key={it.title} checked locked title={it.title} detail={it.detail} />
-            ))}
-            <Check checked={deleteDrive} title={s.deleteDriveItem} detail={s.deleteDriveDetail} onPress={() => setDeleteDrive(!deleteDrive)} />
-            <View style={[styles.note, { backgroundColor: colors.warningSoft }]}>
-              <Text style={[styles.body, { color: colors.ink, fontSize: 12 }]}>
-                <Text style={{ fontFamily: fonts.sansBold }}>{s.payingTitle}</Text>
-                {s.paying}
-              </Text>
-            </View>
+            <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.deleteWhatBody}</Text>
+            <Check
+              checked={deleting.account}
+              title={s.deleteAccountItem}
+              detail={s.deleteAccountDetail(user?.email ?? '')}
+              onPress={() => setDeleting((d) => ({ ...d, account: !d.account }))}
+            />
+            <Check checked={deleting.phone} title={s.deletePhoneItem} detail={s.deletePhoneDetail} onPress={() => setDeleting((d) => ({ ...d, phone: !d.phone }))} />
+            <Check checked={deleting.drive} title={s.deleteDriveItem} detail={s.deleteDriveDetail} onPress={() => setDeleting((d) => ({ ...d, drive: !d.drive }))} />
+            {deleting.account && !deleting.phone ? <Note tone="teal">{s.keepsPhoneData}</Note> : null}
+            {deleting.phone && !deleting.drive && !device.lastBackupAt ? <Note tone="red">{s.noBackupWarn}</Note> : null}
+            {deleting.account ? (
+              <View style={[styles.note, { backgroundColor: colors.warningSoft }]}>
+                <Text style={[styles.body, { color: colors.ink, fontSize: 12 }]}>
+                  <Text style={{ fontFamily: fonts.sansBold }}>{s.payingTitle}</Text>
+                  {s.paying}
+                </Text>
+              </View>
+            ) : null}
             <Field label={s.typeDelete} value={deleteText} onChangeText={setDeleteText} autoCapitalize="characters" placeholder="DELETE" />
             <Button
-              label={busy ? strings.backup.working : s.deleteAccount}
+              label={busy ? strings.backup.working : s.deleteButton(deleting)}
               style={{ backgroundColor: colors.expense }}
-              disabled={busy || deleteText.trim() !== 'DELETE'}
+              disabled={busy || deleteText.trim() !== 'DELETE' || !(deleting.account || deleting.phone || deleting.drive)}
               onPress={async () => {
                 setBusy(true);
                 try {
-                  await deleteSarrafAccount(backupDeps(), { deleteDriveBackup: deleteDrive, deleteFiles: deleteAllStoredFiles });
+                  await deleteChosen(backupDeps(), deleting, { deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
                   setSheet(null);
-                  toast({ message: s.deleted });
-                  router.replace('/start');
+                  toast({ message: s.deletedWhat(deleting) });
+                  if (deleting.account || deleting.phone) router.replace('/start');
                 } catch (e) {
                   toast({ message: (e as Error).message });
                 } finally {
