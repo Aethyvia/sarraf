@@ -94,3 +94,15 @@ export function splitOf(db: AppDb, transactionId: string): SplitDraft | null {
     shares: ordered.map((r) => ({ personId: r.personId, amount: r.shareAmount, percent: r.sharePercent, treat: r.isTreat })),
   };
 }
+
+/**
+ * Saving with money left to assign (Owner, Nov 12): it isn't blocked; what's
+ * left is added to your share. Works for amounts (whole = the total) and
+ * percents (whole = 100). Null when the shares add up to more than the whole.
+ */
+export function leftoverToYou(values: DecimalString[], youIndex: number, whole: DecimalString): DecimalString[] | null {
+  const left = values.reduce((rest, v) => rest.minus(dec(v || '0')), dec(whole));
+  if (left.isNegative()) return null;
+  if (left.isZero()) return values;
+  return values.map((v, i) => (i === youIndex ? toDecimalString(dec(v || '0').plus(left)) : v));
+}

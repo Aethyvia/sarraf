@@ -3,24 +3,26 @@ import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { Keypad } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { AddPeopleSheet } from '@/components/sheets/AddPeopleSheet';
 import { Initials } from '@/components/sheets/pickers';
-import { Button, Card, Header, IconButton, LinkButton, Segmented } from '@/components/ui';
-import { equalShares, percentShares, type SplitDraft, type SplitMode } from '@/data/splits';
+import { Card, Header, IconButton, LinkButton, Segmented } from '@/components/ui';
+import { equalShares, leftoverToYou, percentShares, type SplitDraft, type SplitMode } from '@/data/splits';
 import { people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { Decimal, dec, parseTypedAmount, toDecimalString, toTypedText } from '@/lib/money';
+import { expressionValue, pressKey, type CalcKey } from '@/lib/calc';
+import { Decimal, dec, formatTyped, getCurrency, toDecimalString, toTypedText } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
 
 interface Row {
   personId: string | null;
-  /** Amounts mode: typed amount. */
+  /** Amounts mode: the amount as typed on the keypad. */
   amountText: string;
-  /** Percent mode: typed percent. */
+  /** Percent mode: the percent as typed on the keypad. */
   percentText: string;
   treat: boolean;
 }
@@ -34,7 +36,9 @@ export interface SplitResult {
 /**
  * Split with people (Spec §9c). "I paid": the whole bill left your account and
  * others' shares are owed to you (a Treat owes nothing). "Someone else paid":
- * only your share becomes a debt, to the payer. Remaining to assign must reach 0.
+ * only your share becomes a debt, to the payer. Shares are edited like Charges
+ * (Owner, Nov 12): tap one, type it in the amount box above the keypad. Money
+ * left to assign doesn't block saving; it's added to your share, with a warning.
  */
 export function SplitEditor({
   visible,
@@ -67,6 +71,8 @@ export function SplitEditor({
   const [mode, setMode] = useState<SplitMode>(initial?.mode ?? 'equal');
   const [rows, setRows] = useState<Row[]>([]);
   const [sheet, setSheet] = useState<'add' | 'payer' | null>(null);
+  // The share the keypad is typing into (amounts and percent modes).
+  const [sel, setSel] = useState<number | null>(null);
 
   // Fresh state each time it opens, from the form's split.
   if (visible !== shownFor) {
@@ -77,34 +83,39 @@ export function SplitEditor({
       setMode(initial?.mode ?? 'equal');
       setRows(
         initial
-          ? initial.shares.map((sh) => ({ personId: sh.personId, amountText: toTypedText(sh.amount, numberFormat), percentText: toTypedText(sh.percent ?? '', numberFormat), treat: !!sh.treat }))
+          ? initial.shares.map((sh) => ({ personId: sh.personId, amountText: sh.amount, percentText: sh.percent ?? '', treat: !!sh.treat }))
           : [{ personId: null, amountText: '', percentText: '', treat: false }, ...(initialPayerId ? [{ personId: initialPayerId, amountText: '', percentText: '', treat: false }] : [])],
       );
+      setSel(initial && initial.mode !== 'equal' ? 0 : null);
     }
   }
 
   const other = whoPaid === 'other';
   const { total, currency } = other ? someonePaid : iPaid;
   const payerName = payerId ? (names.get(payerId) ?? '') : null;
+  const minor = getCurrency(currency).minorUnits;
+  const pct = (r: Row) => expressionValue(r.percentText, 4) ?? '0';
+  const youIndex = rows.findIndex((r) => r.personId === null);
 
   // Each row's amount for the current mode.
   const amounts: (string | null)[] = (() => {
     if (!total) return rows.map(() => null);
     if (mode === 'equal') return equalShares(total, rows.length, currency);
     if (mode === 'percent') {
-      const pcts = rows.map((r) => parseTypedAmount(r.percentText, numberFormat) ?? '0');
-      return percentShares(total, pcts, currency);
+      return percentShares(total, rows.map(pct), currency);
     }
-    return rows.map((r) => parseTypedAmount(r.amountText, numberFormat));
+    return rows.map((r) => (r.amountText ? expressionValue(r.amountText, minor) : '0'));
   })();
   const remaining =
     mode === 'percent'
-      ? toDecimalString(rows.reduce((left, r) => left.minus(dec(parseTypedAmount(r.percentText, numberFormat) ?? '0')), new Decimal(100)))
+      ? toDecimalString(rows.reduce((left, r) => left.minus(dec(pct(r))), new Decimal(100)))
       : total
         ? toDecimalString(amounts.reduce((left, a) => left.minus(dec(a ?? '0')), dec(total)))
         : null;
   const hasOthers = rows.some((r) => r.personId !== null);
-  const canSave = !!total && hasOthers && remaining !== null && dec(remaining).isZero() && amounts.every((a) => a !== null) && (!other || !!payerId);
+  // What's left goes to your share on save; more than the total can't be saved.
+  const leftover = remaining !== null && dec(remaining).gt(0) ? remaining : null;
+  const canSave = !!total && hasOthers && remaining !== null && !dec(remaining).isNegative() && amounts.every((a) => a !== null) && (!other || !!payerId);
 
   const update = (i: number, change: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...change } : r)));
   const setPayer = (id: string) => {
@@ -114,19 +125,27 @@ export function SplitEditor({
     setRows((rs) => (rs.some((r) => r.personId === id) ? rs : [...rs, { personId: id, amountText: '', percentText: '', treat: false }]));
   };
   const save = () => {
-    if (!canSave) return;
+    if (!canSave || !total) return;
+    const percents = mode === 'percent' ? (leftoverToYou(rows.map(pct), youIndex, '100') ?? rows.map(pct)) : null;
+    const finalAmounts = percents ? percentShares(total, percents, currency) : mode === 'amounts' ? (leftoverToYou(amounts as string[], youIndex, total) ?? amounts) : amounts;
     onSave({
       payerId: other ? payerId : null,
       split: {
         mode,
         shares: rows.map((r, i) => ({
           personId: r.personId,
-          amount: amounts[i]!,
-          percent: mode === 'percent' ? (parseTypedAmount(r.percentText, numberFormat) ?? '0') : null,
+          amount: finalAmounts[i]!,
+          percent: percents ? percents[i] : null,
           treat: !other && r.personId !== null && r.treat,
         })),
       },
     });
+  };
+
+  const typeKey = (key: CalcKey) => {
+    if (sel === null) return;
+    if (mode === 'amounts') update(sel, { amountText: pressKey(rows[sel].amountText, key, minor) });
+    else update(sel, { percentText: pressKey(rows[sel].percentText, key, 4) });
   };
 
   const rowDetail = (r: Row): string => {
@@ -143,7 +162,7 @@ export function SplitEditor({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Header title={s.title} onBack={onClose} backIcon="close" actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />} />
 
           <View>
@@ -187,8 +206,9 @@ export function SplitEditor({
             value={mode}
             onChange={(m) => {
               // Start the new mode from the current shares.
-              if (m === 'amounts') setRows((rs) => rs.map((r, i) => ({ ...r, amountText: amounts[i] ? toTypedText(amounts[i], numberFormat) : r.amountText })));
+              if (m === 'amounts') setRows((rs) => rs.map((r, i) => ({ ...r, amountText: amounts[i] ?? r.amountText })));
               setMode(m);
+              setSel(m === 'equal' ? null : (sel ?? 0));
             }}
           />
           <Text style={[styles.hint, { color: colors.inkMuted }]}>{s.modesHint(other ? payerName : null, currency)}</Text>
@@ -222,27 +242,19 @@ export function SplitEditor({
                       ) : null}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                      {mode === 'amounts' ? (
-                        <AmountTextInput small wrapStyle={{ flexGrow: 0 }}
-                          value={r.amountText}
-                          onChangeText={(t) => update(i, { amountText: t })}
-                          keyboardType="numeric"
-                          placeholder="0.00"
-                          placeholderTextColor={colors.inkMuted}
-                          style={[styles.input, { backgroundColor: colors.filled, color: colors.ink }]}
-                        />
-                      ) : mode === 'percent' ? (
-                        <View style={styles.pctRow}>
-                          <AmountTextInput small wrapStyle={{ flexGrow: 0 }}
-                            value={r.percentText}
-                            onChangeText={(t) => update(i, { percentText: t })}
-                            keyboardType="numeric"
-                            placeholder="0"
-                            placeholderTextColor={colors.inkMuted}
-                            style={[styles.input, styles.pctInput, { backgroundColor: colors.filled, color: colors.ink }]}
-                          />
-                          <Text style={[styles.pdetail, { color: colors.inkMuted }]}>%</Text>
-                        </View>
+                      {mode !== 'equal' ? (
+                        <Pressable
+                          onPress={() => setSel(i)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${name} share`}
+                          style={[styles.cell, { backgroundColor: sel === i ? colors.accentSoft : colors.filled, borderColor: sel === i ? colors.accent : 'transparent' }]}
+                        >
+                          <Text style={[styles.cellText, { color: colors.ink }]} numberOfLines={1}>
+                            {mode === 'amounts'
+                              ? r.amountText ? formatTyped(r.amountText, currency, numberFormat) : '0'
+                              : `${r.percentText ? formatTyped(r.percentText, currency, numberFormat) : '0'}%`}
+                          </Text>
+                        </Pressable>
                       ) : null}
                       {mode !== 'amounts' && amounts[i] ? (
                         <Money
@@ -277,15 +289,36 @@ export function SplitEditor({
             {remaining === null ? null : mode === 'percent' ? (
               <Text style={[styles.remainingValue, { color: dec(remaining).isZero() ? colors.income : colors.warning }]}>{toTypedText(remaining, numberFormat)}%</Text>
             ) : (
-              <Money value={remaining} currency={currency} allowCompact={false} style={[styles.remainingValue, { color: dec(remaining).isZero() ? colors.income : colors.warning }]} />
+              <Money value={remaining} currency={currency} allowCompact={false} style={[styles.remainingValue, { color: dec(remaining).isZero() ? colors.income : dec(remaining).isNegative() ? colors.expense : colors.warning }]} />
             )}
           </View>
+          {leftover ? (
+            <Text style={[styles.hint, { color: colors.warning }]}>
+              {mode === 'percent' ? s.leftoverPercent(toTypedText(leftover, numberFormat)) : s.leftoverAmount}
+            </Text>
+          ) : remaining !== null && dec(remaining).isNegative() ? (
+            <Text style={[styles.hint, { color: colors.expense }]}>{s.overAssigned}</Text>
+          ) : null}
 
           <Text style={[styles.hint, { color: colors.inkMuted, fontSize: 11.5, lineHeight: 17 }]}>{other ? s.explainSomeone(payerName ?? '…') : s.explainIPaid}</Text>
 
-          <Button label={s.save} disabled={!canSave} onPress={save} />
           {initial ? <LinkButton danger label={s.removeSplit} onPress={onRemove} /> : null}
         </ScrollView>
+
+        {mode !== 'equal' && sel !== null && rows[sel] ? (
+          <View style={styles.dock}>
+            <AmountBox
+              label={(rows[sel].personId === null ? s.yourShareLabel : s.theirShareLabel(names.get(rows[sel].personId!) ?? '')).toUpperCase()}
+              expression={mode === 'amounts' ? rows[sel].amountText : rows[sel].percentText}
+              value={mode === 'amounts' ? expressionValue(rows[sel].amountText, minor) : expressionValue(rows[sel].percentText, 4)}
+              currency={currency}
+              chipText={mode === 'percent' ? '%' : undefined}
+              onBackspace={() => typeKey('back')}
+              onClear={() => typeKey('clear')}
+            />
+            <Keypad onKey={typeKey} />
+          </View>
+        ) : null}
 
         <AddPeopleSheet
           visible={sheet === 'add'}
@@ -326,9 +359,9 @@ const styles = StyleSheet.create({
   pname: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   pdetail: { fontFamily: fonts.sans, fontSize: 10.5 },
   pamount: { fontFamily: fonts.monoSemiBold, fontSize: 14.5 },
-  input: { fontFamily: fonts.mono, fontSize: 14, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6, minWidth: 96, textAlign: 'right' },
-  pctRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  pctInput: { minWidth: 60 },
+  cell: { borderRadius: 9, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 6, minWidth: 96, alignItems: 'flex-end' },
+  cellText: { fontFamily: fonts.mono, fontSize: 14 },
+  dock: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: 8 },
   treat: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   treatLabel: { fontFamily: fonts.sansBold, fontSize: 10.5 },
   remaining: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },

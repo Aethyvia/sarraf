@@ -27,6 +27,7 @@ export function AmountBox({
   size = 'large',
   footer,
   testID,
+  chipText,
 }: {
   label?: ReactNode;
   /** The typed expression ("1,04,000+231.75" as typed, calc symbols). */
@@ -42,6 +43,8 @@ export function AmountBox({
   size?: 'large' | 'small';
   footer?: ReactNode;
   testID?: string;
+  /** Shown on the chip instead of the currency (e.g. "%" for percent shares). */
+  chipText?: string;
 }) {
   const { colors } = useTheme();
   const { numberFormat } = useSettings();
@@ -68,7 +71,7 @@ export function AmountBox({
         </Text>
       ) : null}
       <View style={styles.row}>
-        <CurrencyChip currency={currency} onPress={onCurrency} />
+        <CurrencyChip currency={chipText ?? currency} onPress={onCurrency} />
         <Text style={[styles.amount, { fontSize: big, color: shown ? colors.ink : colors.inkMuted }]} numberOfLines={1} adjustsFontSizeToFit>
           {shown || '0'}
         </Text>
