@@ -379,6 +379,11 @@ export const personEntries = sqliteTable(
     date: text('date').notNull(),
     /** The optional note from Mark as settled. */
     note: text('note'),
+    /**
+     * Settling one currency against another (Decided Nov 12): both halves share
+     * this id, so removing one removes both. E.g. John's $30.40 against your ₨8,450.
+     */
+    offsetGroup: text('offset_group'),
     ...timestamps,
   },
   (t) => [

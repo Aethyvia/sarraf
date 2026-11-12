@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { personEntries, splitShares, transactions } from '@/db/schema';
 import { accountBalance } from '../balances';
 import { addMoneyBack, refundableLeft, writeOff } from '../money-back';
-import { expectedBack, markSettled, personBalances, personHistory, settleInOtherCurrency, sharesKeptByRefund } from '../owing';
+import { deleteSettlement, expectedBack, markSettled, offsetBalances, personBalances, personHistory, settleInOtherCurrency, sharesKeptByRefund } from '../owing';
 import { confirmTransaction } from '../review';
 import { equalShares, percentShares, remainingToAssign } from '../splits';
 import { deleteTransaction, restoreTransactions, softDeleteTransactions } from '../transaction-ops';
@@ -199,6 +199,36 @@ describe('a person’s balance', () => {
     expect(bad({ amount: '0' })).toThrow(expect.objectContaining({ code: 'invalid_amount' }));
     expect(bad({ accountId: w.usd })).toThrow(expect.objectContaining({ code: 'same_currency' }));
     expect(bad({ currency: 'EUR' })).toThrow(expect.objectContaining({ code: 'nothing_owed' }));
+  });
+
+  it('settles one currency against another: no account moves, both balances move toward zero', async () => {
+    const w = await world();
+    w.save({ kind: 'transfer', accountId: w.usd, toPersonId: w.john, amount: '250' }); // John owes you $250
+    w.save({ fromPersonId: w.john, amount: '8450', currency: 'PKR' }); // you owe John ₨8,450
+    // ₨8,450 set against $30.40 of the loan (278.00).
+    const group = offsetBalances(w.db, { personId: w.john, a: { currency: 'PKR', amount: '8450' }, b: { currency: 'USD', amount: '30.40' } }, TODAY);
+    expect(w.balance(w.john)).toEqual({ USD: '219.6', PKR: '0' });
+    expect(accountBalance(w.db, w.usd, TODAY)).toBe('750');
+    expect(accountBalance(w.db, w.pkr, TODAY)).toBe('100000');
+
+    // Removing either half removes both.
+    const half = w.db.select().from(personEntries).where(eq(personEntries.offsetGroup, group)).all();
+    expect(half).toHaveLength(2);
+    deleteSettlement(w.db, half[1].id);
+    expect(w.balance(w.john)).toEqual({ USD: '250', PKR: '-8450' });
+  });
+
+  it('refuses an offset when both balances owe the same way, or it’s more than either balance', async () => {
+    const w = await world();
+    w.save({ kind: 'transfer', accountId: w.usd, toPersonId: w.john, amount: '250' });
+    w.save({ kind: 'transfer', accountId: w.pkr, toPersonId: w.john, amount: '1000', currency: 'PKR' }); // John owes in both
+    expect(() => offsetBalances(w.db, { personId: w.john, a: { currency: 'PKR', amount: '1000' }, b: { currency: 'USD', amount: '3.6' } }, TODAY)).toThrow(
+      expect.objectContaining({ code: 'same_direction' }),
+    );
+    w.save({ fromPersonId: w.john, amount: '2000', currency: 'PKR' }); // now you owe ₨1,000
+    expect(() => offsetBalances(w.db, { personId: w.john, a: { currency: 'PKR', amount: '1001' }, b: { currency: 'USD', amount: '3.6' } }, TODAY)).toThrow(
+      expect.objectContaining({ code: 'invalid_amount' }),
+    );
   });
 
   it('tagging someone never creates an amount owed', async () => {

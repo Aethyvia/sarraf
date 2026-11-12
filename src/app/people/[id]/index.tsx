@@ -51,9 +51,14 @@ export default function PersonScreen() {
           .map((r) => r.parentId!),
       );
       const accountNames = new Map(db.select({ id: accounts.id, name: accounts.name }).from(accounts).all().map((a) => [a.id, a.name]));
-      const history = personHistory(db, id, today).map((h) => {
+      const raw = personHistory(db, id, today);
+      // An offset's two halves share a group: each names the currency it was set against.
+      const groupCurrencies = new Map<string, string[]>();
+      for (const h of raw) if (h.entry.offsetGroup) groupCurrencies.set(h.entry.offsetGroup, [...(groupCurrencies.get(h.entry.offsetGroup) ?? []), h.entry.currency]);
+      const history = raw.map((h) => {
         const t = h.transaction;
-        let title: string = s.lines.settled;
+        const otherHalf = h.entry.offsetGroup ? groupCurrencies.get(h.entry.offsetGroup)?.find((c) => c !== h.entry.currency) : undefined;
+        let title: string = otherHalf ? s.lines.setAgainst(otherHalf) : s.lines.settled;
         let detail = h.entry.note ?? '';
         if (t) {
           title = rowTitle(toListRowFromDb(db, t));

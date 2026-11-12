@@ -7,6 +7,7 @@ import m0002 from './0002_budget_alerted.sql';
 import m0003 from './0003_device_state.sql';
 import m0004 from './0004_sign_out_and_plan.sql';
 import m0005 from './0005_person_currency.sql';
+import m0006 from './0006_offset_group.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0001,
 m0002,
 m0003,
 m0004,
-m0005
+m0005,
+m0006
     }
   }
   

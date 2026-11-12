@@ -155,8 +155,64 @@ export function settleInOtherCurrency(
   }).id;
 }
 
-/** Removes a Mark as settled entry (from the person page's history). */
+/**
+ * Settles one balance against another (Decided Nov 12): John owes you $250 and
+ * you owe him ₨8,450, so ₨8,450 is set against $30.40 of his loan at 278.00.
+ * No account moves; both balances move toward zero by the amounts given, as two
+ * settlement entries sharing one offset group. The two currencies must owe in
+ * opposite directions.
+ */
+export function offsetBalances(
+  db: AppDb,
+  input: { personId: string; a: { currency: string; amount: DecimalString }; b: { currency: string; amount: DecimalString }; note?: string | null; date?: string },
+  today: string = todayDate(),
+): string {
+  if (input.a.currency === input.b.currency) throw new DataError('same_currency', 'Pick two different currencies');
+  for (const side of [input.a, input.b]) {
+    if (!isDecimalString(side.amount) || dec(side.amount).lte(0)) throw new DataError('invalid_amount', 'Enter an amount above zero');
+  }
+  return db.transaction((tx) => {
+    if (!tx.select({ id: people.id }).from(people).where(eq(people.id, input.personId)).get()) throw new DataError('not_found', 'No person');
+    const balances = personBalances(tx, input.personId, today);
+    const balA = dec(balances.get(input.a.currency) ?? '0');
+    const balB = dec(balances.get(input.b.currency) ?? '0');
+    if (balA.isZero() || balB.isZero()) throw new DataError('nothing_owed', 'Nothing to settle in that currency');
+    // One must be owed to you and the other owed by you, or there is nothing to set against.
+    if (balA.isPositive() === balB.isPositive()) throw new DataError('same_direction', 'Both balances owe the same way');
+    if (dec(input.a.amount).gt(balA.abs()) || dec(input.b.amount).gt(balB.abs())) throw new DataError('invalid_amount', 'That’s more than the balance');
+    const group = newId();
+    const date = input.date ?? today;
+    const note = input.note?.trim() || null;
+    for (const [side, bal] of [
+      [input.a, balA],
+      [input.b, balB],
+    ] as const) {
+      tx.insert(personEntries)
+        .values({
+          id: newId(),
+          personId: input.personId,
+          transactionId: null,
+          source: 'settlement',
+          currency: side.currency,
+          // Toward zero on both sides.
+          amount: toDecimalString(bal.isPositive() ? dec(side.amount).negated() : dec(side.amount)),
+          date,
+          note,
+          offsetGroup: group,
+        })
+        .run();
+    }
+    return group;
+  });
+}
+
+/** Removes a Mark as settled entry (from the person page's history); an offset goes with its other half. */
 export function deleteSettlement(db: AppDb, entryId: string): void {
+  const row = db.select({ group: personEntries.offsetGroup }).from(personEntries).where(eq(personEntries.id, entryId)).get();
+  if (row?.group) {
+    db.delete(personEntries).where(and(eq(personEntries.offsetGroup, row.group), eq(personEntries.source, 'settlement'))).run();
+    return;
+  }
   db.delete(personEntries).where(and(eq(personEntries.id, entryId), eq(personEntries.source, 'settlement'))).run();
 }
 

@@ -58,6 +58,7 @@ export const strings = {
     invalid_split: 'The shares need to add up to the total.',
     nothing_owed: 'There’s nothing to settle in that currency.',
     same_currency: 'That account is in the same currency — use the usual Mark as settled.',
+    same_direction: 'Both balances owe the same way, so there’s nothing to set against.',
     unknown: 'Something went wrong. Nothing was changed.',
   },
   settings: {
@@ -838,10 +839,11 @@ export const strings = {
       refundedShareKept: 'refunded, share unchanged',
       paidBy: (name: string) => `paid by ${name}`,
       settled: 'Marked as settled',
+      setAgainst: (currency: string) => `Set against ${currency}`,
     },
     share: 'Share',
     removeSettlement: 'Remove this settlement',
-    removeSettlementDetail: (name: string) => `${name}’s balance goes back to what it was before. Nothing else changes.`,
+    removeSettlementDetail: (name: string) => `${name}’s balance goes back to what it was before. Nothing else changes. If it was set against another currency, that half goes too.`,
   },
   split: {
     title: 'Split with people',
@@ -1493,6 +1495,16 @@ export const strings = {
     done: 'Marked as settled',
     pickCurrency: 'Which currency?',
     // Paid in another currency (Decided Nov 12)
+    how: 'HOW',
+    howOutside: 'Settled outside Sarraf',
+    howOutsideDetail: (name: string) => `Paid in cash, or you let it go. Only ${name}’s balance changes.`,
+    howOffset: (currency: string) => `Against the ${currency} balance`,
+    // The other balance owes the other way: when they owe you here, you owe them there, and back.
+    howOffsetDetailYouOweThem: (name: string, currency: string) => `You owe ${name} in ${currency}: set that against this. No money moves.`,
+    howOffsetDetailTheyOweYou: (name: string, currency: string) => `${name} owes you in ${currency}: set that against this. No money moves.`,
+    offsetRate: (from: string, to: string) => `RATE · 1 ${from} = ? ${to}`,
+    offsetMarket: 'Today’s market rate. Type the rate you agreed if it’s different.',
+    explainOffset: 'Both balances move toward zero at this rate. None of your accounts move. Removing it from the history removes both halves.',
     otherCurrency: 'Paid in another currency',
     subtitleOther: 'The money moves in one of your accounts; the balance clears in its own currency.',
     otherCurrencyDetail: (name: string) => `${name} paid, or you paid ${name}, in a different currency. The money moves in that account.`,

@@ -18,7 +18,8 @@ export type DataErrorCode =
   | 'system_category'
   | 'invalid_split'
   | 'nothing_owed'
-  | 'same_currency';
+  | 'same_currency'
+  | 'same_direction';
 
 export class DataError extends Error {
   constructor(

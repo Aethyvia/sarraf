@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AmountTextInput } from '@/components/AmountTextInput';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
-import { BottomSheet, Button, Field, IconChip, Segmented, SelectorRow, SheetOption, ToggleRow } from '@/components/ui';
-import { markSettled, settleInOtherCurrency } from '@/data/owing';
+import { BottomSheet, Button, Field, IconChip, Segmented, SelectorRow, SheetOption } from '@/components/ui';
+import { markSettled, offsetBalances, settleInOtherCurrency } from '@/data/owing';
+import { marketRate } from '@/data/rates';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { accounts as accountsTable } from '@/db/schema';
 import { useLive } from '@/state/live';
@@ -14,7 +15,7 @@ import { isNull } from 'drizzle-orm';
 import { db } from '@/db/client';
 import type { people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { dec, parseTypedAmount, toDecimalString } from '@/lib/money';
+import { convert, dec, parseTypedAmount, roundToMinor, toDecimalString } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
@@ -38,6 +39,8 @@ export function SettleSheet({
   const s = strings.settle;
   const { colors } = useTheme();
   const { numberFormat } = useSettings();
+  // The sheet scrolls once its choices outgrow the screen.
+  const { height } = useWindowDimensions();
   const toast = useToast();
   const action = useAction();
   const open = balances.filter((b) => !dec(b.balance).isZero());
@@ -46,14 +49,25 @@ export function SettleSheet({
   const [mode, setMode] = useState<'full' | 'part'>('full');
   const [text, setText] = useState('');
   const [note, setNote] = useState('');
-  // Paid in another currency: which account the money went into (or came out of), and how much.
-  const [other, setOther] = useState(false);
+  // How it was settled: outside Sarraf (balance only), paid in another currency (money moves),
+  // or set against a balance in another currency that owes the other way (Decided Nov 12).
+  const [how, setHow] = useState<'outside' | 'paid' | 'offset'>('outside');
+  const other = how === 'paid';
+  const [againstCurrency, setAgainstCurrency] = useState<string | null>(null);
+  const [rateText, setRateText] = useState('');
   const [accountId, setAccountId] = useState<string | null>(null);
   const [paidText, setPaidText] = useState('');
   const [pickingAccount, setPickingAccount] = useState(false);
   const allAccounts = useLive((d) => d.select().from(accountsTable).where(isNull(accountsTable.archivedAt)).orderBy(accountsTable.rank).all());
 
   const chosen = open.find((b) => b.currency === currency) ?? open[0];
+  // Today's market rate between the two balances, as the starting rate for "Against …" (looked up before any early return).
+  const againstPick = chosen
+    ? (open.filter((b) => b.currency !== chosen.currency && dec(b.balance).isPositive() !== dec(chosen.balance).isPositive()).find((b) => b.currency === againstCurrency) ??
+      open.find((b) => b.currency !== chosen.currency && dec(b.balance).isPositive() !== dec(chosen.balance).isPositive()) ??
+      null)
+    : null;
+  const market = useLive((d) => (chosen && againstPick ? marketRate(d, chosen.currency, againstPick.currency) : null), [chosen?.currency, againstPick?.currency]);
   if (!chosen) return null;
   const owesYou = dec(chosen.balance).isPositive();
   const full = toDecimalString(dec(chosen.balance).abs());
@@ -68,23 +82,59 @@ export function SettleSheet({
   // The rate they got, shown like any conversion: paid ÷ what it clears.
   // Like rates elsewhere: at least 2 decimals, at most 6, no trailing zeros past 2 (278.00, 0.003597).
   const rate = valid && paidValid ? dec(paid!).div(dec(amount!)).toDecimalPlaces(6).toFixed(Math.max(2, Math.min(6, dec(paid!).div(dec(amount!)).toDecimalPlaces(6).decimalPlaces()))) : null;
-  const canSave = other ? valid && paidValid : valid;
+  // Against another balance: the currencies owing the other way, the rate, and how much of each clears.
+  const opposite = open.filter((b) => b.currency !== chosen.currency && dec(b.balance).isPositive() !== owesYou);
+  const against = opposite.find((b) => b.currency === againstCurrency) ?? opposite[0] ?? null;
+  // Rates read from the stronger currency (1 EUR = 307.75 PKR, not 1 PKR = 0.0032 EUR): flip when the market rate is below 1.
+  const flipped = !!market && dec(market.rate).lt(1);
+  const shownMarket = market ? (flipped ? dec('1').div(dec(market.rate)).toDecimalPlaces(2).toFixed(2) : market.rate) : null;
+  const typedRate = rateText.trim() ? parseTypedAmount(rateText, numberFormat) : null;
+  const offsetRate = typedRate
+    ? flipped
+      ? dec(typedRate).gt(0)
+        ? toDecimalString(dec('1').div(dec(typedRate)))
+        : null
+      : typedRate
+    : (market?.rate ?? null);
+  const offset = (() => {
+    if (how !== 'offset' || !against || !offsetRate || dec(offsetRate).lte(0) || !valid) return null;
+    const room = dec(against.balance).abs();
+    // As much as asked, but never more than the other balance: then the other side clears in full.
+    let clears = dec(amount!);
+    let other = dec(convert(amount!, offsetRate, against.currency));
+    if (other.gt(room)) {
+      other = room;
+      clears = dec(roundToMinor(toDecimalString(room.div(dec(offsetRate))), chosen.currency));
+    }
+    if (clears.lte(0) || other.lte(0)) return null;
+    return { clears: toDecimalString(clears), other: toDecimalString(other) };
+  })();
+  const afterOffset = (b: { balance: string }, by: string | undefined) =>
+    by ? toDecimalString(dec(b.balance).isPositive() ? dec(b.balance).minus(dec(by)) : dec(b.balance).plus(dec(by))) : b.balance;
+  const canSave = how === 'paid' ? valid && paidValid : how === 'offset' ? !!offset : valid;
 
   const close = () => {
     setText('');
     setNote('');
     setMode('full');
     setCurrency(null);
-    setOther(false);
+    setHow('outside');
+    setAgainstCurrency(null);
+    setRateText('');
     setAccountId(null);
     setPaidText('');
     onClose();
   };
   const save = () => {
     if (!canSave) return;
-    const done = other
-      ? action.run(() => settleInOtherCurrency(db, { personId: person.id, currency: chosen.currency, clears: amount!, accountId: account!.id, amount: paid!, note }))
-      : action.run(() => markSettled(db, { personId: person.id, currency: chosen.currency, amount: amount!, note }));
+    const done =
+      how === 'paid'
+        ? action.run(() => settleInOtherCurrency(db, { personId: person.id, currency: chosen.currency, clears: amount!, accountId: account!.id, amount: paid!, note }))
+        : how === 'offset'
+          ? action.run(() =>
+              offsetBalances(db, { personId: person.id, a: { currency: chosen.currency, amount: offset!.clears }, b: { currency: against!.currency, amount: offset!.other }, note }),
+            )
+          : action.run(() => markSettled(db, { personId: person.id, currency: chosen.currency, amount: amount!, note }));
     if (done) {
       toast({ message: s.done });
       close();
@@ -111,11 +161,11 @@ export function SettleSheet({
           ))}
         </View>
       ) : (
-        <View style={{ gap: 14 }}>
+        <ScrollView style={{ maxHeight: height * 0.82 }} contentContainerStyle={{ gap: 14, paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
           {action.ui}
           <View>
             <Text style={[styles.title, { color: colors.ink }]}>{s.title(person.name)}</Text>
-            <Text style={[styles.sub, { color: colors.inkMuted }]}>{other ? s.subtitleOther : s.subtitle}</Text>
+            <Text style={[styles.sub, { color: colors.inkMuted }]}>{how === 'paid' ? s.subtitleOther : s.subtitle}</Text>
           </View>
           <View>
             <Text style={[styles.label, { color: colors.inkMuted }]}>{s.currency}</Text>
@@ -146,20 +196,59 @@ export function SettleSheet({
               </View>
             </View>
           ) : null}
-          <View style={styles.afterRow}>
+          <View style={[styles.afterRow, how === 'offset' && { display: 'none' }]}>
             <Text style={[styles.sub, { color: colors.inkMuted }]}>{owesYou ? s.stillOwes(person.name) : s.youStillOwe}</Text>
  <Money value={after} currency={chosen.currency} sign={dec(after).isZero() ? 'auto' : 'always'} style={[styles.mono, { fontSize: 12, color: tone(after) }]} />
           </View>
-          {otherAccounts.length ? (
-            <ToggleRow
-              title={s.otherCurrency}
-              detail={s.otherCurrencyDetail(person.name)}
-              value={other}
-              onChange={(v) => {
-                setOther(v);
-                if (v && !accountId) setAccountId(otherAccounts[0]?.id ?? null);
-              }}
-            />
+          <View>
+            <Text style={[styles.label, { color: colors.inkMuted }]}>{s.how}</Text>
+            <SheetOption title={s.howOutside} detail={s.howOutsideDetail(person.name)} selected={how === 'outside'} onPress={() => setHow('outside')} />
+            {otherAccounts.length ? (
+              <SheetOption
+                title={s.otherCurrency}
+                detail={s.otherCurrencyDetail(person.name)}
+                selected={how === 'paid'}
+                onPress={() => {
+                  setHow('paid');
+                  if (!accountId) setAccountId(otherAccounts[0]?.id ?? null);
+                }}
+              />
+            ) : null}
+            {opposite.length ? (
+              <SheetOption
+                title={s.howOffset(against!.currency)}
+                detail={owesYou ? s.howOffsetDetailYouOweThem(person.name, against!.currency) : s.howOffsetDetailTheyOweYou(person.name, against!.currency)}
+                selected={how === 'offset'}
+                onPress={() => setHow('offset')}
+              />
+            ) : null}
+          </View>
+          {how === 'offset' && against ? (
+            <>
+              {opposite.length > 1 ? (
+                <Segmented options={opposite.map((b) => ({ value: b.currency, label: b.currency }))} value={against.currency} onChange={(c) => (setAgainstCurrency(c), setRateText(''))} />
+              ) : null}
+              <Field
+                label={flipped ? s.offsetRate(against.currency, chosen.currency) : s.offsetRate(chosen.currency, against.currency)}
+                value={rateText}
+                onChangeText={setRateText}
+                keyboardType="decimal-pad"
+                placeholder={shownMarket ?? '0.00'}
+              />
+              {market && !rateText.trim() ? <Text style={[styles.small, { color: colors.inkMuted, marginTop: -8 }]}>{s.offsetMarket}</Text> : null}
+              {offset ? (
+                <View style={{ gap: 4 }}>
+                  <View style={styles.afterRow}>
+                    <Text style={[styles.sub, { color: colors.inkMuted }]}>{s.balanceAfter(person.name, chosen.currency)}</Text>
+                    <Money value={afterOffset(chosen, offset.clears)} currency={chosen.currency} sign={dec(afterOffset(chosen, offset.clears)).isZero() ? 'auto' : 'always'} style={[styles.mono, { fontSize: 12, color: tone(afterOffset(chosen, offset.clears)) }]} />
+                  </View>
+                  <View style={styles.afterRow}>
+                    <Text style={[styles.sub, { color: colors.inkMuted }]}>{s.balanceAfter(person.name, against.currency)}</Text>
+                    <Money value={afterOffset(against, offset.other)} currency={against.currency} sign={dec(afterOffset(against, offset.other)).isZero() ? 'auto' : 'always'} style={[styles.mono, { fontSize: 12, color: tone(afterOffset(against, offset.other)) }]} />
+                  </View>
+                </View>
+              ) : null}
+            </>
           ) : null}
           {other ? (
             <>
@@ -188,13 +277,17 @@ export function SettleSheet({
             </>
           ) : null}
           <Field label={s.note.replace(' (OPTIONAL)', '')} optional value={note} onChangeText={setNote} placeholder={s.notePlaceholder} />
-          <Text style={[styles.small, { color: colors.inkMuted }]}>{other ? s.explainOther(person.name) : s.explain(person.name)}</Text>
+          <Text style={[styles.small, { color: colors.inkMuted }]}>{how === 'paid' ? s.explainOther(person.name) : how === 'offset' ? s.explainOffset : s.explain(person.name)}</Text>
           <Button
-            label={valid ? parts(s.save(<Money value={amount!} currency={chosen.currency} style={[styles.mono, { fontSize: 13.5, color: colors.onAccent }]} />)) : strings.people.markSettled}
+            label={
+              valid
+                ? parts(s.save(<Money value={how === 'offset' && offset ? offset.clears : amount!} currency={chosen.currency} style={[styles.mono, { fontSize: 13.5, color: colors.onAccent }]} />))
+                : strings.people.markSettled
+            }
             disabled={!canSave}
             onPress={save}
           />
-        </View>
+        </ScrollView>
       )}
       <PickerSheet
         visible={pickingAccount}

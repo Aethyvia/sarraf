@@ -1,0 +1,1 @@
+ALTER TABLE `person_entries` ADD `offset_group` text;
