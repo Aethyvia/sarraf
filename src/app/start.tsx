@@ -12,8 +12,9 @@ import { AccountsStep, CurrencyStep } from '@/components/start/SetupSteps';
 import { Note, Spinner, StartPage } from '@/components/start/StartPage';
 import { BottomSheet, Button, Card, Field, LinkButton, ToggleRow } from '@/components/ui';
 import { WrongSecretError, isRecoveryKeyShape, normalizeRecoveryKey } from '@/lib/backup-crypto';
-import { applyRestore, backupNow, currentUser, getDeviceState, lookInDrive, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
-import { openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
+import { applyRestore, backupNow, currentUser, detachPreviousBackup, getDeviceState, lookInDrive, makeThisTheBackupPhone, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
+import { backupCounts, openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
+import { decideAfterSignIn, isAccountSwitch } from '@/data/sign-in';
 import { FREE_LIMITS, usage } from '@/data/limits';
 import { finishSetup, suggestedAccounts, type SuggestedAccount } from '@/data/setup';
 import { db } from '@/db/client';
@@ -27,6 +28,7 @@ import { refreshPlan } from '@/data/plan';
 import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
 import { settings } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { fonts, useTheme } from '@/theme';
@@ -44,8 +46,8 @@ type Step =
   | { k: 'email' }
   | { k: 'code'; email: string }
   | { k: 'offline'; retry: () => void }
-  | { k: 'used' }
-  | { k: 'hasData'; found: Found | null }
+  | { k: 'hasData'; found: Found | null; switched: boolean }
+  | { k: 'driveHas'; found: Found }
   | { k: 'finding'; another?: boolean; forNew?: boolean }
   | { k: 'noBackup'; driveEmail: string }
   | { k: 'refused'; forNew: boolean }
@@ -107,6 +109,12 @@ export default function StartScreen() {
   const [skipSheet, setSkipSheet] = useState(false);
   const [freshSheet, setFreshSheet] = useState(false);
   const [overSheet, setOverSheet] = useState(false);
+  const [keepSheet, setKeepSheet] = useState(false);
+  const [eraseText, setEraseText] = useState('');
+  // Asked for "I already use Sarraf": with nothing on record, look in Drive rather than start setup.
+  const returning = useRef(false);
+  // The user chose to replace the backup in Drive (Start fresh, Replace it, Keep): the first backup may.
+  const replaceOk = useRef(false);
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const keysReady = useRef<Promise<void> | null>(null);
   const [checkGroups] = useState(() => {
@@ -146,25 +154,48 @@ export default function StartScreen() {
     }
   };
 
+  /**
+   * After sign-in (council, Nov 12): check, then ask only about a real conflict.
+   * Who this phone's data belonged to is read BEFORE recording the new sign-in,
+   * so a different account never quietly takes over this phone's data.
+   */
   const afterSignIn = async (u: CloudUser) => {
+    const prevUserId = getDeviceState(db).userId ?? getDeviceState(db).signedOutUserId ?? null;
+    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
+    const thisDeviceId = db.select({ id: settings.deviceId }).from(settings).where(eq(settings.id, 1)).get()!.id;
+    const record = await cloud.getRecord(u);
     rememberSignIn(db, u);
     setUser(u);
     setSheet(null);
-    void refreshPlan(db, cloud, u, new Date()).catch(() => {});
-    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
-    // Signing back in on a phone that still has its data: carry on, no restore or setup.
-    if (isSignedOut(db) && hasData) {
-      clearSignedOut(db);
-      router.replace('/');
-      return;
-    }
-    const record = await cloud.getRecord(u);
+    // The plan is known before anything asks about limits (after the sequence, on Home).
+    await refreshPlan(db, cloud, u, new Date()).catch(() => {});
     const found = record ? { driveEmail: record.driveEmail, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } : null;
-    // Owner, Nov 12: never run new-user setup over data that's already on this phone. Keep it, restore over it, or start over.
-    if (hasData) go({ k: 'hasData', found });
-    else if (found) go({ k: 'found', found });
-    else startSetup();
+    switch (decideAfterSignIn({ hasData, prevUserId, userId: u.id, record, thisDeviceId })) {
+      case 'home':
+        clearSignedOut(db);
+        router.replace('/');
+        return;
+      case 'hasData':
+        return go({ k: 'hasData', found, switched: isAccountSwitch({ prevUserId, userId: u.id }) });
+      case 'found':
+        return go({ k: 'found', found: found! });
+      case 'setup':
+        // "I already use Sarraf" with nothing on record: look in Drive (they may have signed in another way).
+        return returning.current ? look({ forNew: true }) : startSetup();
+    }
   };
+
+  /** Keep this phone's data under this account (council, Nov 12). */
+  const keepData = (f: Found | null, switched: boolean) =>
+    online(async () => {
+      if (switched) await detachPreviousBackup(backupDeps());
+      clearSignedOut(db);
+      setKeepSheet(false);
+      // The user confirmed replacing the backup in Drive.
+      const on = getDeviceState(db).backupEnabled;
+      if (f && on) void makeThisTheBackupPhone(backupDeps()).catch(() => {});
+      router.replace(on ? '/' : { pathname: '/backup/turn-on', params: f ? { replace: '1' } : {} });
+    });
 
   const pickSignIn = (method: 'google' | 'github' | 'email') => {
     if (!cloud.ready) return toast({ message: s.notReady });
@@ -195,6 +226,8 @@ export default function StartScreen() {
     wipeLocalData(db);
     if (u) rememberSignIn(db, u);
     setOverSheet(false);
+    setEraseText('');
+    replaceOk.current = true;
     setHistory([{ k: 'welcome' }]);
     startSetup();
   };
@@ -247,9 +280,14 @@ export default function StartScreen() {
     setPwError(null);
     void online(
       async () => {
-        if (!driveEmail) {
-          const d = await cloud.connectDrive();
-          setDriveEmail(d.email);
+        // The Drive is the truth (council, Nov 12): a backup there that this
+        // phone didn't make (another sign-in, say) is never silently replaced.
+        const look = await lookInDrive(backupDeps());
+        setDriveEmail(look.driveEmail);
+        const thisDeviceId = db.select({ id: settings.deviceId }).from(settings).where(eq(settings.id, 1)).get()!.id;
+        if (look.header && look.header.deviceId !== thisDeviceId && !replaceOk.current) {
+          go({ k: 'driveHas', found: { driveEmail: look.driveEmail, deviceName: look.header.deviceName, at: look.header.createdAt, counts: look.header.counts } });
+          return;
         }
         const started = startBackupSetup(backupDeps(), password);
         keysReady.current = started.finished;
@@ -271,7 +309,9 @@ export default function StartScreen() {
       setPassword2('');
       setHistory([{ k: 'done' }]);
       if (withBackup) {
-        backupNow(backupDeps()).catch(() => toast({ message: s.failed }));
+        backupNow(backupDeps(), { replaceExisting: replaceOk.current })
+          .then((r) => (r.ok ? undefined : toast({ message: s.failed })))
+          .catch(() => toast({ message: s.failed }));
       }
       if (thenPin) router.push({ pathname: '/lock/set', params: offerBio ? { biometrics: '1' } : {} });
     });
@@ -309,8 +349,8 @@ export default function StartScreen() {
               <Icon name="lock" size={12} color={colors.inkMuted} strokeWidth={2} />
               <Text style={[styles.small, { color: colors.inkMuted }]}>{s.stays}</Text>
             </View>
-            <Button label={s.getStarted} onPress={() => setSheet('new')} />
-            <Button label={s.alreadyUse} kind="secondary" onPress={() => setSheet('returning')} />
+            <Button label={s.getStarted} onPress={() => ((returning.current = false), setSheet('new'))} />
+            <Button label={s.alreadyUse} kind="secondary" onPress={() => ((returning.current = true), setSheet('returning'))} />
           </View>
           <SignInSheet mode={sheet} busy={busy} onClose={() => setSheet(null)} onPick={pickSignIn} />
         </SafeAreaView>
@@ -398,21 +438,29 @@ export default function StartScreen() {
 
     case 'hasData': {
       const f = step.found;
+      const mine = backupCounts(db);
+      const countRows = (c: BackupCounts, extra?: string) => (
+        <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoValue, { color: colors.ink }]}>{s.insideCounts(c.accounts, c.ledgers, c.transactions)}</Text>
+          </View>
+          {extra ? (
+            <View style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: colors.line }]}>
+              <Text style={[styles.small, { color: colors.inkMuted }]}>{extra}</Text>
+            </View>
+          ) : null}
+        </Card>
+      );
+      const what = s.insideCounts(mine.accounts, mine.ledgers, mine.transactions);
+      const typed = eraseText.trim().toUpperCase() === s.startOverWord;
       return (
         <StartPage
-          icon={f ? 'cloud' : 'check'}
+          icon={f ? 'cloud' : 'phone'}
           title={f ? s.hasDataBackupTitle : s.hasDataTitle}
-          body={f ? s.hasDataBackupBody(f.driveEmail) : s.hasDataBody}
+          body={f ? s.hasDataBackupBody(f.driveEmail) : step.switched ? s.hasDataSwitchedBody : s.hasDataBody}
           footer={
             <>
-              <Button
-                label={s.keepThisPhone}
-                onPress={() => {
-                  clearSignedOut(db);
-                  // No backup yet: straight to turning it on. With one, the next backup replaces it.
-                  router.replace(f ? '/' : '/backup/turn-on');
-                }}
-              />
+              <Button label={step.switched ? s.keepThisPhoneSwitched : s.keepThisPhone} onPress={() => (f ? setKeepSheet(true) : void keepData(null, step.switched))} />
               {f ? (
                 <Button
                   label={s.restoreBackupInstead}
@@ -424,61 +472,94 @@ export default function StartScreen() {
                   }}
                 />
               ) : null}
-              <LinkButton danger label={s.startOver} onPress={() => setOverSheet(true)} />
+              <LinkButton danger label={s.startOver} onPress={() => (setEraseText(''), setOverSheet(true))} />
             </>
           }
         >
+          <Text style={[styles.small, { color: colors.inkMuted, fontFamily: fonts.sansBold, letterSpacing: 0.6 }]}>{s.onThisPhone}</Text>
+          {countRows(mine)}
           {f ? (
-            <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-              {[
-                [s.from, f.deviceName],
-                [s.lastBackedUp, `${formatShortDate(f.at.slice(0, 10))}, ${f.at.slice(0, 4)}`],
-                [s.inside, s.insideCounts(f.counts.accounts, f.counts.ledgers, f.counts.transactions)],
-              ].map(([label, value], i) => (
-                <View key={label} style={[styles.infoRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
-                  <Text style={[styles.small, { color: colors.inkMuted, width: 92 }]}>{label}</Text>
-                  <Text style={[styles.infoValue, { color: colors.ink }]}>{value}</Text>
-                </View>
-              ))}
-            </Card>
-          ) : null}
-          <Note tone={f ? 'amber' : 'teal'}>{f ? s.keepNoteWithBackup : s.keepNoteNoBackup}</Note>
+            <>
+              <Text style={[styles.small, { color: colors.inkMuted, fontFamily: fonts.sansBold, letterSpacing: 0.6 }]}>{s.inYourBackup}</Text>
+              {countRows(f.counts, `${f.deviceName} · ${formatShortDate(f.at.slice(0, 10))}, ${f.at.slice(0, 4)}`)}
+            </>
+          ) : (
+            <Note tone="teal">{step.switched ? s.keepNoteSwitched : s.keepNoteNoBackup}</Note>
+          )}
+          <BottomSheet visible={keepSheet} onClose={() => setKeepSheet(false)} title={s.keepTitle}>
+            <View style={{ gap: 12 }}>
+              <Text style={[styles.small, { color: colors.inkSecondary, fontSize: 13, lineHeight: 19 }]}>
+                {f ? s.keepBody(f.deviceName, `${formatShortDate(f.at.slice(0, 10))}, ${f.at.slice(0, 4)}`) : ''}
+              </Text>
+              <Button label={s.goBack} onPress={() => setKeepSheet(false)} />
+              <Button label={busy ? s.working : s.keepConfirm} kind="secondary" disabled={busy} onPress={() => void keepData(f, step.switched)} />
+            </View>
+          </BottomSheet>
           <BottomSheet visible={overSheet} onClose={() => setOverSheet(false)} title={s.startOverTitle}>
             <View style={{ gap: 12 }}>
-              <Text style={[styles.small, { color: colors.inkSecondary, fontSize: 13, lineHeight: 19 }]}>{f ? s.startOverBodyBackup : s.startOverBody}</Text>
+              <Text style={[styles.small, { color: colors.inkSecondary, fontSize: 13, lineHeight: 19 }]}>{f ? s.startOverBodyBackup(what) : s.startOverBody(what)}</Text>
+              {!f && !getDeviceState(db).lastBackupAt ? <Note tone="red">{s.startOverNoBackup}</Note> : null}
+              <Field label={s.startOverType} value={eraseText} onChangeText={setEraseText} autoCapitalize="characters" placeholder={s.startOverWord} />
               <Button label={s.goBack} onPress={() => setOverSheet(false)} />
-              <Button label={s.startOverConfirm} kind="danger" onPress={startOver} />
+              <Button label={s.startOverConfirm} kind="danger" disabled={!typed} onPress={startOver} />
             </View>
           </BottomSheet>
         </StartPage>
       );
     }
 
-    case 'used':
+    case 'driveHas':
       return (
         <StartPage
+          onBack={back}
           icon="cloud"
-          title={s.usedTitle}
-          body={s.usedBody}
+          iconTone="warning"
+          title={s.driveHasTitle}
+          body={s.driveHasBody(step.found.driveEmail)}
           footer={
             <>
-              <Button label={s.lookInDrive} onPress={() => look({ forNew: true })} />
-              <Button label={s.imNew} kind="secondary" onPress={startSetup} />
-              <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center' }]}>{s.lookNote}</Text>
+              <Button
+                label={s.restoreIt}
+                onPress={() => {
+                  setSecret('');
+                  setTries(0);
+                  go({ k: 'secret', mode: 'password' });
+                }}
+              />
+              <Button
+                label={s.replaceIt}
+                kind="secondary"
+                onPress={() => {
+                  replaceOk.current = true;
+                  back();
+                  turnOnBackup();
+                }}
+              />
+              <LinkButton
+                label={s.useAnotherDrive}
+                onPress={() =>
+                  void online(async () => {
+                    setDriveEmail((await cloud.connectDrive({ another: true })).email);
+                    back();
+                  })
+                }
+              />
             </>
           }
         >
-          {user ? (
-            <Card style={styles.userCard}>
-              <View style={[styles.avatar, { backgroundColor: colors.accentSoft }]}>
-                <Text style={[styles.avatarText, { color: colors.accent }]}>{user.email.slice(0, 1).toUpperCase()}</Text>
+          <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
+            {[
+              [s.from, step.found.deviceName],
+              [s.lastBackedUp, `${formatShortDate(step.found.at.slice(0, 10))}, ${step.found.at.slice(0, 4)}`],
+              [s.inside, s.insideCounts(step.found.counts.accounts, step.found.counts.ledgers, step.found.counts.transactions)],
+            ].map(([label, value], i) => (
+              <View key={label} style={[styles.infoRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+                <Text style={[styles.small, { color: colors.inkMuted, width: 92 }]}>{label}</Text>
+                <Text style={[styles.infoValue, { color: colors.ink }]}>{value}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.userEmail, { color: colors.ink }]}>{user.email}</Text>
-                <Text style={[styles.small, { color: colors.inkMuted }]}>{s.signedInWith(methodName)}</Text>
-              </View>
-            </Card>
-          ) : null}
+            ))}
+          </Card>
+          <Note tone="amber">{s.replaceWarn}</Note>
         </StartPage>
       );
 
@@ -577,6 +658,7 @@ export default function StartScreen() {
                 kind="secondary"
                 onPress={() => {
                   setFreshSheet(false);
+                  replaceOk.current = true;
                   startSetup();
                 }}
               />
@@ -627,7 +709,11 @@ export default function StartScreen() {
             <>
               <Button label={s.tryAgain} onPress={() => (setSecret(''), replace({ k: 'secret', mode: 'password' }))} />
               <Button label={s.useRecoveryKey} kind="secondary" onPress={() => (setSecret(''), replace({ k: 'secret', mode: 'key' }))} />
-              <LinkButton label={s.startFresh} onPress={() => setFreshSheet(true)} />
+              {history.some((h) => h.k === 'hasData') ? (
+                <LinkButton label={s.backToChoices} onPress={() => setHistory((h) => h.slice(0, h.findIndex((x) => x.k === 'hasData') + 1))} />
+              ) : (
+                <LinkButton label={s.startFresh} onPress={() => setFreshSheet(true)} />
+              )}
             </>
           }
         >
@@ -636,7 +722,8 @@ export default function StartScreen() {
             <View style={{ gap: 12 }}>
               <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.freshBody}</Text>
               <Button label={s.goBack} onPress={() => setFreshSheet(false)} />
-              <Button label={s.startFresh} kind="secondary" onPress={() => (setFreshSheet(false), startSetup())} />
+              <Note tone="amber">{s.freshWarn}</Note>
+              <Button label={s.startFresh} kind="secondary" onPress={() => (setFreshSheet(false), (replaceOk.current = true), startSetup())} />
             </View>
           </BottomSheet>
         </StartPage>

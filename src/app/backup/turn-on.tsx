@@ -1,11 +1,12 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Text } from 'react-native';
 
 import { RecoveryKeyCard } from '@/components/backup/RecoveryKeyCard';
+import { ReplaceBackupSheet } from '@/components/backup/ReplaceBackupSheet';
 import { Note, StartPage } from '@/components/start/StartPage';
 import { Button, Card, Field, LinkButton } from '@/components/ui';
-import { backupNow, getDeviceState, startBackupSetup } from '@/data/backup-flow';
+import { backupNow, getDeviceState, startBackupSetup, type ExistingBackup } from '@/data/backup-flow';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { backupDeps, cloud } from '@/services/cloud';
@@ -25,6 +26,9 @@ export default function TurnOnBackupScreen() {
   const [drive, setDrive] = useState<string | null>(() => getDeviceState(db).driveEmail);
   const [key, setKey] = useState<string | null>(null);
   const finished = useRef<Promise<void> | null>(null);
+  // replace=1: the user already chose to overwrite the backup in Drive (Keep this phone's data).
+  const params = useLocalSearchParams<{ replace?: string }>();
+  const [existing, setExisting] = useState<ExistingBackup | null>(null);
 
   const turnOn = async () => {
     if (password[0].length < 8) return setError(s.passwordShort);
@@ -42,11 +46,33 @@ export default function TurnOnBackupScreen() {
     }
   };
 
+  const replaceIt = async () => {
+    setBusy(true);
+    try {
+      const r = await backupNow(backupDeps(), { replaceExisting: true });
+      setExisting(null);
+      toast({ message: r.ok ? strings.backup.backedUp : strings.backup.failed });
+      router.back();
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sheet = (
+    <ReplaceBackupSheet
+      existing={existing}
+      busy={busy}
+      onReplace={() => void replaceIt()}
+      onRestore={() => (setExisting(null), router.replace('/backup/restore'))}
+      onClose={() => (setExisting(null), router.back())}
+    />
+  );
+
   const done = async () => {
     setBusy(true);
     try {
       await finished.current;
-      const r = await backupNow(backupDeps());
+      const r = await backupNow(backupDeps(), { replaceExisting: params.replace === '1' });
+      if (!r.ok && r.reason === 'existing') return setExisting(r.existing);
       toast({ message: r.ok ? strings.backup.backedUp : strings.backup.failed });
       router.back();
     } finally {
@@ -58,6 +84,7 @@ export default function TurnOnBackupScreen() {
     return (
       <StartPage title={s.keyShownTitle} body={s.keyShownBody} footer={<Button label={busy ? s.working : s.savedIt} disabled={busy} onPress={() => void done()} />}>
         <RecoveryKeyCard recoveryKey={key} />
+        {sheet}
       </StartPage>
     );
   }

@@ -50,6 +50,13 @@
       "when": 1794459138877,
       "tag": "0006_offset_group",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794495500276,
+      "tag": "0007_signed_out_user",
+      "breakpoints": true
     }
   ]
 }

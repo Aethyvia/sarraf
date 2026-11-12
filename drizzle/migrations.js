@@ -8,6 +8,7 @@ import m0003 from './0003_device_state.sql';
 import m0004 from './0004_sign_out_and_plan.sql';
 import m0005 from './0005_person_currency.sql';
 import m0006 from './0006_offset_group.sql';
+import m0007 from './0007_signed_out_user.sql';
 
   export default {
     journal,
@@ -18,7 +19,8 @@ m0002,
 m0003,
 m0004,
 m0005,
-m0006
+m0006,
+m0007
     }
   }
   

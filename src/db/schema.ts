@@ -52,6 +52,8 @@ export const deviceState = sqliteTable(
     backupMovedTo: text('backup_moved_to'),
     /** Set by Sign out: data stays, but Sarraf asks to sign in again before going on. */
     signedOutAt: text('signed_out_at'),
+    /** Who was signed in before Sign out, so signing back in knows whose data this is (council, Nov 12). */
+    signedOutUserId: text('signed_out_user_id'),
     /** Cached plan (Supabase subscription) for offline limit checks, with a 7-day grace. */
     plan: text('plan', { enum: ['free', 'plus'] }).notNull().default('free'),
     planCheckedAt: text('plan_checked_at'),

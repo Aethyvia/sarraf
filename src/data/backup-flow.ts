@@ -4,7 +4,7 @@ import { attachments, deviceState, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
-import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupHeader } from './backup-file';
+import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
 
 /** The data key and its two wrapped copies, kept on this phone (Android keystore). */
 export interface StoredKeys {
@@ -106,6 +106,16 @@ export function rememberSignIn(db: AppDb, user: CloudUser): void {
   setDeviceState(db, { userId: user.id, userEmail: user.email, signInMethod: user.method });
 }
 
+/**
+ * Keeping this phone's data under a DIFFERENT account (council, Nov 12): the
+ * old account's backup keys and Drive don't come along. Backup starts again
+ * for this account (turned on from Settings or the next step).
+ */
+export async function detachPreviousBackup(deps: BackupDeps): Promise<void> {
+  await deps.keyStore.clear();
+  setDeviceState(deps.db, { backupEnabled: false, driveEmail: null, lastBackupAt: null, backupMovedAt: null, backupMovedTo: null, backupFailingSince: null });
+}
+
 /** What sign-in found: the record (fast path, like WhatsApp), or nothing yet. */
 export async function backupOnRecord(deps: BackupDeps, user: CloudUser): Promise<BackupRecord | null> {
   return deps.cloud.getRecord(user);
@@ -145,14 +155,42 @@ export async function turnOnBackup(deps: BackupDeps, password: string): Promise<
   return { recoveryKey };
 }
 
-export type BackupResult = { ok: true; at: string } | { ok: false; reason: 'off' | 'moved' | 'no_keys' | 'signed_out'; movedTo?: string };
+/** A backup this phone didn't make, already in the Drive (or on record for this account). */
+export interface ExistingBackup {
+  deviceName: string;
+  at: string;
+  counts: BackupCounts;
+}
+
+export type BackupResult =
+  | { ok: true; at: string }
+  | { ok: false; reason: 'off' | 'moved' | 'no_keys' | 'signed_out'; movedTo?: string }
+  | { ok: false; reason: 'existing'; existing: ExistingBackup };
+
+/**
+ * The upload guard's question (council, Nov 12): is there a backup this phone
+ * didn't make? The record answers fast; without one, the Drive file is checked,
+ * because a backup made under another sign-in has no record here.
+ */
+export async function backupMadeElsewhere(deps: BackupDeps): Promise<ExistingBackup | null> {
+  const user = currentUser(deps.db);
+  const me = deviceId(deps.db);
+  const record = user ? await deps.cloud.getRecord(user) : null;
+  if (record) return record.deviceId === me ? null : { deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts };
+  if (!getDeviceState(deps.db).driveEmail) setDeviceState(deps.db, { driveEmail: (await deps.cloud.connectDrive()).email });
+  if (!(await deps.cloud.findBackup())) return null;
+  const { header } = readBackupHeader(await deps.cloud.downloadBackup());
+  return header.deviceId === me ? null : { deviceName: header.deviceName, at: header.createdAt, counts: header.counts };
+}
 
 /**
  * Makes a backup now. A phone that has backed up before stops when the record
  * names another phone (someone restored there; Decided Nov 7). A phone's
- * first backup takes over, which is how Start fresh replaces an old backup.
+ * FIRST backup never silently replaces a backup it didn't make (council,
+ * Nov 12): it returns `existing` unless the user chose to replace it
+ * (Start fresh, "Replace it", Make this the backup phone).
  */
-export async function backupNow(deps: BackupDeps): Promise<BackupResult> {
+export async function backupNow(deps: BackupDeps, options: { replaceExisting?: boolean } = {}): Promise<BackupResult> {
   const { db, cloud } = deps;
   const state = getDeviceState(db);
   if (!state.backupEnabled) return { ok: false, reason: 'off' };
@@ -169,7 +207,11 @@ export async function backupNow(deps: BackupDeps): Promise<BackupResult> {
     setDeviceState(db, { backupMovedAt: now, backupMovedTo: record.deviceName });
     return { ok: false, reason: 'moved', movedTo: record.deviceName };
   }
-  if (!state.driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
+  if (!state.lastBackupAt && !options.replaceExisting) {
+    const existing = await backupMadeElsewhere(deps);
+    if (existing) return { ok: false, reason: 'existing', existing };
+  }
+  if (!getDeviceState(db).driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
   const file = buildBackup(db, { dataKey: unb64(stored.dataKey), keys: stored.keys, deviceId: me, deviceName: deps.deviceName, createdAt: now });
   await uploadNewAttachments(deps, unb64(stored.dataKey));
   await cloud.uploadBackup(file);
@@ -272,7 +314,7 @@ export async function renewRecoveryKey(deps: BackupDeps): Promise<string> {
 /** "Make this the backup phone" on a phone whose backups moved: its next backup takes over. */
 export async function makeThisTheBackupPhone(deps: BackupDeps): Promise<BackupResult> {
   setDeviceState(deps.db, { backupMovedAt: null, backupMovedTo: null, lastBackupAt: null });
-  return backupNow(deps);
+  return backupNow(deps, { replaceExisting: true });
 }
 
 /** Backup screen → Turn backup off (keeps the backup in Drive; keys stay so turning on again is quick). */

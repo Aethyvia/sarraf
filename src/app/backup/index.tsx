@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { RecoveryKeyCard } from '@/components/backup/RecoveryKeyCard';
+import { ReplaceBackupSheet } from '@/components/backup/ReplaceBackupSheet';
 import { Icon } from '@/components/icons/Icon';
 import { parts } from '@/components/parts';
 import { Note } from '@/components/start/StartPage';
 import { BottomSheet, Button, Card, Field, Header, LinkButton, Screen, SheetOption, ToggleRow } from '@/components/ui';
-import { backupNow, changeBackupPassword, currentUser, getDeviceState, makeThisTheBackupPhone, renewRecoveryKey, type StoredKeys } from '@/data/backup-flow';
+import { backupNow, changeBackupPassword, currentUser, getDeviceState, makeThisTheBackupPhone, renewRecoveryKey, type ExistingBackup, type StoredKeys } from '@/data/backup-flow';
 import { db } from '@/db/client';
 import { settings } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -42,6 +43,7 @@ export default function BackupScreen() {
   const [pw, setPw] = useState(['', '']);
   const [pwError, setPwError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [existing, setExisting] = useState<ExistingBackup | null>(null);
 
   useEffect(() => {
     void keyStore.get().then(setStored);
@@ -58,11 +60,13 @@ export default function BackupScreen() {
     }
   };
 
-  const backUp = () =>
+  const backUp = (replaceExisting = false) =>
     run(async () => {
-      const r = await backupNow(backupDeps());
+      const r = await backupNow(backupDeps(), { replaceExisting });
+      setExisting(null);
       if (r.ok) toast({ message: s.backedUp });
       else if (r.reason === 'moved') toast({ message: s.moved(r.movedTo ?? '') });
+      else if (r.reason === 'existing') setExisting(r.existing);
       else toast({ message: s.failed });
     });
 
@@ -236,6 +240,13 @@ export default function BackupScreen() {
           </View>
         )}
       </BottomSheet>
+      <ReplaceBackupSheet
+        existing={existing}
+        busy={busy}
+        onReplace={() => void backUp(true)}
+        onRestore={() => (setExisting(null), router.push('/backup/restore'))}
+        onClose={() => setExisting(null)}
+      />
     </Screen>
   );
 }

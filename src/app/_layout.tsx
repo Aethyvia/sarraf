@@ -137,7 +137,7 @@ function PlanEndedPrompt() {
   const plan = usePlan();
   const pathname = usePathname();
   // Never in the middle of signing in, restoring or first-run setup.
-  const busyElsewhere = pathname.startsWith('/start') || pathname.startsWith('/plan-ended') || pathname.startsWith('/lock');
+  const busyElsewhere = pathname.startsWith('/start') || pathname.startsWith('/plan-ended') || pathname.startsWith('/lock') || pathname.startsWith('/backup');
   const needs = useLive((d) => needsPlanChoice(d, plan), [plan]);
   useEffect(() => {
     if (!needs || busyElsewhere || planChoiceDismissed()) return;

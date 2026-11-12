@@ -1,0 +1,1 @@
+ALTER TABLE `device_state` ADD `signed_out_user_id` text;

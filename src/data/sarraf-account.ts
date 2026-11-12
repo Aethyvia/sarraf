@@ -11,10 +11,11 @@ import { currentUser } from './backup-flow';
  * in again before going on, and backups pause until then.
  */
 export async function signOut(deps: BackupDeps, now: string): Promise<void> {
+  const was = currentUser(deps.db)?.id ?? null;
   await deps.cloud.signOut();
   deps.db
     .update(deviceState)
-    .set({ userId: null, userEmail: null, signInMethod: null, signedOutAt: now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
+    .set({ signedOutUserId: was, userId: null, userEmail: null, signInMethod: null, signedOutAt: now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
     .where(eq(deviceState.id, 1))
     .run();
 }
@@ -25,7 +26,7 @@ export function isSignedOut(db: AppDb): boolean {
 
 /** Signing back in on a phone that still has its data: no restore, no setup, just carry on. */
 export function clearSignedOut(db: AppDb): void {
-  db.update(deviceState).set({ signedOutAt: null }).where(eq(deviceState.id, 1)).run();
+  db.update(deviceState).set({ signedOutAt: null, signedOutUserId: null }).where(eq(deviceState.id, 1)).run();
 }
 
 /** Every local table emptied, then the base rows again (a fresh install). */

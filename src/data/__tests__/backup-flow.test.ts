@@ -12,6 +12,7 @@ import {
   automaticBackupDue,
   backupNow,
   changeBackupPassword,
+  detachPreviousBackup,
   getDeviceState,
   lookInDrive,
   makeThisTheBackupPhone,
@@ -75,8 +76,37 @@ describe('backup and restore across phones', () => {
     const fresh = await phone('Pixel 9', cloud);
     expect((await lookInDrive(fresh)).header?.deviceName).toBe('Pixel 7');
     await turnOnBackup(fresh, 'pw-two');
-    expect(await backupNow(fresh)).toMatchObject({ ok: true });
+    // The first backup never silently replaces one this phone didn't make (council, Nov 12).
+    expect(await backupNow(fresh)).toMatchObject({ ok: false, reason: 'existing', existing: { deviceName: 'Pixel 7' } });
+    expect((await lookInDrive(fresh)).header?.deviceName).toBe('Pixel 7');
+    expect(await backupNow(fresh, { replaceExisting: true })).toMatchObject({ ok: true });
     expect((await lookInDrive(fresh)).header?.deviceName).toBe('Pixel 9');
+    // After that, backups go on as usual.
+    expect(await backupNow(fresh)).toMatchObject({ ok: true });
+  });
+
+  it('a backup in Drive with no record (made under another sign-in) still stops the first backup', async () => {
+    const store = memoryStore();
+    const old = await phone('Pixel 7', fakeCloud(store), true);
+    await turnOnBackup(old, 'pw-one');
+    await backupNow(old);
+    // Same Drive, but the record belongs to another sign-in: this account has none.
+    const cloud = fakeCloud(store);
+    const fresh = await phone('Pixel 9', cloud);
+    jest.spyOn(cloud, 'getRecord').mockResolvedValue(null);
+    await turnOnBackup(fresh, 'pw-two');
+    expect(await backupNow(fresh)).toMatchObject({ ok: false, reason: 'existing', existing: { deviceName: 'Pixel 7' } });
+  });
+
+  it('keeping data under a different account drops the old backup keys', async () => {
+    const cloud = fakeCloud(memoryStore());
+    const p = await phone('Pixel 7', cloud, true);
+    await turnOnBackup(p, 'pw-one');
+    await backupNow(p);
+    await detachPreviousBackup(p);
+    expect(await p.keyStore.get()).toBeNull();
+    expect(getDeviceState(p.db)).toMatchObject({ backupEnabled: false, driveEmail: null, lastBackupAt: null });
+    expect(await backupNow(p)).toEqual({ ok: false, reason: 'off' });
   });
 
   it('an interrupted download changes nothing on the phone', async () => {
