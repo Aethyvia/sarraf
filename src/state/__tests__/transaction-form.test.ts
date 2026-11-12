@@ -1,4 +1,4 @@
-import { applyKey, draftFromForm, initialForm, switchKind } from '../transaction-form';
+import { applyKey, draftFromForm, focusConversion, initialForm, switchKind } from '../transaction-form';
 
 const base = () => initialForm({ date: '2026-09-28', ledgerId: 'personal', accountId: 'alfalah' });
 
@@ -63,5 +63,42 @@ describe('draft', () => {
       reimbursable: false,
       categoryId: null,
     });
+  });
+});
+
+describe('money in another currency (option D)', () => {
+  const base = () => initialForm({ date: '2026-11-12', ledgerId: 'l', accountId: 'a', kind: 'income' });
+
+  it('types the rate on the keypad, as an expression', () => {
+    let f = focusConversion(base(), 'rate');
+    expect(f.target).toBe('rate');
+    for (const k of ['2', '6', '7', '.', '4'] as const) f = applyKey(f, k, 2);
+    expect(f.rateText).toBe('267.4');
+    expect(f.rateMode).toBe('rate_known');
+  });
+
+  it('tapping what arrived makes it the typed number and the rate worked out', () => {
+    let f = { ...base(), rateText: '267' };
+    f = focusConversion(f, 'known');
+    expect(f).toMatchObject({ rateMode: 'amount_known', target: 'known', knownExpression: '' });
+    f = applyKey(f, '9', 2);
+    expect(f.knownExpression).toBe('9');
+  });
+
+  it('tapping the worked-out rate starts it empty and switches back', () => {
+    const f = focusConversion({ ...base(), rateMode: 'amount_known', knownExpression: '141000', rateText: '1' }, 'rate');
+    expect(f).toMatchObject({ rateMode: 'rate_known', rateText: '', target: 'rate', knownExpression: '141000' });
+  });
+
+  it('tapping the typed one keeps what is typed', () => {
+    const f = focusConversion({ ...base(), rateMode: 'rate_known', rateText: '267' }, 'rate');
+    expect(f.rateText).toBe('267');
+    expect(focusConversion(f, 'amount').target).toBe('amount');
+  });
+
+  it('caps a typed rate at 10 decimal places', () => {
+    let f = focusConversion({ ...base(), rateText: '0.0035971223' }, 'rate');
+    f = applyKey(f, '7', 2);
+    expect(f.rateText).toBe('0.0035971223');
   });
 });

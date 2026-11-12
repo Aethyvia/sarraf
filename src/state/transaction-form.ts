@@ -14,8 +14,8 @@ export interface FormState {
   expression: string;
   /** "I know what was charged / received", typed on the keypad. */
   knownExpression: string;
-  /** Which number the keypad is typing into. */
-  target: 'amount' | 'known';
+  /** Which number the keypad is typing into: the amount, what was charged/received, or the rate. */
+  target: 'amount' | 'known' | 'rate';
   /** The main amount's currency for an expense or income; null = the account's. */
   currency: string | null;
   /** Expense: paid from. Income: received into. Transfer: From. */
@@ -31,6 +31,7 @@ export interface FormState {
   reimbursable: boolean;
   expectedFromPersonId: string | null;
   rateMode: RateMode;
+  /** The rate as typed on the keypad (may be an expression); 1 main = rate receiving. */
   rateText: string;
   charges: ChargeDraft[];
   notes: string;
@@ -96,9 +97,27 @@ export function switchKind(state: FormState, kind: FormKind, defaults: { date: s
   };
 }
 
+/** Places a typed rate may have. */
+export const RATE_MAX_DECIMALS = 10;
+
+/**
+ * Money in another currency (option D, Owner Nov 12): tapping one of the three
+ * numbers points the keypad at it. Tapping the worked-out one (the rate or what
+ * was charged/received) makes it the typed one, starting empty; the other is
+ * then worked out instead. No "I know the rate / amount" switch.
+ */
+export function focusConversion(state: FormState, slot: 'amount' | 'rate' | 'known'): FormState {
+  if (slot === 'amount') return { ...state, target: 'amount' };
+  if (slot === 'rate') {
+    return state.rateMode === 'rate_known' ? { ...state, target: 'rate' } : { ...state, rateMode: 'rate_known', rateText: '', target: 'rate' };
+  }
+  return state.rateMode === 'amount_known' ? { ...state, target: 'known' } : { ...state, rateMode: 'amount_known', knownExpression: '', target: 'known' };
+}
+
 /** A key on the keypad, applied to whichever number it's typing into. */
 export function applyKey(state: FormState, key: CalcKey, maxDecimals: number): FormState {
   if (state.target === 'known') return { ...state, knownExpression: pressKey(state.knownExpression, key, maxDecimals) };
+  if (state.target === 'rate') return { ...state, rateText: pressKey(state.rateText, key, RATE_MAX_DECIMALS) };
   return { ...state, expression: pressKey(state.expression, key, maxDecimals) };
 }
 

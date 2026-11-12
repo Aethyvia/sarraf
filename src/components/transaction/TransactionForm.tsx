@@ -7,6 +7,7 @@ import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icons/Icon';
+import { ConversionTrio } from '@/components/AmountBox';
 import { Keypad } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
@@ -59,11 +60,11 @@ import {
   type ChargeContext,
   type ChargeEdit,
 } from '@/state/charge-edit';
-import { applyKey, draftFromForm, splitForTotal, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
+import { RATE_MAX_DECIMALS, applyKey, draftFromForm, focusConversion, splitForTotal, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
 import { fonts, useTheme } from '@/theme';
 import { ChargeEditor, ChargeEditorHint } from './ChargeEditor';
 import { SplitEditor } from './SplitEditor';
-import { AmountCard, ConversionBlock, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
+import { AmountCard, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
 
 type Sheet =
   | 'charges'
@@ -136,8 +137,9 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const converts = !isSavings && mainCurrency !== receivingCurrency && (form.kind !== 'transfer' || (!!fromAccount && !!toAccount));
   const amount = expressionValue(form.expression, getCurrency(mainCurrency).minorUnits);
   const known = expressionValue(form.knownExpression, getCurrency(receivingCurrency).minorUnits);
-  // rateText is always a stored decimal ("."), never raw typed text.
-  const rate = form.rateText && isDecimalString(form.rateText) ? form.rateText : null;
+  // The rate is typed on the keypad (option D); only a positive result counts.
+  const typedRate = expressionValue(form.rateText, RATE_MAX_DECIMALS);
+  const rate = typedRate && isDecimalString(typedRate) && dec(typedRate).gt(0) ? typedRate : null;
   const market = useLive((d) => (converts ? marketRate(d, mainCurrency, receivingCurrency) : null), [converts, mainCurrency, receivingCurrency]);
 
   // ── Charges page (Decided Nov 11, option D): one charge at a time in the panel above the keypad ──
@@ -248,7 +250,10 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
 
   // ── Actions ──
   const onKey = (key: Parameters<typeof applyKey>[1]) =>
-    setForm((f) => applyKey(f, key, getCurrency(f.target === 'known' ? receivingCurrency : mainCurrency).minorUnits));
+    setForm((f) => {
+      const g = converts || f.target === 'amount' ? f : { ...f, target: 'amount' as const };
+      return applyKey(g, key, getCurrency(g.target === 'known' ? receivingCurrency : mainCurrency).minorUnits);
+    });
   const changeKind = (kind: FormKind) => {
     setForm((f) => switchKind(f, kind, { date: today, accountId: ref.firstAccount }));
   };
@@ -516,21 +521,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       );
     }
 
-    const conversion = converts ? (
-      <ConversionBlock
-        mode={form.rateMode}
-        onMode={(m) => set({ rateMode: m, target: m === 'amount_known' ? 'known' : 'amount' })}
-        knownLabel={form.kind === 'expense' ? s.iKnowCharged : s.iKnowReceived}
-        rateText={form.rateText}
-        from={mainCurrency}
-        to={receivingCurrency}
-        onRate={() => setSheet('rate')}
-        market={market?.rate ?? null}
-        onUseMarket={() => market && set({ rateMode: 'rate_known', rateText: trimRate(market.rate), target: 'amount' })}
-        vsMarket={vsMarketPercent(preview.result?.rate ?? null, market?.rate ?? null)}
-        derivedRate={preview.result?.rate ?? null}
-      />
-    ) : null;
 
     const tagRow = (
       <FormRow
@@ -609,7 +599,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           />
           {toPerson && amount ? <RowNote>{s.lendHint(toPerson.name)}</RowNote> : null}
           {fromPerson ? <RowNote>{s.borrowHint(fromPerson.name)}</RowNote> : null}
-          {conversion}
           {tagRow}
           {statusRows}
         </>
@@ -649,7 +638,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             {splitRow}
           </>
         ) : null}
-        {conversion}
       </>
     );
   })();
@@ -675,24 +663,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       </View>
     ) : null;
 
-  // ── Amount card's converted line ──
-  const convertedLine =
-    converts && receivingName ? (
-      <Text
-        onPress={() => set({ rateMode: 'amount_known', target: 'known' })}
-        style={[styles.converted, { color: colors.inkMuted }]}
-        accessibilityRole="button"
-      >
-        {form.kind === 'expense' ? s.chargedTo(receivingName) : s.receivedIn(receivingName)}{' '}
-        {form.rateMode === 'amount_known' ? (
-          <Text style={[styles.convertedValue, { color: form.target === 'known' ? colors.accent : colors.ink }]}>
-            {form.knownExpression ? formatTyped(form.knownExpression, receivingCurrency, settings.numberFormat) : s.tapToEnter}
-          </Text>
-        ) : r ? (
-          <MoneyInline value={form.kind === 'transfer' ? (r.toAmount ?? '0') : r.accountAmount} currency={receivingCurrency} />
-        ) : null}
-      </Text>
-    ) : null;
 
 
   return (
@@ -721,26 +691,63 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       </ScrollView>
 
       <View style={styles.bottom}>
-        <AmountCard
-          expression={formatTyped(form.expression, mainCurrency, settings.numberFormat)}
-          showExpression={hasOperator(form.expression)}
-          value={
-            hasOperator(form.expression) && amount
-              ? formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat, showCurrency: false }).text
-              : formatTyped(form.expression, mainCurrency, settings.numberFormat)
-          }
-          currency={mainCurrency}
-          onCurrency={form.kind === 'expense' || form.kind === 'income' ? () => setSheet('currency') : undefined}
-          date={form.date}
-          onDate={() => pickDate(form.date, (d) => set({ date: d }))}
-          converted={convertedLine}
-          focused={form.target === 'amount' && converts && form.rateMode === 'amount_known'}
-          onBackspace={() => {
-            if (form.target === 'known' && !(converts && form.rateMode === 'amount_known')) set({ target: 'amount' });
-            onKey('back');
-          }}
-          onClear={() => onKey('clear')}
-        />
+        {converts ? (
+          <ConversionTrio
+            amount={{
+              label: (form.kind === 'expense' ? s.trioPaid : form.kind === 'income' ? s.trioPaidIncome : s.trioSent).toUpperCase(),
+              currency: mainCurrency,
+              onCurrency: form.kind === 'expense' || form.kind === 'income' ? () => setSheet('currency') : undefined,
+              expression: form.expression,
+              value: amount,
+            }}
+            rate={{
+              from: mainCurrency,
+              to: receivingCurrency,
+              expression: form.rateText,
+              value: form.rateMode === 'rate_known' ? rate : (r?.rate ?? null),
+              worked: form.rateMode !== 'rate_known',
+            }}
+            counter={{
+              label: (form.kind === 'expense' ? s.trioCharged(receivingName ?? '') : s.trioArrived(receivingName ?? '')).toUpperCase(),
+              currency: receivingCurrency,
+              expression: form.knownExpression,
+              value: form.rateMode === 'amount_known' ? known : r ? (form.kind === 'transfer' ? (r.toAmount ?? null) : r.accountAmount) : null,
+              worked: form.rateMode !== 'amount_known',
+            }}
+            focused={form.target === 'known' ? 'counter' : form.target}
+            onFocus={(slot) => setForm((f) => focusConversion(f, slot === 'counter' ? 'known' : slot))}
+            onBackspace={() => onKey('back')}
+            onClear={() => onKey('clear')}
+            market={market?.rate ?? null}
+            onUseMarket={() => market && set({ rateMode: 'rate_known', rateText: trimRate(market.rate), target: 'rate' })}
+            vsMarket={(() => {
+              const pct = vsMarketPercent(r?.rate ?? null, market?.rate ?? null);
+              return pct ? s.vsMarket(pct) : null;
+            })()}
+            footer={
+              <Text onPress={() => pickDate(form.date, (d) => set({ date: d }))} style={[styles.trioDate, { color: colors.inkMuted }]} suppressHighlighting>
+                {formatLongDate(form.date)}
+              </Text>
+            }
+          />
+        ) : (
+          <AmountCard
+            expression={formatTyped(form.expression, mainCurrency, settings.numberFormat)}
+            showExpression={hasOperator(form.expression)}
+            value={
+              hasOperator(form.expression) && amount
+                ? formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat, showCurrency: false }).text
+                : formatTyped(form.expression, mainCurrency, settings.numberFormat)
+            }
+            currency={mainCurrency}
+            onCurrency={form.kind === 'expense' || form.kind === 'income' ? () => setSheet('currency') : undefined}
+            date={form.date}
+            onDate={() => pickDate(form.date, (d) => set({ date: d }))}
+            focused={false}
+            onBackspace={() => onKey('back')}
+            onClear={() => onKey('clear')}
+          />
+        )}
         <View style={styles.utilRow}>
           <UtilityButton icon="notes" label={s.notes} dot={!!form.notes.trim()} onPress={() => setSheet('notes')} />
           <UtilityButton icon="clip" label={attachmentCount ? s.files(attachmentCount) : s.attach} onPress={() => setSheet('attach')} />
@@ -756,22 +763,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <UtilityButton icon="layers" label={ledger?.name ?? '—'} onPress={() => setSheet('ledger')} />
           </View>
         ) : null}
-        <Keypad
-          onKey={(k) => {
-            if (form.target === 'known' && !(converts && form.rateMode === 'amount_known')) set({ target: 'amount' });
-            onKey(k);
-          }}
-        />
-        {converts && form.rateMode === 'amount_known' ? (
-          <Segmented
-            options={[
-              { value: 'amount', label: `${mainCurrency} amount` },
-              { value: 'known', label: `${receivingCurrency} ${form.kind === 'expense' ? 'charged' : 'received'}` },
-            ]}
-            value={form.target}
-            onChange={(t) => set({ target: t })}
-          />
-        ) : null}
+        <Keypad onKey={onKey} />
       </View>
 
       {/* ── Sheets ── */}
@@ -874,15 +866,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         onClose={() => setSheet(null)}
       />
       <CurrencySheet visible={sheet === 'currency'} selected={mainCurrency} onSelect={(c) => set({ currency: c })} onClose={() => setSheet(null)} />
-      <RateSheet
-        visible={sheet === 'rate'}
-        from={mainCurrency}
-        to={receivingCurrency}
-        value={form.rateText}
-        market={market?.rate ?? null}
-        onDone={(v) => set({ rateText: v, rateMode: 'rate_known' })}
-        onClose={() => setSheet(null)}
-      />
       <AttachSheet
         visible={sheet === 'attach'}
         saved={savedAttachments}
@@ -1100,4 +1083,5 @@ const styles = StyleSheet.create({
   convertedValue: { fontFamily: fonts.monoSemiBold, fontSize: 14 },
   notes: { borderRadius: 12, padding: 14, minHeight: 140, textAlignVertical: 'top', fontFamily: fonts.sans, fontSize: 14.5 },
   counter: { fontFamily: fonts.mono, fontSize: 11, textAlign: 'right' },
+  trioDate: { fontFamily: fonts.sans, fontSize: 11 },
 });
