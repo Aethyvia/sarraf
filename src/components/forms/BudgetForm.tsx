@@ -1,20 +1,21 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { KeypadScreen, useAmountField } from '@/components/KeypadScreen';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useLedgerItems } from '@/components/sheets/pickers';
-import { BottomSheet, Button, Header, IconButton, IconChip, LinkButton, Screen, Segmented, SelectorRow } from '@/components/ui';
+import { BottomSheet, Button, Header, IconButton, IconChip, LinkButton, Segmented, SelectorRow } from '@/components/ui';
 import { createBudget, deleteBudget, updateBudget, type Budget } from '@/data/budgets';
 import { db } from '@/db/client';
 import { budgets, categories, ledgers } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { Decimal, dec, parseTypedAmount, toDecimalString, toTypedText } from '@/lib/money';
+import { Decimal, dec, getCurrency, toDecimalString } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
@@ -33,7 +34,6 @@ export function BudgetForm({ budget, ledgerId: initialLedger }: { budget?: Budge
   const [scope, setScope] = useState<'whole' | 'category'>(budget ? (budget.categoryId ? 'category' : 'whole') : 'category');
   const [categoryId, setCategoryId] = useState<string | null>(budget?.categoryId ?? null);
   const [period, setPeriod] = useState<'monthly' | 'yearly'>(budget?.period === 'yearly' ? 'yearly' : 'monthly');
-  const [text, setText] = useState(budget ? toTypedText(budget.amount, settings.numberFormat) : '');
   const [sheet, setSheet] = useState<'ledger' | 'currency' | 'category' | 'delete' | null>(null);
   const ledger = ledgerId ?? defaultLedger;
   const ledgerItems = useLedgerItems();
@@ -46,7 +46,9 @@ export function BudgetForm({ budget, ledgerId: initialLedger }: { budget?: Budge
     }),
     [ledger, categoryId, currency],
   );
-  const amount = parseTypedAmount(text, settings.numberFormat);
+  // Typed on Sarraf's keypad (pattern A). The chip in the amount box is the one place to pick the currency (Owner, Nov 12).
+  const field = useAmountField(budget?.amount ?? '', getCurrency(currency).minorUnits);
+  const amount = field.value;
   const canSave = !!ledger && !!amount && dec(amount).gt(0) && (scope === 'whole' || !!categoryId);
 
   // Heads-up when category budgets would add up to more than the whole-ledger cap.
@@ -63,11 +65,35 @@ export function BudgetForm({ budget, ledgerId: initialLedger }: { budget?: Budge
   };
 
   return (
-    <Screen>
-      <Header title={budget ? s.edit : s.add} onBack={goBack} backIcon="close" actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />} />
-      {action.ui}
+    <KeypadScreen
+      header={
+        <>
+          <Header title={budget ? s.edit : s.add} onBack={goBack} backIcon="close" actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />} />
+          {action.ui}
+        </>
+      }
+      onKey={field.press}
+      amount={
+        <>
+          {overBy && whole ? (
+            <View style={[styles.warn, { backgroundColor: colors.warningSoft, borderColor: colors.warning + '55' }]}>
+              <Icon name="bolt" size={16} color={colors.warning} strokeWidth={2} />
+              <Text style={[styles.warnText, { color: colors.warning }]}>{parts(s.formOverlap(info.ledgerName, money(toDecimalString(catSum)), money(overBy), money(whole)))}</Text>
+            </View>
+          ) : null}
+          <AmountBox
+            label={s.amount.toUpperCase()}
+            expression={field.expression}
+            value={field.value}
+            currency={currency}
+            onCurrency={() => (Keyboard.dismiss(), setSheet('currency'))}
+            onBackspace={field.back}
+            onClear={field.clear}
+          />
+        </>
+      }
+    >
       <SelectorRow label={s.ledger} value={info.ledgerName || '—'} onPress={() => setSheet('ledger')} />
-      <SelectorRow label={s.currency} value={currency} onPress={() => setSheet('currency')} />
       <View style={{ gap: 6 }}>
         <Segmented
           options={[
@@ -90,20 +116,6 @@ export function BudgetForm({ budget, ledgerId: initialLedger }: { budget?: Budge
         <Text style={[styles.label, { color: colors.inkMuted }]}>{s.period}</Text>
         <Segmented options={(['monthly', 'yearly'] as const).map((p) => ({ value: p, label: s.periods[p] }))} value={period} onChange={setPeriod} />
       </View>
-      <View>
-        <Text style={[styles.label, { color: colors.inkMuted }]}>{s.amount}</Text>
-        <View style={[styles.amountBox, { backgroundColor: colors.filled }]}>
-          <Text style={[styles.code, { color: colors.inkSecondary }]}>{currency}</Text>
-          <AmountTextInput value={text} onChangeText={setText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
-        </View>
-      </View>
-      {overBy && whole ? (
-        <View style={[styles.warn, { backgroundColor: colors.warningSoft, borderColor: colors.warning + '55' }]}>
-          <Icon name="bolt" size={16} color={colors.warning} strokeWidth={2} />
-          <Text style={[styles.warnText, { color: colors.warning }]}>{parts(s.formOverlap(info.ledgerName, money(toDecimalString(catSum)), money(overBy), money(whole)))}</Text>
-        </View>
-      ) : null}
-      <Button label={s.save} disabled={!canSave} onPress={save} />
       {budget ? <LinkButton danger label={s.delete} onPress={() => setSheet('delete')} /> : null}
 
       <PickerSheet visible={sheet === 'ledger'} title={strings.ledgers.title} sections={[{ items: ledgerItems }]} selectedId={ledger} onSelect={setLedgerId} onClose={() => setSheet(null)} />
@@ -128,15 +140,12 @@ export function BudgetForm({ budget, ledgerId: initialLedger }: { budget?: Budge
           <Button kind="secondary" label={strings.common.cancel} onPress={() => setSheet(null)} />
         </View>
       </BottomSheet>
-    </Screen>
+    </KeypadScreen>
   );
 }
 
 const styles = StyleSheet.create({
   label: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 5 },
-  amountBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.field, paddingHorizontal: 14 },
-  code: { fontFamily: fonts.sansBold, fontSize: 11 },
-  amountInput: { flex: 1, fontFamily: fonts.mono, fontSize: 22, paddingVertical: 12 },
   warn: { flexDirection: 'row', gap: 9, borderRadius: radius.field, borderWidth: 1.5, padding: 12 },
   warnText: { flex: 1, fontFamily: fonts.sans, fontSize: 12, lineHeight: 17 },
   inline: { fontFamily: fonts.monoSemiBold, fontSize: 12 },

@@ -2,9 +2,10 @@ import { goBack } from '@/state/nav';
 import { asc, isNotNull } from 'drizzle-orm';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { KeypadScreen, useAmountField } from '@/components/KeypadScreen';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { IconColorSheet } from '@/components/sheets/IconColorSheet';
 import { BottomSheet, Button, Field, Header, Hint, IconButton, IconChip, Screen, SelectorRow, SheetOption } from '@/components/ui';
@@ -12,24 +13,23 @@ import { createAccount, defaultAccountLook, updateAccount, type Account } from '
 import { db } from '@/db/client';
 import { accounts } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { getCurrency, parseTypedAmount } from '@/lib/money';
+import { getCurrency } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { usePlan } from '@/state/plan';
 import { useSettings } from '@/state/settings';
-import { fonts, radius, useTheme } from '@/theme';
 
 /** Add account (no account) or Edit account. The currency is fixed once created. */
 export function AccountForm({ account }: { account?: Account }) {
   const s = strings.accounts;
   const settings = useSettings();
   const plan = usePlan();
-  const { colors } = useTheme();
   const [name, setName] = useState(account?.name ?? '');
   // Settings → Default currency is pre-selected for new accounts (Schema: settings.default_currency).
   const [currency, setCurrency] = useState<string | null>(account?.currency ?? settings.defaultCurrency);
   const [institution, setInstitution] = useState<string | null>(account?.institution ?? null);
-  const [balance, setBalance] = useState('');
+  // The opening balance is typed on Sarraf's keypad (pattern A, Owner Nov 12), in the account's currency.
+  const balance = useAmountField('', getCurrency(currency ?? settings.defaultCurrency).minorUnits);
   const [look, setLook] = useState<{ icon: string; color: string } | null>(
     account ? { icon: account.icon, color: account.color } : null,
   );
@@ -38,8 +38,8 @@ export function AccountForm({ account }: { account?: Account }) {
 
   const picked = defaultAccountLook(name, institution);
   const shown = look ?? picked;
-  const balanceValue = balance.trim() ? parseTypedAmount(balance, settings.numberFormat) : null;
-  const balanceInvalid = balance.trim() !== '' && balanceValue === null;
+  const balanceValue = balance.expression ? balance.value : null;
+  const balanceInvalid = balance.expression !== '' && balanceValue === null;
   const canSave = name.trim() !== '' && currency !== null && !balanceInvalid;
 
   const save = () => {
@@ -55,8 +55,8 @@ export function AccountForm({ account }: { account?: Account }) {
     if (ok) router.back();
   };
 
-  return (
-    <Screen>
+  const header = (
+    <>
       <Header
         title={account ? s.edit : s.add}
         onBack={goBack}
@@ -64,7 +64,10 @@ export function AccountForm({ account }: { account?: Account }) {
         actions={<IconButton icon="tick" filled label={strings.common.save} onPress={save} disabled={!canSave} />}
       />
       {action.ui}
-
+    </>
+  );
+  const rows = (
+    <>
       <SelectorRow
         chevron="forward"
         leading={<IconChip icon={shown.icon} color={shown.color} size={44} />}
@@ -83,36 +86,12 @@ export function AccountForm({ account }: { account?: Account }) {
       />
       <Hint>{account ? s.currencyLocked : s.currencyHint}</Hint>
 
-      {!account ? (
-        <>
-          <View style={[styles.amountBox, { backgroundColor: colors.filled }, balanceInvalid && { borderColor: colors.expense, borderWidth: 1.5 }]}>
-            <Text style={[styles.amountLabel, { color: colors.inkMuted }]}>
-              {s.currentBalance.toUpperCase()} ({strings.common.optional.toUpperCase()})
-            </Text>
-            <AmountTextInput
-              value={balance}
-              onChangeText={setBalance}
-              placeholder="0.00"
-              placeholderTextColor={colors.inkMuted}
-              keyboardType="numeric"
-              style={[styles.amountInput, { color: colors.ink }]}
-            />
-          </View>
-          <Hint>{s.currentBalanceHint}</Hint>
-        </>
-      ) : null}
-
       <SelectorRow label={account ? s.institution : `${s.institution} (${strings.common.optional})`} value={institution ?? strings.common.none} onPress={() => setSheet('institution')} />
-      {/* Edit account (board): no hint and no bottom button — the tick saves. */}
-      {!account ? (
-        <>
-          <Hint>{s.institutionHint}</Hint>
-          <View style={{ flex: 1 }} />
-          <Text style={[styles.saveHint, { color: colors.inkMuted }]}>{s.saveHint}</Text>
-          <Button label={s.save} onPress={save} disabled={!canSave} />
-        </>
-      ) : null}
-
+      {!account ? <Hint>{s.institutionHint}</Hint> : null}
+    </>
+  );
+  const sheets = (
+    <>
       <IconColorSheet
         visible={sheet === 'icon'}
         title={name.trim() || s.add}
@@ -134,7 +113,41 @@ export function AccountForm({ account }: { account?: Account }) {
         onSelect={setInstitution}
         onClose={() => setSheet(null)}
       />
-    </Screen>
+    </>
+  );
+
+  // Edit account (board): no amount, no bottom button — the tick saves.
+  if (account) {
+    return (
+      <Screen>
+        {header}
+        {rows}
+        {sheets}
+      </Screen>
+    );
+  }
+  return (
+    <KeypadScreen
+      header={header}
+      onKey={balance.press}
+      amount={
+        <>
+          <AmountBox
+            label={`${s.currentBalance.toUpperCase()} (${strings.common.optional.toUpperCase()})`}
+            expression={balance.expression}
+            value={balance.value}
+            currency={currency ?? settings.defaultCurrency}
+            onFocus={Keyboard.dismiss}
+            onBackspace={balance.back}
+            onClear={balance.clear}
+          />
+          <Hint>{s.currentBalanceHint}</Hint>
+        </>
+      }
+    >
+      {rows}
+      {sheets}
+    </KeypadScreen>
   );
 }
 
@@ -181,10 +194,3 @@ function InstitutionSheet({
     </BottomSheet>
   );
 }
-
-const styles = StyleSheet.create({
-  amountBox: { borderRadius: radius.field, paddingHorizontal: 13, paddingTop: 10, paddingBottom: 4 },
-  amountLabel: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 0.4 },
-  amountInput: { fontFamily: fonts.mono, fontSize: 15, paddingVertical: 4 },
-  saveHint: { fontFamily: fonts.sans, fontSize: 11, textAlign: 'center', marginTop: 8, marginBottom: -6 },
-});

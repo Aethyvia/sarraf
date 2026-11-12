@@ -1,19 +1,20 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Keyboard, StyleSheet, Text, View } from 'react-native';
 
-import { AmountTextInput } from '@/components/AmountTextInput';
+import { AmountBox } from '@/components/AmountBox';
+import { KeypadScreen, useAmountField } from '@/components/KeypadScreen';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
-import { BottomSheet, Button, Field, Header, Hint, IconButton, LinkButton, Screen, SelectorRow } from '@/components/ui';
+import { BottomSheet, Button, Field, Header, Hint, IconButton, LinkButton } from '@/components/ui';
 import { createGoal, deleteGoal, goalTotal, updateGoal, type Goal } from '@/data/goals';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
-import { dec, parseTypedAmount, toTypedText } from '@/lib/money';
+import { dec, getCurrency } from '@/lib/money';
 import { useAction } from '@/state/actions';
 import { goBack } from '@/state/nav';
 import { usePlan } from '@/state/plan';
 import { useSettings } from '@/state/settings';
-import { fonts, radius, useTheme } from '@/theme';
+import { fonts, useTheme } from '@/theme';
 
 /** Add savings goal / Edit goal: a name, one currency, a target. */
 export function GoalForm({ goal }: { goal?: Goal }) {
@@ -24,9 +25,10 @@ export function GoalForm({ goal }: { goal?: Goal }) {
   const action = useAction({ itemName: goal?.name });
   const [name, setName] = useState(goal?.name ?? '');
   const [currency, setCurrency] = useState(goal?.currency ?? settings.defaultCurrency);
-  const [targetText, setTargetText] = useState(goal ? toTypedText(goal.targetAmount, settings.numberFormat) : '');
   const [sheet, setSheet] = useState<'currency' | 'delete' | null>(null);
-  const target = parseTypedAmount(targetText, settings.numberFormat);
+  // The target is typed on Sarraf's keypad (pattern A); the chip in its box is the one place to pick the currency (Owner, Nov 12).
+  const field = useAmountField(goal?.targetAmount ?? '', getCurrency(currency).minorUnits);
+  const target = field.value;
   const currencyLocked = !!goal && dec(goalTotal(db, goal.id)).gt(0);
   const canSave = name.trim() !== '' && !!target && dec(target).gt(0);
 
@@ -37,20 +39,28 @@ export function GoalForm({ goal }: { goal?: Goal }) {
   };
 
   return (
-    <Screen>
-      <Header title={goal ? s.edit : s.add} onBack={goBack} backIcon="close" actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />} />
-      {action.ui}
+    <KeypadScreen
+      header={
+        <>
+          <Header title={goal ? s.edit : s.add} onBack={goBack} backIcon="close" actions={<IconButton icon="tick" filled label={s.save} onPress={save} disabled={!canSave} />} />
+          {action.ui}
+        </>
+      }
+      onKey={field.press}
+      amount={
+        <AmountBox
+          label={s.target.toUpperCase()}
+          expression={field.expression}
+          value={field.value}
+          currency={currency}
+          onCurrency={currencyLocked || goal ? undefined : () => (Keyboard.dismiss(), setSheet('currency'))}
+          onBackspace={field.back}
+          onClear={field.clear}
+        />
+      }
+    >
       <Field label={s.name} value={name} onChangeText={setName} placeholder={s.namePlaceholder} />
-      <SelectorRow label={s.currency.toUpperCase()} value={currency} onPress={currencyLocked || goal ? undefined : () => setSheet('currency')} />
       <Hint>{s.currencyHint}</Hint>
-      <View>
-        <Text style={[styles.label, { color: colors.inkMuted }]}>{s.target}</Text>
-        <View style={[styles.amountBox, { backgroundColor: colors.filled }]}>
-          <Text style={[styles.code, { color: colors.inkSecondary }]}>{currency}</Text>
-          <AmountTextInput value={targetText} onChangeText={setTargetText} keyboardType="numeric" placeholder="0.00" placeholderTextColor={colors.inkMuted} style={[styles.amountInput, { color: colors.ink }]} />
-        </View>
-      </View>
-      <Button label={s.save} disabled={!canSave} onPress={save} />
       {goal ? <LinkButton danger label={s.delete} onPress={() => setSheet('delete')} /> : null}
 
       <CurrencySheet visible={sheet === 'currency'} selected={currency} onSelect={setCurrency} onClose={() => setSheet(null)} />
@@ -67,14 +77,10 @@ export function GoalForm({ goal }: { goal?: Goal }) {
           <Button kind="secondary" label={strings.common.cancel} onPress={() => setSheet(null)} />
         </View>
       </BottomSheet>
-    </Screen>
+    </KeypadScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  label: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.42, marginBottom: 5 },
-  amountBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.field, paddingHorizontal: 14 },
-  code: { fontFamily: fonts.sansBold, fontSize: 11 },
-  amountInput: { flex: 1, fontFamily: fonts.mono, fontSize: 20, paddingVertical: 10 },
   body: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
 });
