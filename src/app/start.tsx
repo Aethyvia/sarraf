@@ -24,7 +24,8 @@ import { backupDeps, cloud, usingRealCloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
 import { store } from '@/services/store';
 import { refreshPlan } from '@/data/plan';
-import { clearSignedOut, isSignedOut } from '@/data/sarraf-account';
+import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
+import { deleteAllStoredFiles } from '@/services/attachments';
 import { settings } from '@/db/schema';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
@@ -44,6 +45,7 @@ type Step =
   | { k: 'code'; email: string }
   | { k: 'offline'; retry: () => void }
   | { k: 'used' }
+  | { k: 'hasData'; found: Found | null }
   | { k: 'finding'; another?: boolean; forNew?: boolean }
   | { k: 'noBackup'; driveEmail: string }
   | { k: 'refused'; forNew: boolean }
@@ -104,6 +106,7 @@ export default function StartScreen() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [skipSheet, setSkipSheet] = useState(false);
   const [freshSheet, setFreshSheet] = useState(false);
+  const [overSheet, setOverSheet] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const keysReady = useRef<Promise<void> | null>(null);
   const [checkGroups] = useState(() => {
@@ -148,15 +151,19 @@ export default function StartScreen() {
     setUser(u);
     setSheet(null);
     void refreshPlan(db, cloud, u, new Date()).catch(() => {});
+    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
     // Signing back in on a phone that still has its data: carry on, no restore or setup.
-    if (isSignedOut(db) && db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o) {
+    if (isSignedOut(db) && hasData) {
       clearSignedOut(db);
       router.replace('/');
       return;
     }
     const record = await cloud.getRecord(u);
-    if (record) go({ k: 'found', found: { driveEmail: record.driveEmail, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } });
-    else go({ k: 'used' });
+    const found = record ? { driveEmail: record.driveEmail, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } : null;
+    // Owner, Nov 12: never run new-user setup over data that's already on this phone. Keep it, restore over it, or start over.
+    if (hasData) go({ k: 'hasData', found });
+    else if (found) go({ k: 'found', found });
+    else startSetup();
   };
 
   const pickSignIn = (method: 'google' | 'github' | 'email') => {
@@ -179,6 +186,17 @@ export default function StartScreen() {
       },
       () => replace({ k: 'refused', forNew: options.forNew }),
     );
+  };
+
+  /** Start over (Owner, Nov 12): erase this phone's data, stay signed in, set up as new. */
+  const startOver = () => {
+    const u = user;
+    deleteAllStoredFiles();
+    wipeLocalData(db);
+    if (u) rememberSignIn(db, u);
+    setOverSheet(false);
+    setHistory([{ k: 'welcome' }]);
+    startSetup();
   };
 
   const startSetup = () => {
@@ -377,6 +395,64 @@ export default function StartScreen() {
 
     case 'offline':
       return <StartPage onBack={back} icon="cloud" iconTone="neutral" title={s.offlineTitle} body={s.offlineBody} footer={<Button label={s.tryAgain} onPress={() => (back(), step.retry())} />} />;
+
+    case 'hasData': {
+      const f = step.found;
+      return (
+        <StartPage
+          icon={f ? 'cloud' : 'check'}
+          title={f ? s.hasDataBackupTitle : s.hasDataTitle}
+          body={f ? s.hasDataBackupBody(f.driveEmail) : s.hasDataBody}
+          footer={
+            <>
+              <Button
+                label={s.keepThisPhone}
+                onPress={() => {
+                  clearSignedOut(db);
+                  // No backup yet: straight to turning it on. With one, the next backup replaces it.
+                  router.replace(f ? '/' : '/backup/turn-on');
+                }}
+              />
+              {f ? (
+                <Button
+                  label={s.restoreBackupInstead}
+                  kind="secondary"
+                  onPress={() => {
+                    setSecret('');
+                    setTries(0);
+                    go({ k: 'secret', mode: 'password' });
+                  }}
+                />
+              ) : null}
+              <LinkButton danger label={s.startOver} onPress={() => setOverSheet(true)} />
+            </>
+          }
+        >
+          {f ? (
+            <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
+              {[
+                [s.from, f.deviceName],
+                [s.lastBackedUp, `${formatShortDate(f.at.slice(0, 10))}, ${f.at.slice(0, 4)}`],
+                [s.inside, s.insideCounts(f.counts.accounts, f.counts.ledgers, f.counts.transactions)],
+              ].map(([label, value], i) => (
+                <View key={label} style={[styles.infoRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+                  <Text style={[styles.small, { color: colors.inkMuted, width: 92 }]}>{label}</Text>
+                  <Text style={[styles.infoValue, { color: colors.ink }]}>{value}</Text>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+          <Note tone={f ? 'amber' : 'teal'}>{f ? s.keepNoteWithBackup : s.keepNoteNoBackup}</Note>
+          <BottomSheet visible={overSheet} onClose={() => setOverSheet(false)} title={s.startOverTitle}>
+            <View style={{ gap: 12 }}>
+              <Text style={[styles.small, { color: colors.inkSecondary, fontSize: 13, lineHeight: 19 }]}>{f ? s.startOverBodyBackup : s.startOverBody}</Text>
+              <Button label={s.goBack} onPress={() => setOverSheet(false)} />
+              <Button label={s.startOverConfirm} kind="danger" onPress={startOver} />
+            </View>
+          </BottomSheet>
+        </StartPage>
+      );
+    }
 
     case 'used':
       return (
@@ -671,6 +747,8 @@ export default function StartScreen() {
             setItems(suggestedAccounts(everyday, also));
             go({ k: 'accounts' });
           }}
+          // A returning user whose backup isn't on record can still look for it.
+          extra={user ? <LinkButton label={s.restoreFromDrive} onPress={() => look({ forNew: true })} /> : null}
         />
       );
 
@@ -692,10 +770,22 @@ export default function StartScreen() {
             </>
           }
         >
-          <Card style={styles.userCard}>
+          <Card
+            style={[styles.userCard, !driveEmail && { borderWidth: 1.5, borderColor: colors.accent }]}
+            // Not connected yet: the whole row is the Connect button (it looked like one, Nov 12).
+            onPress={
+              driveEmail
+                ? undefined
+                : () =>
+                    void online(
+                      async () => setDriveEmail((await cloud.connectDrive()).email),
+                      () => go({ k: 'refused', forNew: true }),
+                    )
+            }
+          >
             <Icon name="cloud" size={18} color={colors.accent} strokeWidth={1.9} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.userEmail, { color: colors.ink }]}>{driveEmail ?? s.connectDrive}</Text>
+              <Text style={[styles.userEmail, { color: driveEmail ? colors.ink : colors.accent }]}>{driveEmail ?? s.connectDrive}</Text>
               <Text style={[styles.small, { color: colors.inkMuted }]}>{s.driveLine}</Text>
             </View>
             {driveEmail ? (

@@ -84,20 +84,18 @@ export function SectionLabel({ children, style }: { children: ReactNode; style?:
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
   const { colors, scheme } = useTheme();
-  return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.surface },
-        scheme === 'light' && styles.cardShadow,
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+  const look = [styles.card, { backgroundColor: colors.surface }, scheme === 'light' && styles.cardShadow, style];
+  // A card that does something is a real button (accessible, pressed state).
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [...look, pressed && { opacity: 0.8 }]}>
+        {children}
+      </Pressable>
+    );
+  }
+  return <View style={look}>{children}</View>;
 }
 
 export function Hint({ children }: { children: ReactNode }) {

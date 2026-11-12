@@ -9,7 +9,7 @@ import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { useFonts } from 'expo-font';
-import { router, Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
@@ -135,13 +135,16 @@ function ThemedStack({ added }: { added: TransactionRow[] }) {
  */
 function PlanEndedPrompt() {
   const plan = usePlan();
+  const pathname = usePathname();
+  // Never in the middle of signing in, restoring or first-run setup.
+  const busyElsewhere = pathname.startsWith('/start') || pathname.startsWith('/plan-ended') || pathname.startsWith('/lock');
   const needs = useLive((d) => needsPlanChoice(d, plan), [plan]);
   useEffect(() => {
-    if (!needs || planChoiceDismissed()) return;
+    if (!needs || busyElsewhere || planChoiceDismissed()) return;
     // Let the first screen mount before stacking this one on top.
     const t = setTimeout(() => router.push('/plan-ended'), 600);
     return () => clearTimeout(t);
-  }, [needs]);
+  }, [needs, busyElsewhere]);
   return null;
 }
 

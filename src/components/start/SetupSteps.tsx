@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -19,12 +20,15 @@ export function CurrencyStep({
   onChange,
   onBack,
   onNext,
+  extra,
 }: {
   everyday: string;
   also: string[];
   onChange: (everyday: string, also: string[]) => void;
   onBack: () => void;
   onNext: () => void;
+  /** Under Continue, e.g. "Restore from Google Drive". */
+  extra?: ReactNode;
 }) {
   const s = strings.start;
   const { colors } = useTheme();
@@ -37,7 +41,12 @@ export function CurrencyStep({
       step={1}
       title={s.currencyTitle}
       body={s.currencyBody}
-      footer={<Button label={s.continue} onPress={onNext} />}
+      footer={
+        <>
+          <Button label={s.continue} onPress={onNext} />
+          {extra}
+        </>
+      }
     >
       <Pressable onPress={() => setPicking('everyday')} style={[styles.select, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
         <View style={{ flex: 1 }}>
