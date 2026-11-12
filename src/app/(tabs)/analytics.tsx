@@ -46,6 +46,13 @@ export function rangeFor(key: RangeKey, today: string, fiscalStart: number | nul
   }
 }
 
+/** Months the trend shows for a range: all of them, and at least 6 for context. */
+export function trendMonths(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return Math.max(6, (ty - fy) * 12 + (tm - fm) + 1);
+}
+
 /**
  * Analytics (Decided Nov 7): ledger, range and currency at the top; the monthly
  * trend; expense by category as a donut (tap to highlight, then View in
@@ -78,7 +85,8 @@ export default function AnalyticsScreen() {
         from,
         to,
         flows: flows(d, { currency: cur, from, to, ledgerId: ledger }),
-        trend: monthlyTrend(d, { currency: cur, ledgerId: ledger }, today, 6),
+        // The trend follows the range: it ends at the range's last month and shows every month in it, never fewer than 6.
+        trend: monthlyTrend(d, { currency: cur, ledgerId: ledger }, to, trendMonths(from, to)),
         cats: new Map(d.select().from(categories).all().map((c) => [c.id, c])),
         names: new Map(d.select({ id: people.id, name: people.name }).from(people).all().map((p) => [p.id, p.name])),
       };
@@ -102,6 +110,16 @@ export default function AnalyticsScreen() {
   const ledgerName = data.ledger ? (data.ledgerRows.find((l) => l.id === data.ledger)?.name ?? '') : s.allLedgers;
   const maxIncome = Math.max(0, ...f.income.map((x) => Number(x.amount)));
   const maxPerson = Math.max(0, ...f.incomeByPerson.map((x) => Number(x.amount)));
+
+  // Each range says exactly which days it covers ("This year" alone didn't).
+  const fiscal = settings.fiscalYearForAnalytics && settings.fiscalYearStartMonth !== 1 ? settings.fiscalYearStartMonth : null;
+  const rangeLabel = (k: RangeKey) => (k === 'year' && fiscal ? s.fiscalYear : s.ranges[k]);
+  const period = (k: RangeKey) => {
+    const r = rangeFor(k, data.today, fiscal);
+    const year = r.to.slice(0, 4);
+    const day = (d: string) => `${strings.dates.months[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}`;
+    return r.from.slice(0, 4) === year ? `${day(r.from)} – ${day(r.to)}, ${year}` : `${day(r.from)}, ${r.from.slice(0, 4)} – ${day(r.to)}, ${year}`;
+  };
 
   const view = (categoryId: string) =>
     router.push({
@@ -129,9 +147,10 @@ export default function AnalyticsScreen() {
         </View>
         <View style={styles.chips}>
           {chip('ledger', s.ledger, ledgerName)}
-          {chip('range', s.range, s.ranges[range])}
+          {chip('range', s.range, rangeLabel(range))}
           {chip('currency', null, f.currency)}
         </View>
+        <Text style={[styles.period, { color: colors.inkMuted }]}>{period(range)}</Text>
 
         <Card style={styles.card}>
           <SectionLabel style={{ marginBottom: 12 }}>{s.trend}</SectionLabel>
@@ -271,7 +290,7 @@ export default function AnalyticsScreen() {
       <PickerSheet
         visible={sheet === 'range'}
         title={strings.dateRange.title}
-        sections={[{ items: (['month', 'last', 'three', 'year'] as const).map((k) => ({ id: k, title: s.ranges[k] })) }]}
+        sections={[{ items: (['month', 'last', 'three', 'year'] as const).map((k) => ({ id: k, title: rangeLabel(k), detail: period(k) })) }]}
         selectedId={range}
         onSelect={(id) => {
           setRange(id as RangeKey);
@@ -314,6 +333,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'flex-start' },
   title: { fontFamily: fonts.serif, fontSize: 24 },
+  period: { fontFamily: fonts.sans, fontSize: 12, marginTop: -6, paddingHorizontal: 2 },
   sub: { fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 9 },

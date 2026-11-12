@@ -11,7 +11,7 @@ import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
 import { useAction } from '@/state/actions';
 import { useToast } from '@/state/toast';
-import { fonts, radius, useTheme } from '@/theme';
+import { BUTTON_HEIGHT, fonts, radius, useTheme } from '@/theme';
 
 /**
  * A recurring item (Spec §8, §12). On Home: same-amount items get Paid
@@ -24,11 +24,15 @@ export function RecurringRow({
   last,
   onSkip,
   category,
+  buttonStyle,
 }: {
   item: RecurringItem;
-  variant: 'home' | 'list';
+  /** home: a card with an icon; review: a plain row in Review's card; list: the Recurring list. */
+  variant: 'home' | 'review' | 'list';
   last?: boolean;
   onSkip?: () => void;
+  /** Review sizes every action the same. */
+  buttonStyle?: object;
   /** Its category's look: on Home a fixed payment shows a repeat icon in its colour, a bill its icon. */
   category?: { icon: string; color: string } | null;
 }) {
@@ -56,13 +60,13 @@ export function RecurringRow({
         <Text style={[styles.tag, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{s.auto}</Text>
       ) : null
     ) : item.autoAdd ? (
-      <Text style={[styles.tag, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{s.auto}</Text>
+      <AutoTag />
     ) : varies ? (
-      <Button label={s.addBill} onPress={open} style={styles.button} />
+      <Button label={s.addBill} onPress={open} style={[styles.button, buttonStyle]} />
     ) : (
       <Button
         label={item.kind === 'expense' ? s.paid : s.received}
-        style={styles.button}
+        style={[styles.button, buttonStyle]}
         onPress={() => {
           // Same amount: one tap adds it, unless a transfer between currencies needs what arrived.
           if (!canPayInOneTap(db, item)) return open();
@@ -100,7 +104,19 @@ export function RecurringRow({
   );
 }
 
+/** Home's "Auto" marker: the same shape and size as the Paid / Add buttons beside it, but not a button. */
+export function AutoTag() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.autoTag, { backgroundColor: colors.filled }]} accessibilityLabel={strings.recurring.auto}>
+      <Text style={[styles.autoText, { color: colors.inkSecondary }]}>{strings.recurring.auto}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  autoTag: { height: BUTTON_HEIGHT, minWidth: 64, paddingHorizontal: 14, borderRadius: radius.field, alignItems: 'center', justifyContent: 'center' },
+  autoText: { fontFamily: fonts.sansBold, fontSize: 13.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, minHeight: 60 },
   title: { fontFamily: fonts.sansSemiBold, fontSize: 14 },
   detail: { fontFamily: fonts.sans, fontSize: 12 },

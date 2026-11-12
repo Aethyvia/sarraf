@@ -757,6 +757,7 @@ export const strings = {
     range: 'RANGE',
     allLedgers: 'All ledgers',
     ranges: { month: 'This month', last: 'Last month', three: 'Last 3 months', year: 'This year' },
+    fiscalYear: 'This fiscal year',
     trend: 'MONTHLY TREND',
     income: 'Income',
     expense: 'Expense',

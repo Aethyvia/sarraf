@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Icon } from '@/components/icons/Icon';
 import { GotItSheet } from '@/components/transaction/GotItSheet';
 import { RecurringRow } from '@/components/RecurringRow';
 import { Money } from '@/components/Money';
@@ -70,8 +69,15 @@ export default function ReviewScreen() {
     setConfirming(t);
   };
 
+  // Tapping a row shows its details; waiting-back rows open the expense itself (Owner, Nov 11: no ⋯ button).
+  const openRow = (t: TransactionRow, button: 'confirm' | 'date' | 'gotIt') => (button === 'gotIt' ? router.push(`/transaction/${t.id}`) : setOptions(t));
   const row = (t: TransactionRow, detail: string, button: 'confirm' | 'date' | 'gotIt', last: boolean) => (
-    <View key={t.id} style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+    <Pressable
+      key={t.id}
+      onPress={() => openRow(t, button)}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.row, !last && { borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { backgroundColor: colors.filled }]}
+    >
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[styles.title, { color: colors.ink }]} numberOfLines={1}>
           {titleOf(t, names)}
@@ -84,16 +90,11 @@ export default function ReviewScreen() {
       {button === 'date' ? (
         <Text style={[styles.date, { color: colors.inkSecondary }]}>{formatShortDate(t.date)}</Text>
       ) : button === 'gotIt' ? (
-        <Button kind="secondary" label={s.gotIt} onPress={() => setGotIt(t.id)} />
+        <Button kind="secondary" label={s.gotIt} onPress={() => setGotIt(t.id)} style={styles.action} />
       ) : (
-        <Button label={confirmLabel(t) === 'paid' ? s.paid : s.received} onPress={() => startConfirm(t)} />
+        <Button label={confirmLabel(t) === 'paid' ? s.paid : s.received} onPress={() => startConfirm(t)} style={styles.action} />
       )}
-      {button !== 'gotIt' ? (
-        <Pressable onPress={() => setOptions(t)} hitSlop={8} accessibilityRole="button" accessibilityLabel="More" style={styles.more}>
-          <Icon name="more" size={18} color={colors.inkMuted} />
-        </Pressable>
-      ) : null}
-    </View>
+    </Pressable>
   );
 
   const accountCurrencies = useLive((d) => new Map(d.select({ id: accounts.id, c: accounts.currency }).from(accounts).all().map((a) => [a.id, a.c])));
@@ -123,7 +124,14 @@ export default function ReviewScreen() {
           {!data.recurring.length ? <SectionLabel>{s.recurring}</SectionLabel> : null}
           <Card>
             {data.reminders.map((r, i) => (
-              <RecurringRow key={r.id} item={r} variant="home" last={i === data.reminders.length - 1} onSkip={() => action.run(() => skipRecurring(db, r.id))} />
+              <RecurringRow
+                key={r.id}
+                item={r}
+                variant="review"
+                last={i === data.reminders.length - 1}
+                onSkip={() => action.run(() => skipRecurring(db, r.id))}
+                buttonStyle={styles.action}
+              />
             ))}
           </Card>
         </View>
@@ -268,12 +276,13 @@ function ConfirmDateSheet({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingStart: 14, paddingEnd: 6, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  /** Every action on this page is the same size: Paid, Received, Add, Got it, and the date. */
+  action: { width: 96, paddingHorizontal: 0 },
   title: { fontFamily: fonts.sansSemiBold, fontSize: 14.5 },
   detail: { fontFamily: fonts.sans, fontSize: 12 },
   detailMoney: { fontSize: 12 },
-  date: { fontFamily: fonts.sansSemiBold, fontSize: 13, paddingHorizontal: 8 },
-  more: { padding: 6 },
+  date: { fontFamily: fonts.sansSemiBold, fontSize: 13, width: 96, textAlign: 'center' },
   empty: { fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19, paddingVertical: 24, textAlign: 'center' },
   footer: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16, paddingHorizontal: 4 },
   facts: { borderRadius: radius.field, padding: 12, gap: 8, marginBottom: 8 },

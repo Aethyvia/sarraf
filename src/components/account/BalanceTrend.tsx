@@ -10,8 +10,10 @@ const HEIGHT = 100;
 /**
  * The balance as a step line: flat between movements, a step on each day money
  * moved. Hidden while "Hide amounts" is on, since its shape gives amounts away.
+ * Days before the account existed are null: the axis still spans the whole
+ * range (30D / 6M / 1Y), and the line starts on the account's first day.
  */
-export function BalanceTrend({ points, labels }: { points: number[]; labels: [string, string, string] }) {
+export function BalanceTrend({ points: all, labels }: { points: (number | null)[]; labels: [string, string, string] }) {
   const { colors } = useTheme();
   const { hideAmounts } = useSettings();
   const [width, setWidth] = useState(0);
@@ -20,20 +22,23 @@ export function BalanceTrend({ points, labels }: { points: number[]; labels: [st
   let line = '';
   let area = '';
   let last = { x: 0, y: 0 };
+  const start = all.findIndex((v) => v !== null);
+  const points = start < 0 ? [] : (all.slice(start) as number[]);
   if (width > 0 && points.length > 0) {
     const min = Math.min(0, ...points);
     const max = Math.max(...points);
     const span = max - min || 1;
     const y = (v: number) => 4 + (1 - (v - min) / span) * (HEIGHT - 10);
-    const step = points.length > 1 ? width / (points.length - 1) : width;
-    line = `M0,${y(points[0]).toFixed(1)}`;
+    const step = all.length > 1 ? width / (all.length - 1) : width;
+    const x0 = start * step;
+    line = `M${x0.toFixed(1)},${y(points[0]).toFixed(1)}`;
     points.forEach((v, i) => {
       if (i === 0) return;
-      const x = (i * step).toFixed(1);
+      const x = (x0 + i * step).toFixed(1);
       line += ` H${x} V${y(v).toFixed(1)}`;
     });
-    if (points.length === 1) line += ` H${width}`;
-    area = `${line} V${HEIGHT - 4} H0 Z`;
+    if (all.length === 1) line += ` H${width}`;
+    area = `${line} V${HEIGHT - 4} H${x0.toFixed(1)} Z`;
     last = { x: width, y: y(points[points.length - 1]) };
   }
 

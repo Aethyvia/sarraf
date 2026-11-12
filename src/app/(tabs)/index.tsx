@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencyTileCard as Tile } from '@/components/CurrencyTile';
 import { Money } from '@/components/Money';
-import { RecurringRow } from '@/components/RecurringRow';
+import { AutoTag, RecurringRow } from '@/components/RecurringRow';
 import { BudgetCard } from '@/components/BudgetCard';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
 import { Card, IconButton, IconChip, LinkButton, SectionLabel } from '@/components/ui';
@@ -163,7 +163,7 @@ export default function HomeScreen() {
                       <Money value={t.amount} currency={t.currency} style={styles.confirmDetail} /> · {strings.recurring.addedAuto(formatShortDate(t.date))}
                     </Text>
                   </View>
-                  <Text style={[styles.autoTag, { color: colors.inkSecondary, backgroundColor: colors.filled }]}>{strings.recurring.auto}</Text>
+                  <AutoTag />
                 </Card>
               </Pressable>
             ))}
@@ -213,7 +213,6 @@ const styles = StyleSheet.create({
   section: { gap: 10 },
   groupLabel: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 0.53, paddingHorizontal: 2 },
   autoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14 },
-  autoTag: { fontFamily: fonts.sansBold, fontSize: 11, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden' },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 22, paddingHorizontal: 16 },
   emptyTitle: { fontFamily: fonts.sansSemiBold, fontSize: 13.5 },

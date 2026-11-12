@@ -64,11 +64,13 @@ export default function AccountDetailScreen() {
       const account = d.select().from(accounts).where(eq(accounts.id, id)).get();
       if (!account) return null;
       const today = todayDate();
-      // The trend never starts before the account's first day.
-      const first = addDays(today, -(RANGE_DAYS[range] - 1));
+      // The axis always spans the whole range; the line starts on the account's first day.
+      const from = addDays(today, -(RANGE_DAYS[range] - 1));
       const opened = firstDate(d, id) ?? today;
-      const from = first < opened ? (opened > today ? today : opened) : first;
       const series = balanceSeries(d, id, from, today);
+      // The change is counted from the range start, or from the first day if the account is younger.
+      const since = opened > from ? (opened > today ? today : opened) : from;
+      const sinceIndex = Math.max(0, series.findIndex((p) => p.date >= since));
       const rows = listTransactions(d, { accountIds: [id] }, today).flatMap((g) => g.rows.filter((r) => !r.echoOf));
       return {
         account,
@@ -77,7 +79,10 @@ export default function AccountDetailScreen() {
         balance: accountBalance(d, id),
         setAside: setAsideByGoal(d, id),
         series,
-        change: toDecimalString(dec(series[series.length - 1].balance).minus(dec(series[0].balance))),
+        since,
+        opened,
+        // Counted from the balance on that day, so an opening balance never shows as growth.
+        change: toDecimalString(dec(series[series.length - 1].balance).minus(dec(series[sinceIndex].balance))),
         rows: rows.slice(0, 3),
       };
     },
@@ -109,7 +114,7 @@ export default function AccountDetailScreen() {
                 sign="always"
                 style={[styles.changeValue, { color: dec(change).isNegative() ? colors.expense : dec(change).isZero() ? colors.inkSecondary : colors.income }]}
               />
-              {a.sinceStart(formatShortDate(data.from))}
+              {a.sinceStart(formatShortDate(data.since))}
             </Text>
             <View style={[styles.ranges, { backgroundColor: colors.filled }]}>
               {(Object.keys(RANGE_DAYS) as Range[]).map((r) => (
@@ -124,7 +129,10 @@ export default function AccountDetailScreen() {
               ))}
             </View>
           </View>
-          <BalanceTrend points={series.map((p) => Number(p.balance))} labels={[formatShortDate(data.from), formatShortDate(mid), a.today]} />
+          <BalanceTrend
+            points={series.map((p) => (p.date < data.opened ? null : Number(p.balance)))}
+            labels={[formatShortDate(data.from), formatShortDate(mid), a.today]}
+          />
         </View>
       </Card>
 
