@@ -161,12 +161,6 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {__DEV__ ? (
-        <View>
-          <Row icon="code" title="Developer preview" onPress={() => go('/dev')} last />
-        </View>
-      ) : null}
-
       {user ? (
         <View style={{ gap: 8, marginTop: 10 }}>
           <Button label={s.signOut} kind="danger" onPress={() => setSheet('signout')} />

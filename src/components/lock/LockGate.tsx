@@ -10,7 +10,8 @@ import { BottomSheet, Button, Field, LinkButton } from '@/components/ui';
 import { checkPin, FREE_TRIES, proveWithBackupSecret, setPin, shouldLock, waitLeft, WAITS } from '@/data/app-lock';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
-import { keyStore } from '@/services/cloud';
+import { currentUser } from '@/data/backup-flow';
+import { cloud, keyStore } from '@/services/cloud';
 import { consumeLockPause, pauseLockFor } from '@/state/lock-pause';
 import { useSettings } from '@/state/settings';
 import { fonts, useTheme } from '@/theme';
@@ -39,6 +40,10 @@ export function LockGate() {
   const [triesLeft, setTriesLeft] = useState<number | null>(null);
   const [wait, setWait] = useState(() => waitLeft(db, new Date()));
   const [forgot, setForgot] = useState<'password' | 'key' | null>(null);
+  // Signed in (Owner, Nov 12): a code to the Sarraf account's email resets the PIN; nothing on the phone changes.
+  const [emailStep, setEmailStep] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [secret, setSecret] = useState('');
   const [secretWrong, setSecretWrong] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,6 +105,34 @@ export function LockGate() {
   }, [locked, set.biometricsEnabled, bioReady, wait, biometric]);
 
   if (!locked || !set.appLockEnabled) return null;
+  const user = currentUser(db);
+
+  const sendCode = async () => {
+    if (!user) return;
+    setEmailStep('sending');
+    setCodeError(null);
+    try {
+      await cloud.sendEmailCode(user.email);
+      setEmailStep('sent');
+    } catch {
+      setEmailStep('idle');
+      setCodeError(s.emailSendFailed);
+    }
+  };
+  const checkCode = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      // The code must sign in as the same Sarraf account this phone is signed in to.
+      const who = await cloud.verifyEmailCode(user.email, code.trim());
+      if (who.id !== user.id) throw new Error('other account');
+      setResetting(true);
+    } catch {
+      setCodeError(s.emailCodeWrong);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const digit = (d: string) => {
     const next = (error ? '' : pin) + d;
@@ -149,8 +182,23 @@ export function LockGate() {
           <LinkButton label={s.forgot} onPress={() => (setSecret(''), setSecretWrong(false), setForgot('password'))} />
         </SafeAreaView>
       )}
-      <BottomSheet visible={forgot !== null && !resetting} onClose={() => setForgot(null)} title={s.resetTitle}>
+      <BottomSheet visible={forgot !== null && !resetting} onClose={() => (setForgot(null), setEmailStep('idle'), setCode(''), setCodeError(null))} title={s.resetTitle}>
         <View style={{ gap: 12 }}>
+          {user ? (
+            <View style={{ gap: 10 }}>
+              <Text style={[styles.body, { color: colors.inkSecondary }]}>{emailStep === 'sent' ? s.emailSent(user.email) : s.emailBody(user.email)}</Text>
+              {emailStep === 'sent' ? (
+                <>
+                  <Field label={s.emailCodeField} value={code} onChangeText={(v) => (setCode(v.replace(/\D/g, '').slice(0, 6)), setCodeError(null))} keyboardType="number-pad" />
+                  <Button label={busy ? strings.start.unlocking : strings.start.continue} disabled={busy || code.length !== 6} onPress={() => void checkCode()} />
+                  <LinkButton label={s.emailResend} onPress={() => void sendCode()} />
+                </>
+              ) : (
+                <Button label={emailStep === 'sending' ? s.emailSending : s.emailSend} disabled={emailStep === 'sending'} onPress={() => void sendCode()} />
+              )}
+              {codeError ? <Note tone="red">{codeError}</Note> : null}
+            </View>
+          ) : null}
           {hasBackupKeys ? (
             <>
               <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.resetBody}</Text>
@@ -177,10 +225,12 @@ export function LockGate() {
               <LinkButton label={forgot === 'key' ? strings.start.usePassword : strings.start.useRecovery} onPress={() => (setSecret(''), setForgot(forgot === 'key' ? 'password' : 'key'))} />
             </>
           ) : null}
-          <View style={[styles.box, { backgroundColor: colors.filled }]}>
-            <Text style={[styles.boxTitle, { color: colors.ink }]}>{s.resetNoBackupTitle}</Text>
-            <Text style={[styles.small, { color: colors.inkSecondary, textAlign: 'left' }]}>{s.resetNoBackup}</Text>
-          </View>
+          {!user && !hasBackupKeys ? (
+            <View style={[styles.box, { backgroundColor: colors.filled }]}>
+              <Text style={[styles.boxTitle, { color: colors.ink }]}>{s.resetNoBackupTitle}</Text>
+              <Text style={[styles.small, { color: colors.inkSecondary, textAlign: 'left' }]}>{s.resetNoBackup}</Text>
+            </View>
+          ) : null}
         </View>
       </BottomSheet>
     </Modal>

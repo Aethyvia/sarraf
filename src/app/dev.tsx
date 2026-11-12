@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useState } from 'react';
 import { DevSettings, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -38,7 +38,13 @@ const EXAMPLES: { value: string; currency: string; sign?: 'always' }[] = [
   { value: '1.5', currency: 'KWD' },
 ];
 
-export default function DevPreview() {
+/** Developer tools: dev builds only (no entry in the app; open sarraf://dev). Store builds go Home. */
+export default function DevRoute() {
+  if (!__DEV__) return <Redirect href="/" />;
+  return <DevPreview />;
+}
+
+function DevPreview() {
   const s = useSettings();
   const { colors, swatch } = useTheme();
   const { data: accountRows } = useLiveQuery(db.select().from(accounts).orderBy(accounts.rank));
