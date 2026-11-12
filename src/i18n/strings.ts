@@ -76,7 +76,11 @@ export const strings = {
     fiscalYear: 'Fiscal year',
     fiscalYearStarts: 'Fiscal year starts',
     fiscalYearHint: 'Tax export always uses it.',
-    fiscalForAnalytics: 'Use for Analytics’ “This year”',
+    fiscalForAnalytics: 'Use my fiscal year for “This year”',
+    // What Analytics' "This year" covers, so the switch says exactly what it changes.
+    fiscalForAnalyticsDetail: (on: boolean, start: string, range: string) =>
+      on ? `“This year” in Analytics runs from ${start} 1 (your fiscal year, ${range}).` : `“This year” in Analytics runs from Jan 1. On: from ${start} 1, your fiscal year (${range}).`,
+    fiscalForAnalyticsSame: 'Your fiscal year is Jan – Dec, the same as the calendar year, so this changes nothing. Set the fiscal year above.',
     analytics: 'ANALYTICS',
     incomeByPerson: 'Show income by person',
     incomeByPersonDetail: 'Adds a second breakdown below income by category',
