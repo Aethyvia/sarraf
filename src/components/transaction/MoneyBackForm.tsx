@@ -69,8 +69,9 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
   // null = untouched: pre-filled with what's still expected / today's market rate.
   const [amountText, setAmountText] = useState<string | null>(null);
   const [rateText, setRateText] = useState<string | null>(null);
-  const [countsText, setCountsText] = useState('');
-  const [known, setKnown] = useState<'rate' | 'y'>('rate');
+  // null = untouched: counts as what's still expected (council fix, Nov 12: what's shown is what's saved).
+  const [countsText, setCountsText] = useState<string | null>(null);
+  const [known, setKnown] = useState<'rate' | 'y'>('y');
   const [focus, setFocus] = useState<TrioSlot>('amount');
   const [date, setDate] = useState(today);
   const [notes, setNotes] = useState('');
@@ -83,8 +84,8 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
     setAccountId(null);
     setAmountText(null);
     setRateText(null);
-    setCountsText('');
-    setKnown('rate');
+    setCountsText(null);
+    setKnown('y');
     setFocus('amount');
     setDate(today);
     setNotes('');
@@ -107,12 +108,14 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
   const defaultAmount = !account ? '' : !other ? left : market ? convert(left, xPerY!, account.currency) : '';
   const amountExpr = amountText ?? defaultAmount;
   const amount = amountExpr ? expressionValue(amountExpr, getCurrency(accCur).minorUnits) : null;
-  const rateExpr = rateText ?? marketShown ?? '';
+  // Untouched: the amount back is what's expected at today's market rate, it counts as exactly what's
+  // expected, and the rate shown is the one those two amounts give — what's on screen is what's saved.
+  const rateExpr = rateText ?? '';
+  const countsExpr = countsText ?? (other ? left : '');
   const typedRate = expressionValue(rateExpr, RATE_MAX_DECIMALS);
-  const typedCounts = expressionValue(countsText, getCurrency(base.currency).minorUnits);
+  const typedCounts = expressionValue(countsExpr, getCurrency(base.currency).minorUnits);
   const worked = workOut({ x: amount, known, rate: typedRate, y: typedCounts, curY: base.currency, rateFromY: fromY });
-  // Untouched, the pre-filled amount counts as exactly what's still expected (no round trip through the rate).
-  const countsAs = !other ? amount : amountText === null && rateText === null && known === 'rate' && defaultAmount ? left : worked.y;
+  const countsAs = !other ? amount : worked.y;
   const after = countsAs ? toDecimalString(dec(left).minus(dec(countsAs))) : left;
   const afterStatus = dec(after).lte(0) ? 'reimbursed' : 'partly_back';
   const overRefund = kind === 'refund' && !!countsAs && dec(countsAs).gt(dec(left));
@@ -123,7 +126,7 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
     const slot = other ? focus : 'amount';
     if (slot === 'amount') setAmountText(pressKey(amountExpr, key, getCurrency(accCur).minorUnits));
     else if (slot === 'rate') setRateText(pressKey(rateExpr, key, RATE_MAX_DECIMALS));
-    else setCountsText(pressKey(countsText, key, getCurrency(base.currency).minorUnits));
+    else setCountsText(pressKey(countsExpr, key, getCurrency(base.currency).minorUnits));
   };
   const onFocus = (slot: TrioSlot) => {
     Keyboard.dismiss();
@@ -186,7 +189,7 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
             value: known === 'rate' ? typedRate : worked.rate,
             worked: known !== 'rate',
           }}
-          counter={{ label: s.countsAs.toUpperCase(), currency: base.currency, expression: countsText, value: countsAs, worked: known !== 'y' }}
+          counter={{ label: s.countsAs.toUpperCase(), currency: base.currency, expression: countsExpr, value: countsAs, worked: known !== 'y' }}
           focused={focus}
           onFocus={onFocus}
           onBackspace={() => onKey('back')}
@@ -229,8 +232,8 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
         setAccountId(id);
         setAmountText(null);
         setRateText(null);
-        setCountsText('');
-        setKnown('rate');
+        setCountsText(null);
+        setKnown('y');
         setFocus('amount');
       }}
       onClose={() => setPicking(false)}

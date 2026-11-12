@@ -8,12 +8,12 @@ import { Keypad } from '@/components/Keypad';
 import { Money } from '@/components/Money';
 import { AddPeopleSheet } from '@/components/sheets/AddPeopleSheet';
 import { Initials } from '@/components/sheets/pickers';
-import { Card, Header, IconButton, LinkButton, Segmented } from '@/components/ui';
+import { Button, Card, Header, IconButton, LinkButton, Segmented } from '@/components/ui';
 import { equalShares, leftoverToYou, percentShares, type SplitDraft, type SplitMode } from '@/data/splits';
 import { people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { expressionValue, pressKey, type CalcKey } from '@/lib/calc';
-import { Decimal, dec, formatTyped, getCurrency, toDecimalString, toTypedText } from '@/lib/money';
+import { Decimal, dec, formatAmount, formatTyped, getCurrency, toDecimalString, toTypedText } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
@@ -113,9 +113,19 @@ export function SplitEditor({
         ? toDecimalString(amounts.reduce((left, a) => left.minus(dec(a ?? '0')), dec(total)))
         : null;
   const hasOthers = rows.some((r) => r.personId !== null);
-  // What's left goes to your share on save; more than the total can't be saved.
+  // Money left to assign (council fix, Nov 12): an explicit "Add … to my share" tap, never added silently on save.
   const leftover = remaining !== null && dec(remaining).gt(0) ? remaining : null;
-  const canSave = !!total && hasOthers && remaining !== null && !dec(remaining).isNegative() && amounts.every((a) => a !== null) && (!other || !!payerId);
+  const canSave = !!total && hasOthers && remaining !== null && dec(remaining).isZero() && amounts.every((a) => a !== null) && (!other || !!payerId);
+  const addLeftoverToMe = () => {
+    if (!total || youIndex < 0) return;
+    if (mode === 'percent') {
+      const next = leftoverToYou(rows.map(pct), youIndex, '100');
+      if (next) setRows((rs) => rs.map((r, i) => (i === youIndex ? { ...r, percentText: next[i] } : r)));
+    } else if (mode === 'amounts') {
+      const next = leftoverToYou(amounts.map((a) => a ?? '0'), youIndex, total);
+      if (next) setRows((rs) => rs.map((r, i) => (i === youIndex ? { ...r, amountText: next[i] } : r)));
+    }
+  };
 
   const update = (i: number, change: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...change } : r)));
   const setPayer = (id: string) => {
@@ -126,8 +136,8 @@ export function SplitEditor({
   };
   const save = () => {
     if (!canSave || !total) return;
-    const percents = mode === 'percent' ? (leftoverToYou(rows.map(pct), youIndex, '100') ?? rows.map(pct)) : null;
-    const finalAmounts = percents ? percentShares(total, percents, currency) : mode === 'amounts' ? (leftoverToYou(amounts as string[], youIndex, total) ?? amounts) : amounts;
+    const percents = mode === 'percent' ? rows.map(pct) : null;
+    const finalAmounts = percents ? percentShares(total, percents, currency) : amounts;
     onSave({
       payerId: other ? payerId : null,
       split: {
@@ -293,9 +303,16 @@ export function SplitEditor({
             )}
           </View>
           {leftover ? (
-            <Text style={[styles.hint, { color: colors.warning }]}>
-              {mode === 'percent' ? s.leftoverPercent(toTypedText(leftover, numberFormat)) : s.leftoverAmount}
-            </Text>
+            <View style={{ gap: 6 }}>
+              <Text style={[styles.hint, { color: colors.warning }]}>
+                {mode === 'percent' ? s.leftoverPercent(toTypedText(leftover, numberFormat)) : s.leftoverAmount}
+              </Text>
+              <Button
+                kind="secondary"
+                label={mode === 'percent' ? s.addPercentToMe(toTypedText(leftover, numberFormat)) : s.addToMe(formatAmount(leftover, currency, { numberFormat }).text)}
+                onPress={addLeftoverToMe}
+              />
+            </View>
           ) : remaining !== null && dec(remaining).isNegative() ? (
             <Text style={[styles.hint, { color: colors.expense }]}>{s.overAssigned}</Text>
           ) : null}

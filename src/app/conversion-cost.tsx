@@ -45,7 +45,11 @@ export default function ConversionCostScreen() {
         <>
           <Card style={styles.card}>
             <SectionLabel>{s.total}</SectionLabel>
-            {money(c.total, { fontSize: 28, color: colors.ink, marginTop: 4 })}
+            {/* Labelled like Home's estimated total (council fix, Nov 12): it combines currencies at today's rates. */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ fontSize: 24, color: colors.inkMuted }}>≈</Text>
+              {money(c.total, { fontSize: 28, color: colors.ink, marginTop: 4 })}
+            </View>
             <Text style={[styles.small, { color: colors.inkMuted }]}>{parts(s.share(pct, money(c.moved, { fontSize: 11.5, color: colors.inkMuted })))}</Text>
             <View style={styles.split}>
               <Text style={[styles.small, { color: colors.inkSecondary }]}>

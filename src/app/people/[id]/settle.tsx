@@ -1,3 +1,4 @@
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { eq, isNull } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -17,7 +18,7 @@ import { strings } from '@/i18n/strings';
 import { expressionValue, pressKey, type CalcKey } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
 import { dec, getCurrency, toDecimalString } from '@/lib/money';
-import { trimRate } from '@/components/transaction/parts';
+import { formatLongDate, trimRate } from '@/components/transaction/parts';
 import { useAction } from '@/state/actions';
 import { rateFromYFirst, workOut } from '@/state/conversion';
 import { useLive } from '@/state/live';
@@ -67,6 +68,8 @@ export default function SettleUpScreen() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [againstCurrency, setAgainstCurrency] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  // When it was settled (council fix, Nov 12): cash paid last week shouldn't be dated today.
+  const [date, setDate] = useState(today);
   const [sheet, setSheet] = useState<'balance' | 'account' | 'paidCurrency' | 'against' | null>(null);
 
   const balances = data?.balances ?? [];
@@ -102,7 +105,8 @@ export default function SettleUpScreen() {
   const xPerY = market?.rate ?? null;
   const fromY = rateFromYFirst(xPerY);
   const marketShown = xPerY ? trimRate(fromY ? xPerY : toDecimalString(dec('1').dividedBy(dec(xPerY)))) : null;
-  const rateExpr = rateText ?? (known === 'rate' ? (marketShown ?? '') : '');
+  // Never saved at the market rate by default (council fix, Nov 12): type the rate or tap "Market · use it".
+  const rateExpr = rateText ?? '';
   const typedRate = expressionValue(rateExpr, RATE_MAX_DECIMALS);
   const typedY = curY ? expressionValue(yText, getCurrency(curY).minorUnits) : null;
   const worked = converts && curY ? workOut({ x: xValid ? x : null, known, rate: typedRate, y: typedY, curY, rateFromY: fromY }) : { rate: null, y: null };
@@ -163,10 +167,10 @@ export default function SettleUpScreen() {
     if (!canSave || !x) return;
     const done =
       how === 'paid'
-        ? action.run(() => settleByPayment(db, { personId: person.id, currency: curX, clears: x, accountId: account!.id, amount: y!, note }))
+        ? action.run(() => settleByPayment(db, { personId: person.id, currency: curX, clears: x, accountId: account!.id, amount: y!, note, date }, today))
         : how === 'offset'
-          ? action.run(() => offsetBalances(db, { personId: person.id, a: { currency: curX, amount: x }, b: { currency: against!.currency, amount: y! }, note }))
-          : action.run(() => markSettled(db, { personId: person.id, currency: curX, amount: x, note }));
+          ? action.run(() => offsetBalances(db, { personId: person.id, a: { currency: curX, amount: x }, b: { currency: against!.currency, amount: y! }, note, date }, today))
+          : action.run(() => markSettled(db, { personId: person.id, currency: curX, amount: x, note, date }, today));
     if (done) {
       toast({ message: s.done });
       router.back();
@@ -289,6 +293,19 @@ export default function SettleUpScreen() {
         />
       ) : null}
       {how === 'offset' && against ? <SelectorRow label={u.againstLabel} value={balanceValue(against)} onPress={opposite.length > 1 ? () => setSheet('against') : undefined} /> : null}
+      <SelectorRow
+        label={u.date}
+        value={date === today ? u.today(formatLongDate(date)) : formatLongDate(date)}
+        onPress={() => {
+          const [yy, mm, dd] = date.split('-').map(Number);
+          DateTimePickerAndroid.open({
+            value: new Date(yy, mm - 1, dd),
+            mode: 'date',
+            maximumDate: new Date(),
+            onChange: (e, picked) => e.type === 'set' && picked && setDate(todayDate(picked)),
+          });
+        }}
+      />
       <Field label={s.note.replace(' (OPTIONAL)', '')} optional value={note} onChangeText={setNote} placeholder={s.notePlaceholder} />
       <Hint>{how === 'paid' ? s.explainOther(person.name) : how === 'offset' ? s.explainOffset : s.explain(person.name)}</Hint>
 
