@@ -108,3 +108,15 @@ describe('the receipt while typing, and keeping changes', () => {
     expect(commitCharges([fee], changed, ctx)[0].amount).toBe('45');
   });
 });
+
+describe('the rate on the same keypad (Owner, Nov 12)', () => {
+  it('types the rate when it is the target, and counts it once it works out', () => {
+    let e: ChargeEdit = { ...newChargeEdit('transfer_fee', ctx), currency: 'EUR', expression: '20', target: 'rate' };
+    for (const k of ['1', '.', '0', '8'] as const) e = pressChargeKey(e, k);
+    expect(e).toMatchObject({ rate: '1.08', expression: '20' });
+    expect(chargeFromEdit(e, ctx)).toMatchObject({ currency: 'EUR', amount: '20', rate: '1.08' });
+    expect(chargeFromEdit({ ...e, rate: '0' }, ctx)).toBeNull();
+    expect(pressChargeKey({ ...e, target: 'amount' }, '5').expression).toBe('205');
+  });
+});
+

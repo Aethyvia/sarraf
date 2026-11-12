@@ -4,8 +4,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/icons/Icon';
 import { BackspaceButton } from '@/components/Keypad';
 import { Money } from '@/components/Money';
-import { parts } from '@/components/parts';
-import { Segmented } from '@/components/ui';
 import type { ChargeDraft } from '@/data/transactions';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';

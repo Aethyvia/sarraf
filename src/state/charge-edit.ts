@@ -20,8 +20,10 @@ export interface ChargeEdit {
   deduction: ChargeDraft['deduction'];
   accountId: string | null;
   isTax: boolean;
-  /** A stored decimal, for an inside charge in a third currency. */
-  rate: DecimalString | null;
+  /** An inside charge in a third currency: the rate as typed on the keypad (1 charge currency = rate main). */
+  rate: string | null;
+  /** Which the keypad types into (Owner, Nov 12: the rate uses the same keypad). */
+  target?: 'amount' | 'rate';
 }
 
 export interface ChargeContext {
@@ -83,8 +85,18 @@ export function withAccount(e: ChargeEdit, accountId: string, ctx: ChargeContext
   return { ...e, accountId, currency: ctx.accountCurrency(accountId) ?? e.currency };
 }
 
+/** Places a typed rate may have (same as Add transaction's). */
+const CHARGE_RATE_DECIMALS = 10;
+
 export function pressChargeKey(e: ChargeEdit, key: CalcKey): ChargeEdit {
+  if (e.target === 'rate') return { ...e, rate: pressKey(e.rate ?? '', key, CHARGE_RATE_DECIMALS) };
   return { ...e, expression: pressKey(e.expression, key, getCurrency(e.currency).minorUnits) };
+}
+
+/** The rate as it works out now (a positive decimal), or null. */
+export function chargeRate(e: ChargeEdit): DecimalString | null {
+  const v = e.rate ? expressionValue(e.rate, CHARGE_RATE_DECIMALS) : null;
+  return v && dec(v).gt(0) ? v : null;
 }
 
 export const needsRate = (e: ChargeEdit, ctx: ChargeContext) =>
@@ -100,8 +112,8 @@ export function chargeAmount(e: ChargeEdit): DecimalString | null {
 export function chargeFromEdit(e: ChargeEdit, ctx: ChargeContext): ChargeDraft | null {
   const amount = chargeAmount(e);
   const onTop = e.deduction === 'charged_separately';
-  const rate = needsRate(e, ctx) ? e.rate : null;
-  if (!amount || (onTop && !e.accountId) || (needsRate(e, ctx) && !(rate && dec(rate).gt(0))) || (e.type === 'custom' && !e.label?.trim())) return null;
+  const rate = needsRate(e, ctx) ? chargeRate(e) : null;
+  if (!amount || (onTop && !e.accountId) || (needsRate(e, ctx) && !rate) || (e.type === 'custom' && !e.label?.trim())) return null;
   return {
     type: e.type,
     label: e.type === 'custom' ? e.label!.trim() : null,

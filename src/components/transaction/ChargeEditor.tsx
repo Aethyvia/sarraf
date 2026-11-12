@@ -22,7 +22,6 @@ export function ChargeEditor({
   insideLabel,
   accountName,
   rateLabel,
-  rateValue,
   forcedTax,
   onType,
   onRemove,
@@ -31,6 +30,7 @@ export function ChargeEditor({
   onAccount,
   onCurrency,
   onRate,
+  onAmount,
   onKey,
 }: {
   edit: ChargeEdit;
@@ -38,9 +38,8 @@ export function ChargeEditor({
   /** "Inside the $530.00". */
   insideLabel: string;
   accountName: string | null;
-  /** Shown only when an inside charge is in a third currency: "1 EUR = ? USD". */
-  rateLabel: string | null;
-  rateValue: string | null;
+  /** Shown only when an inside charge is in a third currency: "1 EUR = ? USD" (from, to). */
+  rateLabel: { from: string; to: string } | null;
   forcedTax: boolean;
   onType: () => void;
   onRemove: () => void;
@@ -48,7 +47,10 @@ export function ChargeEditor({
   onTax: () => void;
   onAccount: () => void;
   onCurrency: () => void;
+  /** Points the keypad at the rate (Owner, Nov 12: rates use the same keypad). */
   onRate: () => void;
+  /** Points the keypad back at the amount. */
+  onAmount: () => void;
   onKey: (key: CalcKey) => void;
 }) {
   const s = strings.charge;
@@ -57,6 +59,7 @@ export function ChargeEditor({
   const tax = forcedTax || edit.isTax;
   const shown = edit.expression || '0';
   const result = hasOperator(edit.expression) ? evaluate(edit.expression) : null;
+  const rateOn = !!rateLabel && edit.target === 'rate';
 
   return (
     <View style={[styles.dock, { backgroundColor: colors.sheet, borderTopColor: colors.outline }]}>
@@ -100,9 +103,26 @@ export function ChargeEditor({
       </View>
 
       {onTop ? <FormRow label={s.paidFrom} value={accountName ?? undefined} placeholder={strings.add.pick} onPress={onAccount} /> : null}
-      {rateLabel ? <FormRow label={rateLabel} value={rateValue ?? undefined} placeholder={s.rateNeeded} onPress={onRate} /> : null}
+      {rateLabel ? (
+        <Pressable
+          onPress={onRate}
+          accessibilityRole="button"
+          accessibilityLabel={`Rate, 1 ${rateLabel.from} = ${edit.rate || '?'} ${rateLabel.to}`}
+          style={[styles.rateRow, { backgroundColor: rateOn ? colors.accentSoft : colors.filled, borderColor: rateOn ? colors.accent : 'transparent' }]}
+        >
+          <Text style={[styles.rateLabel, { color: colors.inkMuted }]}>AT</Text>
+          <Text style={[styles.rateText, { color: edit.rate ? colors.ink : colors.inkMuted }]} numberOfLines={1}>
+            1 {rateLabel.from} = {edit.rate || '?'} {rateLabel.to}
+          </Text>
+          {rateOn ? null : <Icon name="edit" size={13} color={colors.accent} strokeWidth={2} />}
+        </Pressable>
+      ) : null}
 
-      <View style={[styles.amountCard, { backgroundColor: colors.surface }]}>
+      <Pressable
+        onPress={onAmount}
+        accessibilityRole="button"
+        style={[styles.amountCard, { backgroundColor: colors.surface, borderColor: rateLabel && !rateOn ? colors.accent : 'transparent' }]}
+      >
         <Pressable
           onPress={onCurrency}
           disabled={onTop}
@@ -120,7 +140,7 @@ export function ChargeEditor({
           </Text>
         </View>
         <BackspaceButton onPress={() => onKey('back')} onLongPress={() => onKey('clear')} />
-      </View>
+      </Pressable>
 
       <Keypad onKey={onKey} />
     </View>
@@ -143,7 +163,10 @@ const styles = StyleSheet.create({
   bin: { width: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   tax: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderRadius: radius.pill, paddingHorizontal: 12 },
   taxText: { fontFamily: fonts.sansBold, fontSize: 11.5 },
-  amountCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
+  amountCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5 },
+  rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 11, borderWidth: 1.5, paddingHorizontal: 12, paddingVertical: 9 },
+  rateLabel: { fontFamily: fonts.sansBold, fontSize: 9.5, letterSpacing: 0.4 },
+  rateText: { flex: 1, fontFamily: fonts.mono, fontSize: 14 },
   cur: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
   curText: { fontFamily: fonts.sansBold, fontSize: 11 },
   expr: { fontFamily: fonts.mono, fontSize: 11.5 },

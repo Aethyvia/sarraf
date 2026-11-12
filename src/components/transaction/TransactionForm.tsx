@@ -23,7 +23,7 @@ import {
   useLedgerItems,
   usePeopleItems,
 } from '@/components/sheets/pickers';
-import { BottomSheet, Button, Field, Header, IconButton, Segmented, ToggleRow } from '@/components/ui';
+import { BottomSheet, Button, Header, IconButton, Segmented, ToggleRow } from '@/components/ui';
 import { vsMarketPercent, type AmountResult } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
@@ -39,7 +39,7 @@ import { strings } from '@/i18n/strings';
 import { expressionValue, hasOperator } from '@/lib/calc';
 import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
-import { add, dec, toDecimalString, formatAmount, formatTyped, getCurrency, isDecimalString, parseTypedAmount, toTypedText } from '@/lib/money';
+import { add, dec, toDecimalString, formatAmount, formatTyped, getCurrency, isDecimalString } from '@/lib/money';
 import { deleteStoredFiles, storeFiles } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
@@ -146,7 +146,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const [chargeEdit, setChargeEdit] = useState<ChargeEdit | null>(null);
   // The charges as they were when the page opened: ✕ goes back to these (after a warning).
   const [chargesBefore, setChargesBefore] = useState<ChargeDraft[]>([]);
-  const [chargeSheet, setChargeSheet] = useState<'type' | 'account' | 'currency' | 'rate' | 'discard' | null>(null);
+  const [chargeSheet, setChargeSheet] = useState<'type' | 'account' | 'currency' | 'discard' | null>(null);
   const chargeCtx: ChargeContext = {
     mainCurrency,
     receivingCurrency,
@@ -910,8 +910,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
               typeName={chargeEdit.type === 'custom' ? (chargeEdit.label ?? strings.charge.types.custom) : strings.charge.types[chargeEdit.type]}
               insideLabel={amount && !settings.hideAmounts ? strings.charge.insideShort(formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat }).text) : strings.charge.insideAmount}
               accountName={chargeEdit.accountId ? (ref.accounts.get(chargeEdit.accountId)?.name ?? null) : null}
-              rateLabel={needsRate(chargeEdit, chargeCtx) ? strings.charge.rate(chargeEdit.currency, mainCurrency) : null}
-              rateValue={chargeEdit.rate ? trimRate(chargeEdit.rate) : null}
+              rateLabel={needsRate(chargeEdit, chargeCtx) ? { from: chargeEdit.currency, to: mainCurrency } : null}
               forcedTax={isForcedTax(chargeEdit.type)}
               onType={() => setChargeSheet('type')}
               onRemove={removeCharge}
@@ -919,7 +918,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
               onTax={() => setChargeEdit((e) => e && { ...e, isTax: !e.isTax })}
               onAccount={() => setChargeSheet('account')}
               onCurrency={() => setChargeSheet('currency')}
-              onRate={() => setChargeSheet('rate')}
+              onRate={() => setChargeEdit((e) => e && { ...e, target: 'rate' })}
+              onAmount={() => setChargeEdit((e) => e && { ...e, target: 'amount' })}
               onKey={(k) => setChargeEdit((e) => e && pressChargeKey(e, k))}
             />
           ) : (
@@ -953,16 +953,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         <CurrencySheet
           visible={chargeSheet === 'currency'}
           selected={chargeEdit?.currency ?? mainCurrency}
-          onSelect={(c) => setChargeEdit((e) => e && { ...e, currency: c, rate: null })}
-          onClose={() => setChargeSheet(null)}
-        />
-        <RateSheet
-          visible={chargeSheet === 'rate'}
-          from={chargeEdit?.currency ?? mainCurrency}
-          to={mainCurrency}
-          value={chargeEdit?.rate ?? ''}
-          market={null}
-          onDone={(v) => setChargeEdit((e) => e && { ...e, rate: v || null })}
+          onSelect={(c) => setChargeEdit((e) => e && { ...e, currency: c, rate: null, target: 'amount' })}
           onClose={() => setChargeSheet(null)}
         />
         <BottomSheet visible={chargeSheet === 'discard'} onClose={() => setChargeSheet(null)} title={strings.charge.discardTitle}>
@@ -977,55 +968,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   );
 }
 
-function RateSheet({
-  visible,
-  from,
-  to,
-  value,
-  market,
-  onDone,
-  onClose,
-}: {
-  visible: boolean;
-  from: string;
-  to: string;
-  /** A stored decimal ("277.5"), or empty. */
-  value: string;
-  market: string | null;
-  onDone: (v: string) => void;
-  onClose: () => void;
-}) {
-  const { numberFormat } = useSettings();
-  const [draft, setDraft] = useState('');
-  const [shownFor, setShownFor] = useState(false);
-  if (visible !== shownFor) {
-    setShownFor(visible);
-    if (visible) setDraft(toTypedText(value, numberFormat));
-  }
-  const parsed = draft.trim() ? parseTypedAmount(draft, numberFormat) : '';
-  return (
-    <BottomSheet visible={visible} onClose={onClose} title={strings.add.rate}>
-      <View style={{ gap: 12 }}>
-        <Field
-          label={`1 ${from} = ? ${to}`}
-          value={draft}
-          onChangeText={setDraft}
-          keyboardType="decimal-pad"
-          placeholder={market ? toTypedText(trimRate(market), numberFormat) : '0.00'}
-          autoFocus
-        />
-        <Button
-          label={strings.notesSheet.done}
-          disabled={parsed === null}
-          onPress={() => {
-            onDone(parsed ?? '');
-            onClose();
-          }}
-        />
-      </View>
-    </BottomSheet>
-  );
-}
 
 function NotesSheet({ visible, value, onDone, onClose }: { visible: boolean; value: string; onDone: (v: string) => void; onClose: () => void }) {
   const { colors } = useTheme();
