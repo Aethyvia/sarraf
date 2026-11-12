@@ -114,7 +114,7 @@ export const strings = {
     keepsPhoneData: 'Your data stays on this phone. You’ll be signed out; sign in again (any way) to keep using it.',
     noBackupWarn: 'This phone’s data has no backup. Once erased, it’s gone.',
     deleteButton: (c: { account: boolean; phone: boolean; drive: boolean }) =>
-      c.account && !c.phone && !c.drive ? 'Delete Sarraf account' : !c.account && c.phone && !c.drive ? 'Delete this phone’s data' : !c.account && !c.phone && c.drive ? 'Delete the Drive backup' : 'Delete what’s ticked',
+      c.account && !c.phone && !c.drive ? 'Delete Sarraf account' : !c.account && c.phone && !c.drive ? 'Delete this phone’s data' : !c.account && !c.phone && c.drive ? 'Delete the Drive backup' : !c.account && !c.phone && !c.drive ? 'Tick what to delete' : 'Delete what’s ticked',
     deletedWhat: (c: { account: boolean; phone: boolean; drive: boolean }) =>
       c.account && !c.phone && !c.drive ? 'Your Sarraf account was deleted. Your data is still here.' : !c.account && c.phone && !c.drive ? 'This phone’s data was deleted' : !c.account && !c.phone && c.drive ? 'The Drive backup was deleted' : 'Deleted',
     sarrafAccount: 'Sarraf account',
@@ -148,8 +148,7 @@ export const strings = {
     hideAmountsDetail: 'Every amount shows as •••• until you tap it.',
   },
   accounts: {
-    addAnother: 'Add an account',
-    afterSetup: 'Add the rest of your accounts here: Payoneer, Wise, another bank. Each can have an institution and an opening balance.',
+    afterSetup: 'Tap + to add the rest of your accounts: Payoneer, Wise, another bank. Each can have an institution and an opening balance.',
     otherAccounts: 'NOT IN AN INSTITUTION',
     title: 'Accounts',
     add: 'Add account',
@@ -217,7 +216,7 @@ export const strings = {
       { target: 'add.amount', title: 'Type the amount', body: 'The keypad does sums too: 1200+350. In another currency, type the number you know and Sarraf works out the other.' },
     ],
     accounts: [
-      { target: 'accounts.add', title: 'Add your other accounts', body: 'Payoneer, Wise, another bank: set the currency, group it under an institution, and add its opening balance.' },
+      { target: 'accounts.add', title: 'Add your other accounts here', body: 'Tap + for Payoneer, Wise or another bank: set the currency, group it under an institution, and add its opening balance.' },
     ],
   },
   iconPicker: {
@@ -228,13 +227,15 @@ export const strings = {
     useDefault: 'Use default',
     iconGroups: {
       money: 'MONEY',
-      food: 'FOOD & SHOPPING',
-      home: 'HOME & BILLS',
+      food: 'FOOD & DRINK',
+      shopping: 'SHOPPING',
+      home: 'HOME',
+      bills: 'BILLS & UTILITIES',
       transport: 'TRAVEL & TRANSPORT',
-      health: 'HEALTH',
-      work: 'WORK, TECH & STUDY',
+      health: 'HEALTH & FITNESS',
+      work: 'WORK & STUDY',
       fun: 'FUN',
-      people: 'PEOPLE',
+      people: 'PEOPLE & GIVING',
       other: 'OTHER',
     },
     colors: {
@@ -1284,7 +1285,7 @@ export const strings = {
     accountsTitle: 'Your first accounts',
     accountsBody: 'A bank and a cash account for each currency. Tick the ones you have; tap one to rename it. Payoneer, Wise and others come next, on the Accounts screen.',
     freeNote: 'Free covers 5 accounts. Choose your main ones now; Sarraf Plus has no limit.',
-    renameHint: (c: string, example: string) => `${c} · rename to your bank, e.g. ${example}`,
+    renameHint: (c: string, example: string | null) => (example ? `${c} · rename to your bank, e.g. ${example}` : `${c} · rename to your bank`),
     tapToRename: (c: string) => `${c} · tap to rename`,
     addAnother: '+ Add another',
     freeCount: (n: number, limit: number) => `${n} of ${limit} free`,

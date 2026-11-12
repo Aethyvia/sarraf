@@ -164,7 +164,7 @@ export function AccountsStep({
               <View style={{ flex: 1, opacity: a.ticked ? 1 : 0.55 }}>
                 <Text style={[styles.name, { color: colors.ink }]}>{a.name}</Text>
                 <Text style={[styles.small, { color: colors.inkMuted }]} numberOfLines={1}>
-                  {a.renameHint ? s.renameHint(a.currency, everyday === 'PKR' ? 'Alfalah' : 'your bank') : s.tapToRename(a.currency)}
+                  {a.renameHint ? s.renameHint(a.currency, a.currency === 'PKR' ? 'Alfalah' : null) : s.tapToRename(a.currency)}
                 </Text>
               </View>
             </Pressable>

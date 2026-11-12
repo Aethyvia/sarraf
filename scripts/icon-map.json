@@ -1,0 +1,17 @@
+{
+  "groups": {
+    "money": {"dollar":"DollarSign","banknote":"Banknote","coins":"Coins","hand-coins":"HandCoins","bank":"Landmark","card":"CreditCard","wallet":"Wallet","savings":"PiggyBank","receipt":"Receipt","percent":"Percent","trend":"TrendingUp","pie":"ChartPie","calculator":"Calculator","scale":"Scale","exchange":"ArrowLeftRight","gem":"Gem","bitcoin":"Bitcoin","handshake":"Handshake","briefcase":"Briefcase","document":"FileText"},
+    "food": {"basket":"ShoppingBasket","cart":"ShoppingCart","utensils":"Utensils","pizza":"Pizza","sandwich":"Sandwich","carrot":"Carrot","apple":"Apple","beef":"Beef","fish":"Fish","egg":"Egg","milk":"Milk","croissant":"Croissant","cake":"CakeSlice","ice-cream":"IceCreamCone","soup":"Soup","coffee":"Coffee","glass":"CupSoda","wine":"Wine"},
+    "shopping": {"bag":"ShoppingBag","store":"Store","shirt":"Shirt","shoe":"Footprints","gift":"Gift","tag":"Tag","package":"Package","glasses":"Glasses","watch":"Watch","sparkles":"Sparkles","scissors":"Scissors"},
+    "home": {"home":"House","apartment":"Building","key":"Key","sofa":"Sofa","bed":"BedDouble","lamp":"Lamp","bath":"Bath","washer":"WashingMachine","fridge":"Refrigerator","hammer":"Hammer","tool":"Wrench","paint":"PaintRoller","tree":"Trees","flower":"Flower2","sun":"Sun","shield":"Shield"},
+    "bills": {"bulb":"Lightbulb","zap":"Zap","flame":"Flame","drop":"Droplet","wifi":"Wifi","phone":"Smartphone","tv":"Tv","trash-bin":"Trash","plug":"Plug"},
+    "transport": {"car":"Car","taxi":"CarTaxiFront","bus":"Bus","train":"TrainFront","plane":"Plane","bicycle":"Bike","scooter":"Motorbike","fuel":"Fuel","tire":"CarFront","parking":"SquareParking","ship":"Ship","suitcase":"Luggage","hotel":"Hotel","map":"Map","pin":"MapPin","umbrella":"Umbrella","tent":"Tent"},
+    "health": {"heart":"Heart","pill":"Pill","stethoscope":"Stethoscope","hospital":"Hospital","syringe":"Syringe","activity":"Activity","dumbbell":"Dumbbell","brain":"Brain"},
+    "work": {"work":"BriefcaseBusiness","office":"Building2","laptop":"Laptop","code":"Code","server":"Server","cloud":"Cloud","globe":"Globe","mail":"Mail","printer":"Printer","pen":"PenTool","palette":"Palette","camera":"Camera","megaphone":"Megaphone","headphones":"Headphones","school":"School","graduation":"GraduationCap","book":"BookOpen","backpack":"Backpack"},
+    "fun": {"film":"Clapperboard","popcorn":"Popcorn","ticket":"Ticket","music":"Music","gamepad":"Gamepad2","dice":"Dice5","party":"PartyPopper","trophy":"Trophy","star":"Star"},
+    "people": {"user":"User","family":"Users","baby":"Baby","paw":"PawPrint","charity":"HandHeart","heart-handshake":"HeartHandshake","eid":"MoonStar"},
+    "other": {"list":"List","check":"Check","flag":"Flag","box":"Box","hourglass":"Hourglass","help":"CircleHelp","more":"Ellipsis"}
+  },
+  "keep": ["tooth", "cycle"],
+  "keepGroups": {"health": ["tooth"], "other": ["cycle"]}
+}

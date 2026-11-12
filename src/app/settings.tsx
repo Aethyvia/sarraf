@@ -216,8 +216,6 @@ export default function SettingsScreen() {
           <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.accountExplain}</Text>
           <SheetOption title={s.backup} detail={device.backupEnabled ? (device.driveEmail ?? s.backupOn) : s.backupOff} onPress={() => (setSheet(null), go('/backup'))} />
           <SheetOption title={s.subscription} detail={plan === 'plus' ? strings.plans.plus : strings.plans.free} onPress={() => (setSheet(null), go('/plans'))} />
-          <Button label={s.signOut} kind="secondary" onPress={() => setSheet('signout')} />
-          <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
         </View>
       </BottomSheet>
 
@@ -262,7 +260,7 @@ export default function SettingsScreen() {
                 }
               }}
             />
-            <Button label={s.keepAccount} kind="secondary" onPress={() => setSheet(null)} />
+            <Button label={strings.common.cancel} kind="secondary" onPress={() => setSheet(null)} />
           </View>
         </ScrollView>
       </BottomSheet>

@@ -59,7 +59,7 @@ export function IconColorSheet({
       <Text style={[styles.label, { color: colors.inkMuted }]}>
         {s.icon} · {s.options(PICKABLE_ICONS.length)}
       </Text>
-      <ScrollView style={{ maxHeight: 300 }}>
+      <ScrollView style={{ maxHeight: 440 }}>
         {ICON_GROUPS.map((g) => (
           <View key={g.key}>
             <Text style={[styles.group, { color: colors.inkMuted }]}>{s.iconGroups[g.key]}</Text>

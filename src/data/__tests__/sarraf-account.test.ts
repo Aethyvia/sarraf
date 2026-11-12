@@ -1,6 +1,6 @@
 import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData } from '@/db/sample';
-import { accounts, deviceState } from '@/db/schema';
+import { accounts, deviceState, settings } from '@/db/schema';
 import { fakeCloud, grantFakePlus, memoryStore } from '@/services/cloud/fake';
 import { createTestDb } from '@/test/db';
 import { backupNow, currentUser, getDeviceState, lookInDrive, memoryKeyStore, rememberSignIn, turnOnBackup } from '../backup-flow';
@@ -85,6 +85,13 @@ describe('sign out and delete', () => {
     expect(p.db.select().from(accounts).all()).toHaveLength(0);
     expect(currentUser(p.db)?.id).toBe('dev-user');
     expect(await p.cloud.getRecord(currentUser(p.db)!)).not.toBeNull();
+  });
+
+  it('erasing this phone keeps its device id (its own backup stays its own)', async () => {
+    const p = await phone();
+    const before = p.db.select().from(settings).get()!.deviceId;
+    await deleteChosen(p, { account: false, phone: true, drive: false }, { ...NOW, deleteFiles: () => {} });
+    expect(p.db.select().from(settings).get()!.deviceId).toBe(before);
   });
 
   it('delete the Drive backup only: the record goes too and backup turns off here', async () => {

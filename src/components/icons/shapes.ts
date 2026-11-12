@@ -1,8 +1,10 @@
 // Generated from the design canvas: the 60 icons of "Bottom sheet — icon & color" plus the UI icons the screens use.
 // Every icon is drawn on a 24×24 grid as round-capped strokes.
-export type IconElement = ['path' | 'circle' | 'rect', Record<string, string>];
+import { LUCIDE_GROUPS, LUCIDE_SHAPES } from './lucide-shapes';
 
-export const ICON_SHAPES = {
+export type IconElement = ['path' | 'circle' | 'rect' | 'line' | 'polyline' | 'polygon' | 'ellipse', Record<string, string>];
+
+const CANVAS_SHAPES = {
   "backspace":[["path",{"d":"M21 6H8l-5 6 5 6h13z"}],["path",{"d":"M12 10l4 4M16 10l-4 4"}]],
   "bank":[["path",{"d":"M4 20h16M6 20V10l6-4 6 4v10"}]],
   "basket":[["path",{"d":"M3 3h18v4H3zM5 7v13a1 1 0 001 1h12a1 1 0 001-1V7M10 11h4"}]],
@@ -113,17 +115,18 @@ export const ICON_SHAPES = {
   "nav-transactions":[["rect",{"x":"4","y":"4","width":"16","height":"16","rx":"2"}],["path",{"d":"M8 9h8M8 13h5"}]]} satisfies Record<string, IconElement[]>;
 
 /** The icons people can pick for an account, category or ledger, in the picker's order. */
-export const PICKABLE_ICONS = ["bank", "basket", "briefcase", "list", "glass", "user", "star", "cart", "car", "home", "hammer", "coffee", "office", "tv", "phone", "document", "heart", "cycle", "work", "check", "dollar", "scooter", "card", "family", "pin", "fuel", "bus", "tire", "umbrella", "pill", "tooth", "music", "gamepad", "suitcase", "bed", "cloud", "laptop", "bulb", "drop", "scissors", "washer", "tool", "sofa", "percent", "scale", "school", "handshake", "trend", "code", "more", "bag", "camera", "palette", "tree", "sun", "key", "trophy", "backpack", "stethoscope", "charity", "mail"] as const;
 
-/** The icon sheet's groups (owner, Nov 12: "categorize the icons so they're easy to find"). Every pickable icon is in exactly one. */
-export const ICON_GROUPS: { key: 'money' | 'food' | 'home' | 'transport' | 'health' | 'work' | 'fun' | 'people' | 'other'; icons: (typeof PICKABLE_ICONS)[number][] }[] = [
-  { key: 'money', icons: ['dollar', 'bank', 'card', 'percent', 'trend', 'scale', 'handshake', 'charity', 'briefcase', 'document'] },
-  { key: 'food', icons: ['basket', 'cart', 'coffee', 'glass', 'bag'] },
-  { key: 'home', icons: ['home', 'sofa', 'bed', 'washer', 'bulb', 'drop', 'key', 'hammer', 'tool', 'tree', 'sun', 'scissors'] },
-  { key: 'transport', icons: ['car', 'bus', 'scooter', 'cycle', 'fuel', 'tire', 'suitcase', 'pin', 'umbrella'] },
-  { key: 'health', icons: ['heart', 'pill', 'tooth', 'stethoscope'] },
-  { key: 'work', icons: ['work', 'office', 'laptop', 'code', 'phone', 'mail', 'cloud', 'camera', 'palette', 'school', 'backpack'] },
-  { key: 'fun', icons: ['tv', 'music', 'gamepad', 'trophy', 'star'] },
-  { key: 'people', icons: ['user', 'family'] },
-  { key: 'other', icons: ['list', 'check', 'more'] },
-];
+
+/**
+ * Every icon: the canvas's UI icons, with the pickable ones redrawn from
+ * Lucide (owner, Nov 12: some icons didn't make sense; more were wanted).
+ * Old names stay, so saved categories and accounts keep their icon.
+ */
+export const ICON_SHAPES = { ...CANVAS_SHAPES, ...LUCIDE_SHAPES } as Record<keyof typeof CANVAS_SHAPES | keyof typeof LUCIDE_SHAPES, IconElement[]>;
+
+export type IconGroupKey = (typeof LUCIDE_GROUPS)[number]['key'];
+
+/** The icon sheet's groups (owner, Nov 12: "categorize the icons so they're easy to find"). */
+export const ICON_GROUPS: { key: IconGroupKey; icons: readonly string[] }[] = LUCIDE_GROUPS.map((g) => ({ key: g.key, icons: g.icons }));
+
+export const PICKABLE_ICONS: readonly string[] = ICON_GROUPS.flatMap((g) => g.icons);

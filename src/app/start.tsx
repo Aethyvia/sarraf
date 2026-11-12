@@ -37,6 +37,8 @@ import { fonts, useTheme } from '@/theme';
 /** What "We found your backup" shows: from the Supabase record or the Drive file's header. */
 interface Found {
   driveEmail: string;
+  /** The phone that made it (this phone's own backup needs no "moves" warning). */
+  deviceId?: string;
   deviceName: string;
   at: string;
   counts: BackupCounts;
@@ -178,7 +180,7 @@ export default function StartScreen() {
     setSheet(null);
     // The plan is known before anything asks about limits (after the sequence, on Home).
     await refreshPlan(db, cloud, u, new Date()).catch(() => {});
-    const found = record ? { driveEmail: record.driveEmail, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } : null;
+    const found = record ? { driveEmail: record.driveEmail, deviceId: record.deviceId, deviceName: record.deviceName, at: record.lastBackupAt, counts: record.counts } : null;
     switch (decideAfterSignIn({ hasData, prevUserId, userId: u.id, record, thisDeviceId })) {
       case 'home':
         clearSignedOut(db);
@@ -223,7 +225,7 @@ export default function StartScreen() {
       async () => {
         const r = await lookInDrive(backupDeps(), { another: options.another });
         setDriveEmail(r.driveEmail);
-        if (r.header) replace({ k: 'found', found: { driveEmail: r.driveEmail, deviceName: r.header.deviceName, at: r.header.createdAt, counts: r.header.counts } });
+        if (r.header) replace({ k: 'found', found: { driveEmail: r.driveEmail, deviceId: r.header.deviceId, deviceName: r.header.deviceName, at: r.header.createdAt, counts: r.header.counts } });
         else replace({ k: 'noBackup', driveEmail: r.driveEmail });
       },
       () => replace({ k: 'refused', forNew: options.forNew }),
@@ -658,9 +660,11 @@ export default function StartScreen() {
               </View>
             ))}
           </Card>
-          <Note tone="amber" icon="phone">
-            {s.movesWarning(step.found.deviceName)}
-          </Note>
+          {step.found.deviceId !== db.select({ id: settings.deviceId }).from(settings).where(eq(settings.id, 1)).get()?.id ? (
+            <Note tone="amber" icon="phone">
+              {s.movesWarning(step.found.deviceName)}
+            </Note>
+          ) : null}
           <BottomSheet visible={freshSheet} onClose={() => setFreshSheet(false)} title={s.freshTitle}>
             <View style={{ gap: 12 }}>
               <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.freshBody}</Text>

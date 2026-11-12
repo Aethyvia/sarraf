@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
-import { deviceState } from '@/db/schema';
+import { deviceState, settings } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import type { BackupDeps } from './backup-flow';
 import { currentUser, detachPreviousBackup, rememberSignIn } from './backup-flow';
@@ -29,8 +29,12 @@ export function clearSignedOut(db: AppDb): void {
   db.update(deviceState).set({ signedOutAt: null, signedOutUserId: null }).where(eq(deviceState.id, 1)).run();
 }
 
-/** Every local table emptied, then the base rows again (a fresh install). */
+/**
+ * Every local table emptied, then the base rows again. It's still the same
+ * phone, so it keeps its device id: a backup it made stays "this phone's".
+ */
 export function wipeLocalData(db: AppDb): void {
+  const keepDeviceId = db.select({ id: settings.deviceId }).from(settings).where(eq(settings.id, 1)).get()?.id;
   const tables = db
     .all<{ name: string }>(sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name not like '__drizzle%'`)
     .map((t) => t.name);
@@ -43,6 +47,7 @@ export function wipeLocalData(db: AppDb): void {
     db.run(sql`PRAGMA foreign_keys = ON`);
   }
   ensureBaseData(db);
+  if (keepDeviceId) db.update(settings).set({ deviceId: keepDeviceId }).where(eq(settings.id, 1)).run();
 }
 
 export interface DeleteChoice {

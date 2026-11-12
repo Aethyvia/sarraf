@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Money } from '@/components/Money';
 import { Icon } from '@/components/icons/Icon';
 import { Note } from '@/components/start/StartPage';
-import { BottomSheet, Button, Card, Header, IconButton, IconChip, LinkButton, ListRow, Screen, SheetOption } from '@/components/ui';
+import { BottomSheet, Card, Header, IconButton, IconChip, LinkButton, ListRow, Screen, SheetOption } from '@/components/ui';
 import { accountBalances } from '@/data/balances';
 import { accounts } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -92,7 +92,9 @@ export default function AccountsScreen() {
         actions={
           <>
             <IconButton icon="sort" label={strings.sort.title(s.title.toLowerCase())} onPress={() => setSorting(true)} />
-            <IconButton icon="plus" filled label={s.add} onPress={() => router.push('/accounts/new')} />
+            <TourTarget id="accounts.add">
+              <IconButton icon="plus" filled label={s.add} onPress={() => router.push('/accounts/new')} />
+            </TourTarget>
           </>
         }
       />
@@ -113,9 +115,6 @@ export default function AccountsScreen() {
           {groups.plain.map((a, i) => row(a, i === groups.plain.length - 1))}
         </Card>
       ) : null}
-      <TourTarget id="accounts.add">
-        <Button label={s.addAnother} icon="plus" kind="secondary" onPress={() => router.push('/accounts/new')} />
-      </TourTarget>
       <Tour id="accounts" steps={strings.tour.accounts} enabled={fromSetup} />
 
       {groups.archived.length > 0 ? (

@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -7,6 +8,9 @@ import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { isLockedNow } from '@/state/lock-state';
 import { fonts } from '@/theme';
+
+/** The tour showing now, if any: only one at a time. */
+let activeTour: string | null = null;
 
 /** Every TourTarget on screen, by id, so a tour can find and measure it. */
 const targets = new Map<string, View>();
@@ -51,13 +55,15 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
   const win = useWindowDimensions();
   const [shown, setShown] = useState<{ step: TourStep; rect: Rect }[] | null>(null);
   const [i, setI] = useState(0);
+  // Only the screen in front shows its tour (Home stays mounted under Accounts).
+  const focused = useIsFocused();
 
   useEffect(() => {
-    if (!enabled || tourSeen(db, id)) return;
+    if (!enabled || !focused || tourSeen(db, id)) return;
     let t: ReturnType<typeof setTimeout>;
     const tryShow = async () => {
       // Never over the lock screen or another sheet's moment: wait until Sarraf is unlocked.
-      if (isLockedNow()) {
+      if (isLockedNow() || (activeTour && activeTour !== id)) {
         t = setTimeout(tryShow, 800);
         return;
       }
@@ -67,7 +73,8 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
         const rect = v ? await measure(v) : null;
         if (rect && rect.y < win.height - 40) found.push({ step, rect });
       }
-      if (found.length) {
+      if (found.length && !activeTour) {
+        activeTour = id;
         setI(0);
         setShown(found);
       }
@@ -75,10 +82,19 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
     t = setTimeout(tryShow, delay);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, enabled]);
+  }, [id, enabled, focused]);
+
+  // Leaving the screen mid-tour: put it away (it shows again next visit).
+  useEffect(() => {
+    if (!focused && shown) {
+      if (activeTour === id) activeTour = null;
+      setShown(null);
+    }
+  }, [focused, shown, id]);
 
   if (!shown) return null;
   const finish = () => {
+    if (activeTour === id) activeTour = null;
     markTourSeen(db, id);
     setShown(null);
   };
@@ -113,7 +129,7 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
             </Pressable>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={{ flexDirection: 'row', gap: 4 }}>
-                {shown.map((_, k) => (
+                {shown.length > 1 && shown.map((_, k) => (
                   <View key={k} style={[styles.dot, k === i && styles.dotOn]} />
                 ))}
               </View>
