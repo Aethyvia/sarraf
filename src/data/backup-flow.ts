@@ -41,7 +41,7 @@ export interface BackupDeps {
 const attachmentName = (id: string) => `${id}.bin`;
 
 /** Uploads attachments Drive doesn't have yet (each once) and removes ones deleted here. Returns how many were uploaded. */
-async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array): Promise<number> {
+async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array, onProgress?: (done: number, total: number) => void): Promise<number> {
   if (!deps.files) return 0;
   const there = new Set(await deps.cloud.listAttachments());
   const rows = deps.db.select({ id: attachments.id, path: attachments.filePath }).from(attachments).all();
@@ -49,9 +49,10 @@ async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array): Prom
   const wanted = new Set(rows.map((a) => attachmentName(a.id)));
   for (const name of there) if (!wanted.has(name)) await deps.cloud.deleteAttachment(name);
   let n = 0;
-  for (const a of rows) {
+  const todo = rows.filter((a) => !there.has(attachmentName(a.id)));
+  onProgress?.(0, todo.length);
+  for (const a of todo) {
     const name = attachmentName(a.id);
-    if (there.has(name)) continue;
     const bytes = deps.files.read(a.path);
     if (!bytes) continue;
     const sealed = seal(dataKey, bytes, new TextEncoder().encode(a.id));
@@ -60,6 +61,7 @@ async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array): Prom
     out.set(sealed.data, 12);
     await deps.cloud.uploadAttachment(name, out);
     n += 1;
+    onProgress?.(n, todo.length);
   }
   return n;
 }
@@ -196,7 +198,22 @@ export async function backupMadeElsewhere(deps: BackupDeps): Promise<ExistingBac
  * Nov 12): it returns `existing` unless the user chose to replace it
  * (Start fresh, "Replace it", Make this the backup phone).
  */
-export async function backupNow(deps: BackupDeps, options: { replaceExisting?: boolean } = {}): Promise<BackupResult> {
+/** Where a backup is (owner, Nov 12: show backup progress). */
+export type BackupStep = 'check' | 'encrypt' | 'attachments' | 'upload' | 'finish';
+export interface BackupProgress {
+  step: BackupStep;
+  /** 0–1 for the whole backup. */
+  fraction: number;
+  /** Attachments: how many of how many. */
+  done?: number;
+  total?: number;
+}
+
+export async function backupNow(
+  deps: BackupDeps,
+  options: { replaceExisting?: boolean; onProgress?: (p: BackupProgress) => void } = {},
+): Promise<BackupResult> {
+  const report = (step: BackupStep, fraction: number, done?: number, total?: number) => options.onProgress?.({ step, fraction, done, total });
   const { db, cloud } = deps;
   const state = getDeviceState(db);
   if (!state.backupEnabled) return { ok: false, reason: 'off' };
@@ -208,6 +225,7 @@ export async function backupNow(deps: BackupDeps, options: { replaceExisting?: b
   const me = deviceId(db);
   const now = deps.now?.() ?? new Date().toISOString();
 
+  report('check', 0.05);
   const record = await cloud.getRecord(user);
   if (record && record.deviceId !== me && state.lastBackupAt) {
     setDeviceState(db, { backupMovedAt: now, backupMovedTo: record.deviceName });
@@ -218,9 +236,13 @@ export async function backupNow(deps: BackupDeps, options: { replaceExisting?: b
     if (existing) return { ok: false, reason: 'existing', existing };
   }
   if (!getDeviceState(db).driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
+  report('encrypt', 0.15);
   const file = buildBackup(db, { dataKey: unb64(stored.dataKey), keys: stored.keys, deviceId: me, deviceName: deps.deviceName, createdAt: now });
-  await uploadNewAttachments(deps, unb64(stored.dataKey));
+  report('attachments', 0.3);
+  await uploadNewAttachments(deps, unb64(stored.dataKey), (done, total) => report('attachments', 0.3 + (total ? (done / total) * 0.4 : 0.4), done, total));
+  report('upload', 0.75);
   await cloud.uploadBackup(file);
+  report('finish', 0.95);
   await cloud.putRecord(user, {
     driveEmail: getDeviceState(db).driveEmail ?? '',
     lastBackupAt: now,
@@ -231,6 +253,7 @@ export async function backupNow(deps: BackupDeps, options: { replaceExisting?: b
     format: BACKUP_FORMAT,
   });
   setDeviceState(db, { lastBackupAt: now, backupFailingSince: null });
+  report('finish', 1);
   return { ok: true, at: now };
 }
 
@@ -282,6 +305,8 @@ export async function applyRestore(
   const now = deps.now?.() ?? new Date().toISOString();
   setDeviceState(db, { backupEnabled: true, lastBackupAt: now, backupMovedAt: null, backupMovedTo: null, backupFailingSince: null });
   const user = currentUser(db);
+  // The record names the Drive account the backup lives in (it was blank after a restore).
+  if (!getDeviceState(db).driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
   if (user) {
     await cloud.putRecord(user, {
       driveEmail: getDeviceState(db).driveEmail ?? '',

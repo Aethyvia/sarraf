@@ -125,6 +125,18 @@ describe('backup and restore across phones', () => {
     expect(fresh.db.select().from(settings).get()!.onboardingCompletedAt).not.toBeNull();
   });
 
+  it('reports backup progress step by step, ending at 100%', async () => {
+    const cloud = fakeCloud(memoryStore());
+    const p = await phone('Pixel 7', cloud, true);
+    await turnOnBackup(p, 'pw-12345678');
+    const seen: { step: string; fraction: number }[] = [];
+    expect(await backupNow(p, { onProgress: (x) => seen.push(x) })).toMatchObject({ ok: true });
+    expect(seen.map((x) => x.step)).toEqual(expect.arrayContaining(['check', 'encrypt', 'upload', 'finish']));
+    const fractions = seen.map((x) => x.fraction);
+    expect(fractions).toEqual([...fractions].sort((a, b) => a - b));
+    expect(fractions.at(-1)).toBe(1);
+  });
+
   it('an interrupted download changes nothing on the phone', async () => {
     const cloud = fakeCloud(memoryStore());
     const old = await phone('Pixel 7', cloud, true);

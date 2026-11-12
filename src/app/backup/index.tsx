@@ -5,11 +5,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { RecoveryKeyCard } from '@/components/backup/RecoveryKeyCard';
 import { ReplaceBackupSheet } from '@/components/backup/ReplaceBackupSheet';
+import { BackupProgressCard } from '@/components/backup/BackupProgressCard';
 import { Icon } from '@/components/icons/Icon';
 import { parts } from '@/components/parts';
 import { Note } from '@/components/start/StartPage';
 import { BottomSheet, Button, Card, Field, Header, LinkButton, Screen, SheetOption, ToggleRow } from '@/components/ui';
-import { backupNow, changeBackupPassword, currentUser, getDeviceState, makeThisTheBackupPhone, renewRecoveryKey, type ExistingBackup, type StoredKeys } from '@/data/backup-flow';
+import { backupNow, changeBackupPassword, currentUser, getDeviceState, makeThisTheBackupPhone, renewRecoveryKey, type BackupProgress, type ExistingBackup, type StoredKeys } from '@/data/backup-flow';
 import { db } from '@/db/client';
 import { settings } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -44,6 +45,7 @@ export default function BackupScreen() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [existing, setExisting] = useState<ExistingBackup | null>(null);
+  const [progress, setProgress] = useState<BackupProgress | null>(null);
 
   useEffect(() => {
     void keyStore.get().then(setStored);
@@ -62,7 +64,8 @@ export default function BackupScreen() {
 
   const backUp = (replaceExisting = false) =>
     run(async () => {
-      const r = await backupNow(backupDeps(), { replaceExisting });
+      setProgress({ step: 'check', fraction: 0 });
+      const r = await backupNow(backupDeps(), { replaceExisting, onProgress: setProgress }).finally(() => setTimeout(() => setProgress(null), 1500));
       setExisting(null);
       if (r.ok) toast({ message: s.backedUp });
       else if (r.reason === 'moved') toast({ message: s.moved(r.movedTo ?? '') });
@@ -162,6 +165,7 @@ export default function BackupScreen() {
         <Text style={[styles.title, { color: colors.ink, marginTop: 3 }]}>{state.lastBackupAt ? when(state.lastBackupAt) : s.never}</Text>
         <Text style={[styles.small, { color: colors.inkMuted, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.line }]}>{s.lastNote}</Text>
       </Card>
+      {progress ? <BackupProgressCard progress={progress} /> : null}
       <Button label={busy ? s.backingUp : s.backUpNow} disabled={busy} onPress={() => void backUp()} />
 
       <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>

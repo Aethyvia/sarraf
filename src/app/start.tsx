@@ -5,6 +5,8 @@ import { BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RecoveryKeyCard } from '@/components/backup/RecoveryKeyCard';
+import { BackupProgressCard } from '@/components/backup/BackupProgressCard';
+import { ProgressBar } from '@/components/ProgressBar';
 import { Icon } from '@/components/icons/Icon';
 import { parts } from '@/components/parts';
 import { SignInSheet } from '@/components/start/SignInSheet';
@@ -12,7 +14,7 @@ import { AccountsStep, CurrencyStep } from '@/components/start/SetupSteps';
 import { Note, Spinner, StartPage } from '@/components/start/StartPage';
 import { BottomSheet, Button, Card, Field, LinkButton, ToggleRow } from '@/components/ui';
 import { WrongSecretError, isRecoveryKeyShape, normalizeRecoveryKey } from '@/lib/backup-crypto';
-import { applyRestore, backupNow, currentUser, detachPreviousBackup, getDeviceState, lookInDrive, makeThisTheBackupPhone, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
+import { type BackupProgress, applyRestore, backupNow, currentUser, detachPreviousBackup, getDeviceState, lookInDrive, makeThisTheBackupPhone, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
 import { backupCounts, openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
 import { decideAfterSignIn, isAccountSwitch } from '@/data/sign-in';
 import { FREE_LIMITS, usage } from '@/data/limits';
@@ -129,6 +131,7 @@ export default function StartScreen() {
   const [driveEmail, setDriveEmail] = useState<string | null>(() => getDeviceState(db).driveEmail);
   const [accountCount, setAccountCount] = useState(0);
   const [offerBio, setOfferBio] = useState(true);
+  const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
 
   // Still signed in on an emptied phone (Delete → this phone's data): carry on from sign-in, no Welcome.
   useEffect(() => {
@@ -324,7 +327,8 @@ export default function StartScreen() {
       setHistory([{ k: 'done' }]);
       void askForNotificationsAfterSignIn();
       if (withBackup) {
-        backupNow(backupDeps(), { replaceExisting: replaceOk.current })
+        setBackupProgress({ step: 'check', fraction: 0 });
+        backupNow(backupDeps(), { replaceExisting: replaceOk.current, onProgress: setBackupProgress })
           .then((r) => (r.ok ? undefined : toast({ message: s.failed })))
           .catch(() => toast({ message: s.failed }));
       }
@@ -759,9 +763,9 @@ export default function StartScreen() {
       return (
         <StartPage centered title={s.restoringTitle}>
           <Spinner icon="cloud" />
-          <View style={[styles.bar, { backgroundColor: colors.accentSoft }]}>
-            <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${progress.step === 'download' ? Math.max(5, progress.pct * 0.5) : progress.step === 'open' ? 60 : progress.step === 'attachments' ? 70 + progress.pct * 0.3 : 70}%` }]} />
-          </View>
+          <ProgressBar
+            value={(progress.step === 'download' ? Math.max(5, progress.pct * 0.5) : progress.step === 'open' ? 60 : progress.step === 'attachments' ? 70 + progress.pct * 0.3 : 70) / 100}
+          />
           <Text style={[styles.small, { color: colors.inkSecondary, textAlign: 'center' }]}>
             {progress.step === 'attachments' && progress.total ? s.attachmentsOf(progress.done ?? 0, progress.total) : s.restoringSteps[progress.step]}
           </Text>
@@ -1019,9 +1023,12 @@ export default function StartScreen() {
           }
         >
           {state.backupEnabled ? (
-            <Note tone="teal" icon="cloud">
-              {s.backupOn(state.driveEmail ?? '')}
-            </Note>
+            <>
+              <Note tone="teal" icon="cloud">
+                {s.backupOn(state.driveEmail ?? '')}
+              </Note>
+              {backupProgress ? <BackupProgressCard progress={backupProgress} /> : null}
+            </>
           ) : (
             <Note tone="amber" icon="cloud">
               {s.backupOff}

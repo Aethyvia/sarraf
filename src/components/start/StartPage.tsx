@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/icons/Icon';
 import { IconButton } from '@/components/ui';
+import { ProgressBar } from '@/components/ProgressBar';
+import { strings } from '@/i18n/strings';
 import { fonts, radius, useTheme } from '@/theme';
 
 /** One first-run screen: optional back and step dots, a hero icon, title, body, content, and buttons at the bottom. */
@@ -63,13 +65,13 @@ export function StartPage({
   );
 }
 
+/** Setup's progress (owner, Nov 12): a bar that fills step by step, with "Step n of 4". */
 export function StepDots({ step, of = 4 }: { step: number; of?: number }) {
   const { colors } = useTheme();
   return (
-    <View style={styles.dots} accessibilityLabel={`Step ${step} of ${of}`}>
-      {Array.from({ length: of }, (_, i) => (
-        <View key={i} style={[styles.dot, { backgroundColor: i + 1 === step ? colors.accent : colors.border }, i + 1 === step && styles.dotOn]} />
-      ))}
+    <View style={{ gap: 6 }} accessibilityLabel={strings.start.stepOf(step, of)}>
+      <ProgressBar value={step / of} />
+      <Text style={{ fontFamily: fonts.sansSemiBold, fontSize: 11.5, color: colors.inkMuted, textAlign: 'center' }}>{strings.start.stepOf(step, of)}</Text>
     </View>
   );
 }
