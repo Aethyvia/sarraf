@@ -20,7 +20,7 @@ import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
 import { isCurrencyCode } from '@/lib/money';
-import { backupDeps, cloud } from '@/services/cloud';
+import { backupDeps, cloud, usingRealCloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
 import { store } from '@/services/store';
 import { refreshPlan } from '@/data/plan';
@@ -371,7 +371,7 @@ export default function StartScreen() {
             style={styles.codeInput}
           />
           {codeError ? <Note tone="red">{s.codeWrong}</Note> : null}
-          {__DEV__ ? <Text style={[styles.small, { color: colors.inkMuted }]}>{s.devCode}</Text> : null}
+          {__DEV__ && !usingRealCloud ? <Text style={[styles.small, { color: colors.inkMuted }]}>{s.devCode}</Text> : null}
         </StartPage>
       );
 
