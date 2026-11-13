@@ -347,14 +347,15 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     const r = strings.receipt;
     const lines: ReceiptLine[] = [];
     const amountMoney = amount ? <MoneyInline value={amount} currency={mainCurrency} /> : null;
-    const chargeLine = (c: ChargeDraft, i: number | 'new'): ReceiptLine => {
+    // `adds`: an on-top charge from the From account, added to the base amount on the way to what left it.
+    const chargeLine = (c: ChargeDraft, i: number | 'new', adds = false): ReceiptLine => {
       const { name, where } = chargeLabel(c);
       const editing = chargeEdit !== null && (chargeEdit.index ?? 'new') === i;
       const typed = editing ? chargeAmount(chargeEdit) : c.amount;
       return {
         key: `c${i}`,
-        label: `− ${name} · ${where}`,
-        amount: typed ? <MoneyInline value={`-${typed}`} currency={c.currency} tone="expense" /> : <Text style={{ color: colors.inkMuted }}>—</Text>,
+        label: `${adds ? '+' : '−'} ${name} · ${where}`,
+        amount: typed ? <MoneyInline value={adds ? typed : `-${typed}`} sign={adds ? 'always' : undefined} currency={c.currency} tone="expense" /> : <Text style={{ color: colors.inkMuted }}>—</Text>,
         onPress: i === 'new' ? undefined : () => selectCharge(i),
         editing,
       };
@@ -387,7 +388,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
 
     if (form.kind === 'expense') {
       if (amountMoney) lines.push({ key: 'main', label: mainLabel('expense'), amount: amountMoney });
-      for (const { c, i } of [...insideBefore, ...insideAfter, ...onTop]) lines.push(chargeLine(c, i));
+      for (const { c, i } of [...insideBefore, ...insideAfter]) lines.push(chargeLine(c, i));
+      for (const { c, i } of onTop) lines.push(chargeLine(c, i, onTopHere.some((x) => x.i === i)));
       totalLine();
       return lines;
     }
@@ -404,7 +406,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     if (res?.arrives && receivingName) {
       lines.push({ key: 'arrives', label: r.arrivesIn(receivingName), amount: <MoneyInline value={res.arrives} currency={receivingCurrency} />, highlight: true });
     }
-    for (const { c, i } of onTop) lines.push(chargeLine(c, i));
+    for (const { c, i } of onTop) lines.push(chargeLine(c, i, form.kind === 'transfer' && onTopHere.some((x) => x.i === i)));
     if (form.kind === 'transfer') totalLine();
     return lines;
   }

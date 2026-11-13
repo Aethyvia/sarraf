@@ -87,9 +87,11 @@ export default function TransactionDetailScreen() {
     const before = inside.filter((c) => !converts || c.currency !== receiving?.currency);
     const after = inside.filter((c) => converts && c.currency === receiving?.currency);
     const onTop = charges.filter((c) => c.deduction === 'charged_separately');
+    // On-top charges from the transaction's own account add to the base amount (owner, Nov 13: Base amount + charge = Left X).
+    const adds = (c: (typeof charges)[number]) => (t.kind === 'expense' || t.kind === 'transfer') && c.deduction === 'charged_separately' && c.accountId === account?.id;
     const charge = (c: (typeof charges)[number]) => {
       const { name, where } = chargeLabel({ ...c, rate: c.rate, rateMode: c.rateMode, accountId: c.accountId, label: c.label });
-      return { key: c.id, label: `${name} · ${where}`, amount: <MoneyInline value={`-${c.amount}`} currency={c.currency} tone="expense" /> };
+      return { key: c.id, label: `${name} · ${where}`, amount: <MoneyInline value={adds(c) ? c.amount : `-${c.amount}`} sign={adds(c) ? 'always' : undefined} currency={c.currency} tone="expense" /> };
     };
     receipt.push({
       key: 'main',
@@ -127,7 +129,7 @@ export default function TransactionDetailScreen() {
       receipt.push({
         key: 'total',
         label: t.status === 'cleared' ? s.totalOut(account.name) : s.willTotalOut(account.name),
-        amount: <MoneyInline value={`-${totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })}`} currency={account.currency} tone="expense" />,
+        amount: <MoneyInline value={totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })} currency={account.currency} />,
         strong: true,
       });
     }
