@@ -5,8 +5,8 @@ import { useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Money } from '@/components/Money';
-import { parts } from '@/components/parts';
-import { MoneyInline, chargeLabel, formatLongDate, trimRate } from '@/components/transaction/parts';
+import { MoneyInline, chargeLabel, formatLongDate, receiptLines } from '@/components/transaction/parts';
+import { buildReceipt as buildReceiptRows } from '@/data/receipt';
 import { GotItSheet } from '@/components/transaction/GotItSheet';
 import { SharesKeptNote } from '@/components/transaction/SharesKeptNote';
 import { amountSign, rowTitle } from '@/components/transaction/TransactionRow';
@@ -27,7 +27,6 @@ import { deleteStoredFiles, formatBytes } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useToast } from '@/state/toast';
-import { totalOut } from '@/data/transaction-list';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -83,48 +82,29 @@ export default function TransactionDetailScreen() {
   const converts = !!t.rate;
   if (charges.length || converts) {
     const receiving = t.kind === 'transfer' ? to : account;
-    const inside = charges.filter((c) => c.deduction === 'already_deducted');
-    const before = inside.filter((c) => !converts || c.currency !== receiving?.currency);
-    const after = inside.filter((c) => converts && c.currency === receiving?.currency);
-    const onTop = charges.filter((c) => c.deduction === 'charged_separately');
-    // On-top charges from the transaction's own account add to the base amount (owner, Nov 13: Base amount + charge = Left X).
-    const adds = (c: (typeof charges)[number]) => (t.kind === 'expense' || t.kind === 'transfer') && c.deduction === 'charged_separately' && c.accountId === account?.id;
-    const charge = (c: (typeof charges)[number]) => {
-      const { name, where } = chargeLabel({ ...c, rate: c.rate, rateMode: c.rateMode, accountId: c.accountId, label: c.label });
-      return { key: c.id, label: `${name} · ${where}`, amount: <MoneyInline value={adds(c) ? c.amount : `-${c.amount}`} sign={adds(c) ? 'always' : undefined} currency={c.currency} tone="expense" /> };
-    };
-    // Receipt order (owner, Nov 13): money out starts with what left the account, then the base amount;
-    // money in starts with the base amount and ends with what arrived (after any on-top charges there).
-    if (t.kind !== 'income' && account) {
-      receipt.push({
-        key: 'left',
-        label: t.status === 'cleared' ? s.leftAccount(account.name) : s.willTotalOut(account.name),
-        amount: <MoneyInline value={totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })} currency={account.currency} />,
-        highlight: true,
-      });
-    }
-    receipt.push({ key: 'main', label: s.expenseAmount, amount: <MoneyInline value={t.amount} currency={t.currency} /> });
-    before.forEach((c) => receipt.push(charge(c)));
-    if (converts && receiving && t.kind !== 'expense') {
-      const insideMain = before.reduce((sum, c) => (c.currency === t.currency ? sum.minus(dec(c.amount)) : sum), dec(t.amount));
-      receipt.push({
-        key: 'conv',
-        label: parts(strings.receipt.convertedAt(<MoneyInline value={insideMain.toFixed()} currency={t.currency} />, `1 ${t.currency} = ${trimRate(t.rate!)} ${receiving.currency}`)),
-      });
-    }
-    after.forEach((c) => receipt.push(charge(c)));
-    onTop.forEach((c) => receipt.push(charge(c)));
-    if (t.kind !== 'expense' && receiving) {
-      const arrived = t.netAmount ?? (t.kind === 'transfer' ? t.toAmount : t.accountAmount);
-      if (arrived) {
-        receipt.push({
-          key: 'arrives',
-          label: t.status === 'cleared' ? strings.receipt.arrivesIn(receiving.name) : s.willGoUpBy(receiving.name),
-          amount: <MoneyInline value={arrived} currency={receiving.currency} tone="income" />,
-          strong: true,
-        });
-      }
-    }
+    // Statement-style receipt (owner, Nov 13): data/receipt builds the lines for both screens.
+    const before = charges.filter((c) => c.deduction === 'already_deducted' && (!converts || c.currency !== receiving?.currency));
+    const insideMain = before.reduce((sum, c) => (c.currency === t.currency ? sum.minus(dec(c.amount)) : sum), dec(t.amount));
+    const kind = t.kind === 'income' ? 'income' : t.kind === 'transfer' ? 'transfer' : 'expense';
+    const rows = buildReceiptRows({
+      kind,
+      from: kind !== 'income' && account ? account : null,
+      to: kind === 'income' ? (account ?? null) : kind === 'transfer' ? (to ?? null) : null,
+      amount: t.amount,
+      currency: t.currency,
+      accountAmount: t.accountAmount,
+      arrives: kind === 'transfer' ? t.toAmount : kind === 'income' ? t.accountAmount : null,
+      conversion: converts && receiving ? { amount: insideMain.toFixed(), rate: t.rate!, from: t.currency, to: receiving.currency } : null,
+      charges: charges.map((c) => ({ key: c.id, deduction: c.deduction, accountId: c.accountId, amount: c.amount, currency: c.currency })),
+    });
+    receipt.push(
+      ...receiptLines(rows, {
+        kind,
+        charges: new Map(charges.map((c) => [c.id, { name: chargeLabel({ ...c, rate: c.rate, rateMode: c.rateMode, accountId: c.accountId, label: c.label }).name, tax: !!c.isTax || c.type === 'withholding_tax' }])),
+        accountName: (aid) => (aid ? (data.accounts.get(aid)?.name ?? null) : null),
+        pending: t.status !== 'cleared',
+      }).map((l) => ({ key: l.key, label: l.label, amount: l.amount, highlight: l.highlight, strong: l.highlight })),
+    );
   }
   const vs = vsMarketPercent(t.rate, t.marketRateAtEntry);
 

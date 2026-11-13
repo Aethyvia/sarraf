@@ -91,3 +91,15 @@ describe('an expense with a charge on top from the same account (owner, Nov 13)'
     expect(row.amount).toMatchObject({ value: '15015', currency: 'PKR', tone: 'expense' });
   });
 });
+
+describe('income with a bank charge taken separately (owner, Nov 13, statement style)', () => {
+  it('the row shows what the account went up by', async () => {
+    const { account, tx, db } = await setup();
+    const pkr = account('Alfalah PKR', 'PKR');
+    const id = tx({ kind: 'income', accountId: pkr, amount: '500', accountAmount: '139000', currency: 'USD' });
+    db.insert(transactionCharges).values({ id: 'bc', transactionId: id, type: 'bank_charge', amount: '150', currency: 'PKR', deduction: 'charged_separately', accountId: pkr }).run();
+    expect(accountBalance(db, pkr, TODAY)).toBe('138850');
+    const row = toListRowFromDb(db, db.select().from(transactions).where(eq(transactions.id, id)).get()!);
+    expect(row.amount).toMatchObject({ value: '138850', currency: 'PKR', tone: 'income' });
+  });
+});

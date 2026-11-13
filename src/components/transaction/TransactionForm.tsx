@@ -66,7 +66,8 @@ import { fonts, useTheme } from '@/theme';
 import { ChargeEditor, ChargeEditorHint } from './ChargeEditor';
 import { SplitEditor } from './SplitEditor';
 import { Tour, TourTarget } from '@/components/tour/Tour';
-import { AmountCard, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, trimRate, type ReceiptLine } from './parts';
+import { AmountCard, FormRow, MoneyInline, ReceiptCard, RowNote, UtilityButton, chargeLabel, formatLongDate, receiptLines as toReceiptLines, trimRate, type ReceiptLine } from './parts';
+import { buildReceipt as buildReceiptRows } from '@/data/receipt';
 
 type Sheet =
   | 'charges'
@@ -344,22 +345,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const receiptLines = buildReceipt();
 
   function buildReceipt(): ReceiptLine[] {
-    const r = strings.receipt;
-    const lines: ReceiptLine[] = [];
-    const amountMoney = amount ? <MoneyInline value={amount} currency={mainCurrency} /> : null;
-    // `adds`: an on-top charge from the From account, added to the base amount on the way to what left it.
-    const chargeLine = (c: ChargeDraft, i: number | 'new', adds = false): ReceiptLine => {
-      const { name, where } = chargeLabel(c);
-      const editing = chargeEdit !== null && (chargeEdit.index ?? 'new') === i;
-      const typed = editing ? chargeAmount(chargeEdit) : c.amount;
-      return {
-        key: `c${i}`,
-        label: `${adds ? '+' : '−'} ${name} · ${where}`,
-        amount: typed ? <MoneyInline value={adds ? typed : `-${typed}`} sign={adds ? 'always' : undefined} currency={c.currency} tone="expense" /> : <Text style={{ color: colors.inkMuted }}>—</Text>,
-        onPress: i === 'new' ? undefined : () => selectCharge(i),
-        editing,
-      };
-    };
     // Every saved charge, with the one being edited shown as typed (even before it's complete).
     const editShown = (e: ChargeEdit): ChargeDraft => ({
       type: e.type,
@@ -370,47 +355,29 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       accountId: e.accountId,
       isTax: e.isTax,
     });
-    const indexed: { c: ChargeDraft; i: number | 'new' }[] = form.charges.map((c, i) => ({ c: chargeEdit?.index === i ? editShown(chargeEdit) : c, i }));
-    if (chargeEdit && chargeEdit.index === null) indexed.push({ c: editShown(chargeEdit), i: 'new' });
-    const insideBefore = indexed.filter(({ c }) => c.deduction === 'already_deducted' && (!converts || c.currency !== receivingCurrency));
-    const insideAfter = indexed.filter(({ c }) => c.deduction === 'already_deducted' && converts && c.currency === receivingCurrency);
-    const onTop = indexed.filter(({ c }) => c.deduction === 'charged_separately');
-    // Receipt order (owner, Nov 13): money out starts with what left the From account, then the base amount;
-    // money in starts with the base amount and ends with what arrived. On-top charges from the From account add (+).
-    const onTopHere = fromAccount ? onTop.filter(({ c }) => c.accountId === fromAccount.id && dec(c.amount).gt(0)) : [];
-    const adds = (i: number | 'new') => form.kind !== 'income' && onTopHere.some((x) => x.i === i);
+    const indexed: { c: ChargeDraft; key: string }[] = form.charges.map((c, i) => ({ c: chargeEdit?.index === i ? editShown(chargeEdit) : c, key: String(i) }));
+    if (chargeEdit && chargeEdit.index === null) indexed.push({ c: editShown(chargeEdit), key: 'new' });
     const res = preview.result;
-    const leftLine = () => {
-      const out = res?.accountAmount;
-      if (!fromAccount || !out) return;
-      const total = onTopHere.reduce((sum, { c }) => sum.plus(dec(c.amount)), dec(out));
-      lines.push({ key: 'left', label: r.whatLeft(fromAccount.name), amount: <MoneyInline value={toDecimalString(total)} currency={fromAccount.currency} />, highlight: true });
-    };
-    const baseLine = () => {
-      if (amountMoney) lines.push({ key: 'main', label: strings.detail.expenseAmount, amount: amountMoney });
-    };
-
-    if (form.kind !== 'income') leftLine();
-    baseLine();
-    if (form.kind === 'expense') {
-      for (const { c, i } of [...insideBefore, ...insideAfter, ...onTop]) lines.push(chargeLine(c, i, adds(i)));
-      return lines;
-    }
-    for (const { c, i } of insideBefore) lines.push(chargeLine(c, i));
-    if (converts && res?.afterInside && res.rate) {
-      lines.push({
-        key: 'conv',
-        label: parts(r.convertedAt(<MoneyInline value={res.afterInside} currency={mainCurrency} />, `1 ${mainCurrency} = ${trimRate(res.rate)} ${receivingCurrency}`)),
-      });
-    }
-    for (const { c, i } of insideAfter) lines.push(chargeLine(c, i));
-    for (const { c, i } of onTop) lines.push(chargeLine(c, i, adds(i)));
-    // What arrived comes last: after on-top charges taken from the receiving account.
-    const arrived = res?.netAmount ?? res?.arrives;
-    if (arrived && receivingName) {
-      lines.push({ key: 'arrives', label: r.arrivesIn(receivingName), amount: <MoneyInline value={arrived} currency={receivingCurrency} />, highlight: true });
-    }
-    return lines;
+    const isIncome = form.kind === 'income';
+    const rows = buildReceiptRows({
+      kind: form.kind === 'savings' ? 'expense' : (form.kind as 'expense' | 'income' | 'transfer'),
+      from: !isIncome && fromAccount ? fromAccount : null,
+      to: form.kind === 'transfer' ? (toAccount ?? null) : isIncome ? (fromAccount ?? null) : null,
+      amount: amount ?? null,
+      currency: mainCurrency,
+      accountAmount: res?.accountAmount ?? null,
+      arrives: res?.arrives ?? null,
+      conversion: converts && res?.afterInside && res.rate ? { amount: res.afterInside, rate: res.rate, from: mainCurrency, to: receivingCurrency } : null,
+      charges: indexed.map(({ c, key }) => ({ key, deduction: c.deduction, accountId: c.accountId ?? null, amount: c.amount && dec(c.amount).gt(0) ? c.amount : null, currency: c.currency })),
+    });
+    return toReceiptLines(rows, {
+      kind: form.kind === 'savings' ? 'expense' : (form.kind as 'expense' | 'income' | 'transfer'),
+      charges: new Map(indexed.map(({ c, key }) => [key, { name: chargeLabel(c).name, tax: !!c.isTax || c.type === 'withholding_tax' }])),
+      accountName: (id) => (id ? (ref.accounts.get(id)?.name ?? null) : null),
+      pending: form.status !== 'cleared',
+      onCharge: (key) => (key === 'new' ? undefined : selectCharge(Number(key))),
+      editingKey: chargeEdit ? (chargeEdit.index === null ? 'new' : String(chargeEdit.index)) : null,
+    });
   }
 
   const onTopOnReceiving = form.charges.filter((c) => c.deduction === 'charged_separately' && c.accountId === (form.kind === 'transfer' ? toAccount?.id : fromAccount?.id));
@@ -954,7 +921,13 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <ChargeEditor
               edit={chargeEdit}
               typeName={chargeEdit.type === 'custom' ? (chargeEdit.label ?? strings.charge.types.custom) : strings.charge.types[chargeEdit.type]}
-              insideLabel={amount && !settings.hideAmounts ? strings.charge.insideShort(formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat }).text) : strings.charge.insideAmount}
+              insideLabel={
+                form.kind !== 'expense'
+                  ? strings.charge.takenBefore
+                  : amount && !settings.hideAmounts
+                    ? strings.charge.insideShort(formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat }).text)
+                    : strings.charge.insideAmount
+              }
               accountName={chargeEdit.accountId ? (ref.accounts.get(chargeEdit.accountId)?.name ?? null) : null}
               rateLabel={needsRate(chargeEdit, chargeCtx) ? { from: chargeEdit.currency, to: mainCurrency } : null}
               forcedTax={isForcedTax(chargeEdit.type)}

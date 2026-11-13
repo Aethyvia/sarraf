@@ -8,6 +8,8 @@ import type { ChargeDraft } from '@/data/transactions';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
 import { Decimal, dec } from '@/lib/money';
+import type { ReceiptRow } from '@/data/receipt';
+import { parts } from '@/components/parts';
 import { fonts, radius, useTheme } from '@/theme';
 
 /** A compact filled row that opens a sheet: small icon, LABEL above value, optional trailing. */
@@ -274,3 +276,61 @@ const styles = StyleSheet.create({
   utilText: { fontFamily: fonts.sansBold, fontSize: 12, flexShrink: 1 },
   dot: { position: 'absolute', top: 8, end: 10, width: 8, height: 8, borderRadius: 4 },
 });
+
+/**
+ * Receipt rows (data/receipt) as screen lines: one wording for the Charges page
+ * and the transaction page. `charges` names each charge by its key.
+ */
+export function receiptLines(
+  rows: ReceiptRow[],
+  ctx: {
+    kind: 'expense' | 'income' | 'transfer';
+    charges: Map<string, { name: string; tax: boolean }>;
+    accountName: (id: string | null) => string | null;
+    pending?: boolean;
+    onCharge?: (key: string) => void;
+    editingKey?: string | null;
+  },
+): ReceiptLine[] {
+  const r = strings.receipt;
+  return rows.map((row): ReceiptLine => {
+    const money =
+      row.value != null && row.currency ? (
+        <MoneyInline
+          value={row.sign === '-' ? `-${row.value}` : row.value}
+          sign={row.sign === '+' ? 'always' : undefined}
+          currency={row.currency}
+          tone={row.kind === 'charge' ? 'expense' : undefined}
+        />
+      ) : row.kind === 'charge' ? (
+        <Text style={{ opacity: 0.5 }}>—</Text>
+      ) : undefined;
+    switch (row.kind) {
+      case 'left':
+        return { key: row.key, label: r.whatLeft(row.account!.name), amount: money, highlight: true };
+      case 'base':
+        return { key: row.key, label: r.base, amount: money };
+      case 'converted': {
+        const c = row.conversion!;
+        return { key: row.key, label: parts(r.convertedAt(<MoneyInline value={c.amount} currency={c.from} />, `1 ${c.from} = ${trimRate(c.rate)} ${c.to}`)) };
+      }
+      case 'arrives':
+        return { key: row.key, label: r.arrivesIn(row.account!.name), amount: money, highlight: row.bold };
+      case 'wentUp':
+        return { key: row.key, label: ctx.pending ? r.willGoUp(row.account!.name) : r.wentUp(row.account!.name), amount: money, highlight: true };
+      case 'charge': {
+        const c = ctx.charges.get(row.chargeKey!);
+        const w = row.chargeWhere!;
+        const where =
+          w.kind === 'before' ? (ctx.kind === 'expense' ? r.includedInPrice : r.inside) : ctx.accountName(w.accountId) ? r.separatelyFrom(ctx.accountName(w.accountId)!) : r.onTop;
+        return {
+          key: row.key,
+          label: [c?.name, c?.tax ? r.tax : null, where].filter(Boolean).join(' · '),
+          amount: money,
+          onPress: ctx.onCharge ? () => ctx.onCharge!(row.chargeKey!) : undefined,
+          editing: ctx.editingKey === row.chargeKey,
+        };
+      }
+    }
+  });
+}

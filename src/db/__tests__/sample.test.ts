@@ -81,7 +81,8 @@ describe('the sample data matches the design canvas (Spec §19)', () => {
     expect(travel.tags).toContain('reimbursed');
     expect(travel.children.map((c) => c.title)).toEqual(['Reimbursed by client']);
     const transfer = groups.find((g) => g.date === '2026-09-26')!.rows.find((r) => r.sent);
-    expect(transfer).toMatchObject({ amount: { value: '13725', currency: 'PKR', tone: 'neutral' }, sent: { value: '49.46', currency: 'USD' }, tags: ['in_transit'] });
+    // The row shows what Alfalah went up by: ₨13,725 arrived, less the ₨150 charged there separately (owner, Nov 13).
+    expect(transfer).toMatchObject({ amount: { value: '13575', currency: 'PKR', tone: 'neutral' }, sent: { value: '49.46', currency: 'USD' }, tags: ['in_transit'] });
     // Upcoming (Oct 26) isn't listed.
     expect(groups.some((g) => g.date > SAMPLE_TODAY)).toBe(false);
   });

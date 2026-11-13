@@ -90,6 +90,12 @@ export function totalOut(t: Pick<TransactionRow, 'id' | 'accountId' | 'amount' |
   return toDecimalString(base.plus(extra));
 }
 
+/** What landed in an account, less on-top charges taken from that same account. */
+function wentUp(txId: string, accountId: string | null, arrived: DecimalString, l: Pick<Lookups, 'onTop'>): DecimalString {
+  const extra = (l.onTop.get(txId) ?? []).filter((c) => c.accountId === accountId).reduce((s, c) => s.plus(dec(c.amount)), dec('0'));
+  return toDecimalString(dec(arrived).minus(extra));
+}
+
 /** A row's display data. */
 export function toListRow(t: TransactionRow, l: Lookups): ListRow {
   const account = t.accountId ? l.accounts.get(t.accountId) : undefined;
@@ -107,7 +113,8 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
   switch (t.kind) {
     case 'income':
       title = tagged ?? category ?? firstLine(t.notes);
-      amount = { value: t.accountAmount ?? t.amount, currency: account?.currency ?? t.currency, tone: 'income' };
+      // What the account went up by: what arrived, less charges taken there separately (owner, Nov 13).
+      amount = { value: wentUp(t.id, t.accountId, t.accountAmount ?? t.amount, l), currency: account?.currency ?? t.currency, tone: 'income' };
       break;
     case 'expense':
       // The boards name an expense by its note ("Netflix", "Client travel expense"), else its category.
@@ -128,7 +135,7 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
       title = firstLine(t.notes) ?? `${fromName} → ${toName}`;
       accountName = `${fromName} → ${toName}`;
       if (to && t.toAmount && account && to.currency !== account.currency) {
-        amount = { value: t.toAmount, currency: to.currency, tone: 'neutral' };
+        amount = { value: wentUp(t.id, t.toAccountId, t.toAmount, l), currency: to.currency, tone: 'neutral' };
         sent = { value: t.accountAmount ?? t.amount, currency: account.currency };
       } else {
         amount = { value: t.toAmount ?? t.accountAmount ?? t.amount, currency: to?.currency ?? account?.currency ?? t.currency, tone: 'neutral' };
