@@ -375,27 +375,28 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     const insideBefore = indexed.filter(({ c }) => c.deduction === 'already_deducted' && (!converts || c.currency !== receivingCurrency));
     const insideAfter = indexed.filter(({ c }) => c.deduction === 'already_deducted' && converts && c.currency === receivingCurrency);
     const onTop = indexed.filter(({ c }) => c.deduction === 'charged_separately');
-    // On-top charges from the From account leave it too: the first line names the amount, and a total follows (owner, Nov 13).
+    // Receipt order (owner, Nov 13): money out starts with what left the From account, then the base amount;
+    // money in starts with the base amount and ends with what arrived. On-top charges from the From account add (+).
     const onTopHere = fromAccount ? onTop.filter(({ c }) => c.accountId === fromAccount.id && dec(c.amount).gt(0)) : [];
-    const mainLabel = (kind: 'expense' | 'transfer') =>
-      !fromAccount ? r.beforeDeductions : onTopHere.length ? (kind === 'expense' ? strings.detail.expenseAmount : strings.detail.sentFrom(fromAccount.name)) : r.whatLeft(fromAccount.name);
-    const totalLine = () => {
-      const out = preview.result?.accountAmount;
-      if (!fromAccount || !onTopHere.length || !out) return;
+    const adds = (i: number | 'new') => form.kind !== 'income' && onTopHere.some((x) => x.i === i);
+    const res = preview.result;
+    const leftLine = () => {
+      const out = res?.accountAmount;
+      if (!fromAccount || !out) return;
       const total = onTopHere.reduce((sum, { c }) => sum.plus(dec(c.amount)), dec(out));
-      lines.push({ key: 'total', label: strings.detail.totalOut(fromAccount.name), amount: <MoneyInline value={toDecimalString(total)} currency={fromAccount.currency} />, highlight: true });
+      lines.push({ key: 'left', label: r.whatLeft(fromAccount.name), amount: <MoneyInline value={toDecimalString(total)} currency={fromAccount.currency} />, highlight: true });
+    };
+    const baseLine = () => {
+      if (amountMoney) lines.push({ key: 'main', label: strings.detail.expenseAmount, amount: amountMoney });
     };
 
+    if (form.kind !== 'income') leftLine();
+    baseLine();
     if (form.kind === 'expense') {
-      if (amountMoney) lines.push({ key: 'main', label: mainLabel('expense'), amount: amountMoney });
-      for (const { c, i } of [...insideBefore, ...insideAfter]) lines.push(chargeLine(c, i));
-      for (const { c, i } of onTop) lines.push(chargeLine(c, i, onTopHere.some((x) => x.i === i)));
-      totalLine();
+      for (const { c, i } of [...insideBefore, ...insideAfter, ...onTop]) lines.push(chargeLine(c, i, adds(i)));
       return lines;
     }
-    if (amountMoney) lines.push({ key: 'main', label: form.kind === 'income' ? r.beforeDeductions : mainLabel('transfer'), amount: amountMoney });
     for (const { c, i } of insideBefore) lines.push(chargeLine(c, i));
-    const res = preview.result;
     if (converts && res?.afterInside && res.rate) {
       lines.push({
         key: 'conv',
@@ -403,11 +404,12 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       });
     }
     for (const { c, i } of insideAfter) lines.push(chargeLine(c, i));
-    if (res?.arrives && receivingName) {
-      lines.push({ key: 'arrives', label: r.arrivesIn(receivingName), amount: <MoneyInline value={res.arrives} currency={receivingCurrency} />, highlight: true });
+    for (const { c, i } of onTop) lines.push(chargeLine(c, i, adds(i)));
+    // What arrived comes last: after on-top charges taken from the receiving account.
+    const arrived = res?.netAmount ?? res?.arrives;
+    if (arrived && receivingName) {
+      lines.push({ key: 'arrives', label: r.arrivesIn(receivingName), amount: <MoneyInline value={arrived} currency={receivingCurrency} />, highlight: true });
     }
-    for (const { c, i } of onTop) lines.push(chargeLine(c, i, form.kind === 'transfer' && onTopHere.some((x) => x.i === i)));
-    if (form.kind === 'transfer') totalLine();
     return lines;
   }
 

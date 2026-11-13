@@ -93,23 +93,19 @@ export default function TransactionDetailScreen() {
       const { name, where } = chargeLabel({ ...c, rate: c.rate, rateMode: c.rateMode, accountId: c.accountId, label: c.label });
       return { key: c.id, label: `${name} · ${where}`, amount: <MoneyInline value={adds(c) ? c.amount : `-${c.amount}`} sign={adds(c) ? 'always' : undefined} currency={c.currency} tone="expense" /> };
     };
-    receipt.push({
-      key: 'main',
-      // With on-top charges, what left the account is more than the main amount, so the first line names the amount itself.
-      label:
-        t.kind === 'income'
-          ? strings.receipt.beforeDeductions
-          : !account
-            ? strings.receipt.beforeDeductions
-            : onTop.length
-              ? t.kind === 'expense'
-                ? s.expenseAmount
-                : s.sentFrom(account.name)
-              : s.leftAccount(account.name),
-      amount: <MoneyInline value={t.amount} currency={t.currency} />,
-    });
+    // Receipt order (owner, Nov 13): money out starts with what left the account, then the base amount;
+    // money in starts with the base amount and ends with what arrived (after any on-top charges there).
+    if (t.kind !== 'income' && account) {
+      receipt.push({
+        key: 'left',
+        label: t.status === 'cleared' ? s.leftAccount(account.name) : s.willTotalOut(account.name),
+        amount: <MoneyInline value={totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })} currency={account.currency} />,
+        highlight: true,
+      });
+    }
+    receipt.push({ key: 'main', label: s.expenseAmount, amount: <MoneyInline value={t.amount} currency={t.currency} /> });
     before.forEach((c) => receipt.push(charge(c)));
-    if (converts && receiving) {
+    if (converts && receiving && t.kind !== 'expense') {
       const insideMain = before.reduce((sum, c) => (c.currency === t.currency ? sum.minus(dec(c.amount)) : sum), dec(t.amount));
       receipt.push({
         key: 'conv',
@@ -117,24 +113,17 @@ export default function TransactionDetailScreen() {
       });
     }
     after.forEach((c) => receipt.push(charge(c)));
-    if (t.kind !== 'expense' && receiving) {
-      const arrives = t.kind === 'transfer' ? t.toAmount : t.accountAmount;
-      if (arrives) receipt.push({ key: 'arrives', label: strings.receipt.arrivesIn(receiving.name), amount: <MoneyInline value={arrives} currency={receiving.currency} />, highlight: true });
-    } else if (converts && account && t.accountAmount) {
-      receipt.push({ key: 'charged', label: strings.add.chargedTo(account.name), amount: <MoneyInline value={t.accountAmount} currency={account.currency} />, highlight: true });
-    }
     onTop.forEach((c) => receipt.push(charge(c)));
-    // The total that left the account: the amount plus on-top charges paid from that same account (owner, Nov 13).
-    if (account && (t.kind === 'expense' || t.kind === 'transfer') && onTop.some((c) => c.accountId === account.id)) {
-      receipt.push({
-        key: 'total',
-        label: t.status === 'cleared' ? s.totalOut(account.name) : s.willTotalOut(account.name),
-        amount: <MoneyInline value={totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })} currency={account.currency} />,
-        strong: true,
-      });
-    }
-    if (t.netAmount && receiving && t.kind !== 'expense') {
-      receipt.push({ key: 'net', label: t.status === 'cleared' ? s.wentUpBy(receiving.name) : s.willGoUpBy(receiving.name), amount: <MoneyInline value={t.netAmount} currency={receiving.currency} tone="income" />, strong: true });
+    if (t.kind !== 'expense' && receiving) {
+      const arrived = t.netAmount ?? (t.kind === 'transfer' ? t.toAmount : t.accountAmount);
+      if (arrived) {
+        receipt.push({
+          key: 'arrives',
+          label: t.status === 'cleared' ? strings.receipt.arrivesIn(receiving.name) : s.willGoUpBy(receiving.name),
+          amount: <MoneyInline value={arrived} currency={receiving.currency} tone="income" />,
+          strong: true,
+        });
+      }
     }
   }
   const vs = vsMarketPercent(t.rate, t.marketRateAtEntry);
