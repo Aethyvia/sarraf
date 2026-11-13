@@ -382,12 +382,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     const c = strings.charge;
     const m = (value: string, currency: string) => <MoneyInline value={value} currency={currency} size={12.5} />;
     if (chargeEdit.deduction === 'already_deducted') {
-      if (form.kind === 'expense') return amount ? parts(c.inPriceOf(m(amount, mainCurrency))) : c.inPriceNoAmount;
+      if (form.kind === 'expense') {
+        return fromAccount && outOfAccount ? parts(c.includedLeaves(m(outOfAccount, fromAccount.currency), fromAccount.name)) : c.includedNoAmount;
+      }
       const arrives = preview.result?.arrives;
-      return arrives && receivingName ? parts(c.deductedArrives(m(arrives, receivingCurrency), receivingName)) : c.deductedNoAmount;
-    }
-    if (form.kind === 'expense' && fromAccount && chargeEdit.accountId === fromAccount.id && totalOutOfAccount) {
-      return parts(c.onTopLeaves(m(totalOutOfAccount, fromAccount.currency), fromAccount.name));
+      return arrives && receivingName ? parts(c.includedArrives(m(arrives, receivingCurrency), receivingName)) : c.includedNoAmount;
     }
     const paid = chargeEdit.accountId ? ref.accounts.get(chargeEdit.accountId)?.name : null;
     return paid ? c.separateLine(paid) : c.separatePick;
@@ -433,7 +432,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     return toReceiptLines(rows, {
       kind: form.kind === 'savings' ? 'expense' : (form.kind as 'expense' | 'income' | 'transfer'),
       charges: new Map(indexed.map(({ c, key }) => [key, { name: chargeLabel(c).name, tax: !!c.isTax || c.type === 'withholding_tax', check: c.check }])),
-      fromId: form.kind === 'expense' ? (fromAccount?.id ?? null) : null,
       accountName: (id) => (id ? (ref.accounts.get(id)?.name ?? null) : null),
       pending: form.status !== 'cleared',
       onCharge: (key) => (key === 'new' ? undefined : selectCharge(Number(key))),
@@ -993,11 +991,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <ChargeEditor
               edit={chargeEdit}
               typeName={chargeEdit.type === 'custom' ? (chargeEdit.label ?? strings.charge.types.custom) : strings.charge.types[chargeEdit.type]}
-              labels={
-                form.kind === 'expense'
-                  ? { inside: strings.charge.inPrice, onTop: strings.charge.addedOnTop }
-                  : { inside: strings.charge.deducted, onTop: strings.charge.separate }
-              }
+              labels={{ inside: strings.charge.included, onTop: strings.charge.separate }}
               caption={chargeCaption}
               accountName={chargeEdit.accountId ? (ref.accounts.get(chargeEdit.accountId)?.name ?? null) : null}
               rateLabel={needsRate(chargeEdit, chargeCtx) ? { from: chargeEdit.currency, to: mainCurrency } : null}

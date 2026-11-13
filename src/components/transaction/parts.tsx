@@ -304,8 +304,6 @@ export function receiptLines(
   ctx: {
     kind: 'expense' | 'income' | 'transfer';
     charges: Map<string, { name: string; tax: boolean; check?: boolean }>;
-    /** Expense: the account the money left (a charge added on top from it needs no "from"). */
-    fromId?: string | null;
     accountName: (id: string | null) => string | null;
     pending?: boolean;
     onCharge?: (key: string) => void;
@@ -342,19 +340,8 @@ export function receiptLines(
         const c = ctx.charges.get(row.chargeKey!);
         const w = row.chargeWhere!;
         const paidFrom = w.kind === 'separately' ? ctx.accountName(w.accountId) : null;
-        // Council, owner Nov 13: say what the charge does. Expense: in the price / added on top; else deducted / separate.
-        const where =
-          w.kind === 'before'
-            ? ctx.kind === 'expense'
-              ? r.includedInPrice
-              : r.inside
-            : ctx.kind === 'expense'
-              ? paidFrom && w.accountId !== ctx.fromId
-                ? r.addedOnTopFrom(paidFrom)
-                : r.addedOnTop
-              : paidFrom
-                ? r.separatelyFrom(paidFrom)
-                : r.onTop;
+        // One pair of words on every kind (owner, Nov 13): included / separate, from X.
+        const where = w.kind === 'before' ? r.inside : paidFrom ? r.separatelyFrom(paidFrom) : r.onTop;
         const text = [c?.name, c?.tax ? r.tax : null, where].filter(Boolean).join(' · ');
         return {
           key: row.key,
