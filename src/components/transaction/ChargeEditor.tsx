@@ -19,7 +19,8 @@ import { FormRow } from './parts';
 export function ChargeEditor({
   edit,
   typeName,
-  insideLabel,
+  labels,
+  caption,
   accountName,
   rateLabel,
   forcedTax,
@@ -35,8 +36,10 @@ export function ChargeEditor({
 }: {
   edit: ChargeEdit;
   typeName: string;
-  /** "Inside the $530.00". */
-  insideLabel: string;
+  /** The two choices (council, owner Nov 13): "Deducted / Separate charge", or for an expense "In the price / Added on top". */
+  labels: { inside: string; onTop: string };
+  /** The live line under the choice, with the user's own numbers ("$980 arrives in Payoneer USD"). */
+  caption: ReactNode;
   accountName: string | null;
   /** Shown only when an inside charge is in a third currency: "1 EUR = ? USD" (from, to). */
   rateLabel: { from: string; to: string } | null;
@@ -82,8 +85,8 @@ export function ChargeEditor({
           <Segmented
             small
             options={[
-              { value: 'already_deducted', label: insideLabel },
-              { value: 'charged_separately', label: s.onTopShort },
+              { value: 'already_deducted', label: labels.inside },
+              { value: 'charged_separately', label: labels.onTop },
             ]}
             value={edit.deduction}
             onChange={onDeduction}
@@ -101,6 +104,8 @@ export function ChargeEditor({
           <Text style={[styles.taxText, { color: tax ? colors.accent : colors.inkSecondary }]}>{s.taxShort}</Text>
         </Pressable>
       </View>
+
+      {caption ? <Text style={[styles.caption, { color: colors.inkMuted }]}>{caption}</Text> : null}
 
       {onTop ? <FormRow label={s.paidFrom} value={accountName ?? undefined} placeholder={strings.add.pick} onPress={onAccount} /> : null}
       {rateLabel ? (
@@ -158,6 +163,7 @@ export function ChargeEditorHint({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  caption: { fontFamily: fonts.sans, fontSize: 12.5, marginTop: -4, paddingHorizontal: 2 },
   dock: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, gap: 8 },
   line: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   bin: { width: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

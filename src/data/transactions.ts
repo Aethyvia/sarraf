@@ -52,6 +52,8 @@ export interface ChargeDraft {
   /** On-top charges only. */
   accountId?: string | null;
   isTax?: boolean;
+  /** Form only, never saved: an earlier change means this charge needs a look ("Check this charge"). */
+  check?: boolean;
 }
 
 /** What Add transaction saves. One side of each kind may be a person instead of an account. */

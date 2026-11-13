@@ -151,3 +151,41 @@ export function commitCharges(charges: ChargeDraft[], e: ChargeEdit | null, ctx:
   if (!current) return charges;
   return e.index === null ? [...charges, current] : charges.map((c, i) => (i === e.index ? current : c));
 }
+
+/**
+ * After the transaction's accounts change (council, owner Nov 13): a separate
+ * charge paid from an account that was on the transaction and no longer is
+ * follows the new default account when it's in the same currency (so ₨150 never
+ * becomes $150); otherwise it stays and is marked to check. Charges paid from
+ * other accounts (picked on purpose) are left alone. Nothing is dropped.
+ */
+export function chargesAfterAccountChange(
+  charges: ChargeDraft[],
+  before: (string | null | undefined)[],
+  after: (string | null | undefined)[],
+  newDefault: string | null,
+  accountCurrency: (accountId: string) => string | undefined,
+): ChargeDraft[] {
+  const was = new Set(before.filter(Boolean));
+  const now = new Set(after.filter(Boolean));
+  return charges.map((c) => {
+    if (c.deduction !== 'charged_separately' || !c.accountId || !was.has(c.accountId) || now.has(c.accountId)) return c;
+    if (newDefault && accountCurrency(newDefault) === c.currency) return { ...c, accountId: newDefault };
+    return { ...c, check: true };
+  });
+}
+
+/** After switching kind: what "Deducted / In the price" means changes, so every charge gets a look. */
+export function chargesAfterKindChange(charges: ChargeDraft[]): ChargeDraft[] {
+  return charges.map((c) => ({ ...c, check: true }));
+}
+
+/**
+ * The Paid from list (council, owner Nov 13): this transaction's accounts first,
+ * then one row that opens every other account.
+ */
+export function splitChargeAccounts<T extends { id: string }>(all: T[], onTransaction: (string | null | undefined)[]): { here: T[]; others: T[] } {
+  const ids = onTransaction.filter(Boolean) as string[];
+  const here = ids.map((id) => all.find((a) => a.id === id)).filter((a): a is T => !!a);
+  return { here, others: all.filter((a) => !ids.includes(a.id)) };
+}

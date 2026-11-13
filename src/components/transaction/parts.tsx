@@ -208,18 +208,36 @@ export function chargeLabel(c: ChargeDraft): { name: string; where: string } {
 }
 
 /** One of the four buttons above the keypad. */
-export function UtilityButton({ icon, label, onPress, dot, disabled }: { icon: string; label: ReactNode; onPress: () => void; dot?: boolean; disabled?: boolean }) {
+export function UtilityButton({
+  icon,
+  label,
+  onPress,
+  dot,
+  dotTone,
+  disabled,
+  dim,
+}: {
+  icon: string;
+  label: ReactNode;
+  onPress: () => void;
+  dot?: boolean;
+  /** 'danger': something here needs a look ("Check charges"). */
+  dotTone?: 'danger';
+  disabled?: boolean;
+  /** Looks unavailable but still answers a tap (to say what's needed first). */
+  dim?: boolean;
+}) {
   const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.util, { borderColor: colors.border }, (pressed || disabled) && { opacity: disabled ? 0.45 : 0.75 }]}
+      style={({ pressed }) => [styles.util, { borderColor: colors.border }, (pressed || disabled || dim) && { opacity: disabled || dim ? 0.45 : 0.75 }]}
     >
       <Icon name={icon} size={15} color={colors.ink} strokeWidth={1.8} />
       {typeof label === 'string' ? <Text style={[styles.utilText, { color: colors.ink }]} numberOfLines={1}>{label}</Text> : label}
-      {dot ? <View style={[styles.dot, { backgroundColor: colors.accent }]} /> : null}
+      {dot ? <View style={[styles.dot, { backgroundColor: dotTone === 'danger' ? colors.expense : colors.accent }]} /> : null}
     </Pressable>
   );
 }
@@ -285,7 +303,9 @@ export function receiptLines(
   rows: ReceiptRow[],
   ctx: {
     kind: 'expense' | 'income' | 'transfer';
-    charges: Map<string, { name: string; tax: boolean }>;
+    charges: Map<string, { name: string; tax: boolean; check?: boolean }>;
+    /** Expense: the account the money left (a charge added on top from it needs no "from"). */
+    fromId?: string | null;
     accountName: (id: string | null) => string | null;
     pending?: boolean;
     onCharge?: (key: string) => void;
@@ -321,11 +341,32 @@ export function receiptLines(
       case 'charge': {
         const c = ctx.charges.get(row.chargeKey!);
         const w = row.chargeWhere!;
+        const paidFrom = w.kind === 'separately' ? ctx.accountName(w.accountId) : null;
+        // Council, owner Nov 13: say what the charge does. Expense: in the price / added on top; else deducted / separate.
         const where =
-          w.kind === 'before' ? (ctx.kind === 'expense' ? r.includedInPrice : r.inside) : ctx.accountName(w.accountId) ? r.separatelyFrom(ctx.accountName(w.accountId)!) : r.onTop;
+          w.kind === 'before'
+            ? ctx.kind === 'expense'
+              ? r.includedInPrice
+              : r.inside
+            : ctx.kind === 'expense'
+              ? paidFrom && w.accountId !== ctx.fromId
+                ? r.addedOnTopFrom(paidFrom)
+                : r.addedOnTop
+              : paidFrom
+                ? r.separatelyFrom(paidFrom)
+                : r.onTop;
+        const text = [c?.name, c?.tax ? r.tax : null, where].filter(Boolean).join(' · ');
         return {
           key: row.key,
-          label: [c?.name, c?.tax ? r.tax : null, where].filter(Boolean).join(' · '),
+          label: c?.check ? (
+            <>
+              {text}
+              {'  '}
+              <CheckMark />
+            </>
+          ) : (
+            text
+          ),
           amount: money,
           onPress: ctx.onCharge ? () => ctx.onCharge!(row.chargeKey!) : undefined,
           editing: ctx.editingKey === row.chargeKey,
@@ -333,4 +374,10 @@ export function receiptLines(
       }
     }
   });
+}
+
+/** "Check this charge": an earlier change means this charge needs a look (council, owner Nov 13). */
+function CheckMark() {
+  const { colors } = useTheme();
+  return <Text style={{ color: colors.expense, fontFamily: fonts.sansBold }}>{strings.charge.check}</Text>;
 }

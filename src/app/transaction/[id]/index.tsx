@@ -103,6 +103,7 @@ export default function TransactionDetailScreen() {
         charges: new Map(charges.map((c) => [c.id, { name: chargeLabel({ ...c, rate: c.rate, rateMode: c.rateMode, accountId: c.accountId, label: c.label }).name, tax: !!c.isTax || c.type === 'withholding_tax' }])),
         accountName: (aid) => (aid ? (data.accounts.get(aid)?.name ?? null) : null),
         pending: t.status !== 'cleared',
+        fromId: kind === 'expense' ? (account?.id ?? null) : null,
       }).map((l) => ({ key: l.key, label: l.label, amount: l.amount, highlight: l.highlight, strong: l.highlight })),
     );
   }

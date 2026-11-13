@@ -2,7 +2,7 @@ import { goBack } from '@/state/nav';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { eq, isNull } from 'drizzle-orm';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,7 +23,7 @@ import {
   useLedgerItems,
   usePeopleItems,
 } from '@/components/sheets/pickers';
-import { BottomSheet, Button, Header, IconButton, Segmented, ToggleRow } from '@/components/ui';
+import { BottomSheet, Button, Header, IconButton, IconChip, Segmented, ToggleRow } from '@/components/ui';
 import { vsMarketPercent, type AmountResult } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
@@ -55,6 +55,9 @@ import {
   newChargeEdit,
   pressChargeKey,
   chargeAmount,
+  chargesAfterAccountChange,
+  chargesAfterKindChange,
+  splitChargeAccounts,
   withAccount,
   withDeduction,
   withType,
@@ -93,6 +96,12 @@ type Sheet =
  * receipt behind the Charges button. ✓ saves and goes back. Edit uses the same
  * screen, filled in (`editId`).
  */
+const OTHER_ACCOUNT = '__other_account';
+/** The accounts on the transaction that a separate charge can come from: From (and To, for a transfer). */
+const chargeSideIds = (f: FormState) => [f.from?.type === 'account' ? f.from.id : null, f.kind === 'transfer' && f.to?.type === 'account' ? f.to.id : null];
+/** Where a new separate charge is paid from: where the money lands (transfer To), else the account. */
+const chargeDefault = (f: FormState) => (f.kind === 'transfer' && f.to?.type === 'account' ? f.to.id : null) ?? (f.from?.type === 'account' ? f.from.id : null);
+
 export function TransactionForm({ initial, editId }: { initial: FormState; editId?: string }) {
   const s = strings.add;
   const settings = useSettings();
@@ -154,6 +163,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   // The charges as they were when the page opened: ✕ goes back to these (after a warning).
   const [chargesBefore, setChargesBefore] = useState<ChargeDraft[]>([]);
   const [chargeSheet, setChargeSheet] = useState<'type' | 'account' | 'currency' | 'discard' | null>(null);
+  const [chargeAllAccounts, setChargeAllAccounts] = useState(false);
+  const reopenAllAccounts = useRef(false);
   const chargeCtx: ChargeContext = {
     mainCurrency,
     receivingCurrency,
@@ -271,8 +282,18 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       return applyKey(g, key, getCurrency(g.target === 'known' ? receivingCurrency : mainCurrency).minorUnits);
     });
   const changeKind = (kind: FormKind) => {
-    setForm((f) => switchKind(f, kind, { date: today, accountId: ref.firstAccount }));
+    setForm((f) => {
+      const next = switchKind(f, kind, { date: today, accountId: ref.firstAccount });
+      // What "Deducted / In the price" means changes with the kind: each charge gets a look (council, owner Nov 13).
+      return next !== f && next.charges.length ? { ...next, charges: chargesAfterKindChange(next.charges) } : next;
+    });
   };
+  /** From / To changed: charges paid from an account that left the transaction follow the new one, or are marked to check. */
+  const setSides = (patch: Partial<FormState>) =>
+    setForm((f) => {
+      const next = { ...f, ...patch };
+      return { ...next, charges: chargesAfterAccountChange(f.charges, chargeSideIds(f), chargeSideIds(next), chargeDefault(next), (id) => ref.accounts.get(id)?.currency) };
+    });
   const pickDate = (value: string, onPick: (d: string) => void) => {
     const [y, m, d] = value.split('-').map(Number);
     DateTimePickerAndroid.open({
@@ -284,7 +305,18 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     });
   };
 
-  const canSave = isSavings ? !!(goal && goalAccount && amount && dec(amount).gt(0)) : !!amount && dec(amount).gt(0);
+  const canSave = isSavings ? !!(goal && goalAccount && amount && dec(amount).gt(0)) : !!amount && dec(amount).gt(0) && preview.error !== 'charges_exceed';
+  // Charges wait for the amount (and, across currencies, the rate): a charge with no base means nothing (council, owner Nov 13).
+  const amountReady = !!amount && dec(amount).gt(0);
+  const rateReady = !converts || (form.rateMode === 'rate_known' ? !!rate : !!known && dec(known).gt(0));
+  const chargesNeedCheck = form.charges.some((c) => c.check);
+  const tapCharges = () => {
+    if (!form.charges.length && (!amountReady || !rateReady)) {
+      toast({ message: amountReady ? strings.charge.rateFirst : strings.charge.amountFirst });
+      return;
+    }
+    openCharges();
+  };
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (!canSave || !amount || saving) return;
@@ -344,6 +376,34 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const receivingName = form.kind === 'transfer' ? toAccount?.name : fromAccount?.name;
   const receiptLines = buildReceipt();
 
+  // The live line under Deducted / Separate charge, with the user's own numbers (council, owner Nov 13).
+  const chargeCaption: ReactNode = (() => {
+    if (!chargeEdit) return null;
+    const c = strings.charge;
+    const m = (value: string, currency: string) => <MoneyInline value={value} currency={currency} size={12.5} />;
+    if (chargeEdit.deduction === 'already_deducted') {
+      if (form.kind === 'expense') return amount ? parts(c.inPriceOf(m(amount, mainCurrency))) : c.inPriceNoAmount;
+      const arrives = preview.result?.arrives;
+      return arrives && receivingName ? parts(c.deductedArrives(m(arrives, receivingCurrency), receivingName)) : c.deductedNoAmount;
+    }
+    if (form.kind === 'expense' && fromAccount && chargeEdit.accountId === fromAccount.id && totalOutOfAccount) {
+      return parts(c.onTopLeaves(m(totalOutOfAccount, fromAccount.currency), fromAccount.name));
+    }
+    const paid = chargeEdit.accountId ? ref.accounts.get(chargeEdit.accountId)?.name : null;
+    return paid ? c.separateLine(paid) : c.separatePick;
+  })();
+
+  // Paid from: this transaction's accounts first, then "Other account…" for the rest (council, owner Nov 13).
+  const chargeAccountsShown = (() => {
+    const all = chargeAccountSections.flatMap((sec) => sec.items);
+    const { here } = splitChargeAccounts(all, chargeSideIds(form));
+    if (chargeAllAccounts || !here.length || here.length === all.length) return chargeAccountSections;
+    return [
+      { label: strings.charge.onThisTransaction, items: here },
+      { items: [{ id: OTHER_ACCOUNT, title: strings.charge.otherAccount, detail: strings.charge.otherAccountDetail, leading: <IconChip icon="wallet" color="neutral" size={32} /> }] },
+    ];
+  })();
+
   function buildReceipt(): ReceiptLine[] {
     // Every saved charge, with the one being edited shown as typed (even before it's complete).
     const editShown = (e: ChargeEdit): ChargeDraft => ({
@@ -372,7 +432,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     });
     return toReceiptLines(rows, {
       kind: form.kind === 'savings' ? 'expense' : (form.kind as 'expense' | 'income' | 'transfer'),
-      charges: new Map(indexed.map(({ c, key }) => [key, { name: chargeLabel(c).name, tax: !!c.isTax || c.type === 'withholding_tax' }])),
+      charges: new Map(indexed.map(({ c, key }) => [key, { name: chargeLabel(c).name, tax: !!c.isTax || c.type === 'withholding_tax', check: c.check }])),
+      fromId: form.kind === 'expense' ? (fromAccount?.id ?? null) : null,
       accountName: (id) => (id ? (ref.accounts.get(id)?.name ?? null) : null),
       pending: form.status !== 'cleared',
       onCharge: (key) => (key === 'new' ? undefined : selectCharge(Number(key))),
@@ -411,7 +472,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   ) : null;
 
   const warningNote =
-    warning?.level === 'balance' && fromAccount ? (
+    preview.error === 'charges_exceed' ? (
+      <RowNote tone="danger" icon="bolt">
+        {strings.charge.exceed}
+      </RowNote>
+    ) : warning?.level === 'balance' && fromAccount ? (
       <RowNote tone="danger" icon="bolt">
         {parts(s.warnBalance(<MoneyInline size={11} value={warning.overBy} currency={fromAccount.currency} tone="expense" />, fromAccount.name))}
         {parts(
@@ -768,9 +833,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           <View style={styles.utilRow}>
             <UtilityButton
               icon="ledger"
-              label={chargesTotal ? (chargesTotal.currency ? <MoneyInline value={chargesTotal.text} currency={chargesTotal.currency} /> : `${s.charges} · ${chargesTotal.text}`) : s.charges}
-              onPress={openCharges}
+              label={chargesNeedCheck ? strings.charge.checkCharges : chargesTotal ? (chargesTotal.currency ? <MoneyInline value={chargesTotal.text} currency={chargesTotal.currency} /> : `${s.charges} · ${chargesTotal.text}`) : s.charges}
+              onPress={tapCharges}
               dot={form.charges.length > 0}
+              dotTone={chargesNeedCheck ? 'danger' : undefined}
+              dim={!form.charges.length && (!amountReady || !rateReady)}
             />
             <UtilityButton icon="layers" label={ledger?.name ?? '—'} onPress={() => setSheet('ledger')} />
           </View>
@@ -786,7 +853,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         value={form.from}
         allowPerson={form.kind !== 'income'}
         excludeAccountId={form.kind === 'transfer' && form.to?.type === 'account' ? form.to.id : null}
-        onSelect={(side) => set({ from: side, ...(form.kind === 'transfer' && side?.type === 'person' && form.to?.type === 'person' ? { to: null } : {}) })}
+        onSelect={(side) => setSides({ from: side, ...(form.kind === 'transfer' && side?.type === 'person' && form.to?.type === 'person' ? { to: null } : {}) })}
         onClose={() => setSheet(null)}
         onNewAccount={() => router.push('/accounts/new')}
         onNewPerson={() => router.push('/people/new')}
@@ -797,7 +864,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         value={form.to}
         allowPerson={form.from?.type !== 'person'}
         excludeAccountId={form.from?.type === 'account' ? form.from.id : null}
-        onSelect={(side) => set({ to: side })}
+        onSelect={(side) => setSides({ to: side })}
         onClose={() => setSheet(null)}
         onNewAccount={() => router.push('/accounts/new')}
         onNewPerson={() => router.push('/people/new')}
@@ -914,6 +981,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 11, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
               {chargesAccount ? <FormRow label={form.kind === 'transfer' ? s.to : s.account} icon={accountChip(chargesAccount)} value={chargesAccount.name} /> : null}
               <ReceiptCard lines={receiptLines} onAdd={startNewCharge} emptyText={strings.receipt.none} onCollapse={doneCharges} />
+              {preview.error === 'charges_exceed' ? (
+                <RowNote tone="danger" icon="bolt">
+                  {strings.charge.exceed}
+                </RowNote>
+              ) : null}
               {goesUp}
             </ScrollView>
           </View>
@@ -921,13 +993,12 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             <ChargeEditor
               edit={chargeEdit}
               typeName={chargeEdit.type === 'custom' ? (chargeEdit.label ?? strings.charge.types.custom) : strings.charge.types[chargeEdit.type]}
-              insideLabel={
-                form.kind !== 'expense'
-                  ? strings.charge.takenBefore
-                  : amount && !settings.hideAmounts
-                    ? strings.charge.insideShort(formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat }).text)
-                    : strings.charge.insideAmount
+              labels={
+                form.kind === 'expense'
+                  ? { inside: strings.charge.inPrice, onTop: strings.charge.addedOnTop }
+                  : { inside: strings.charge.deducted, onTop: strings.charge.separate }
               }
+              caption={chargeCaption}
               accountName={chargeEdit.accountId ? (ref.accounts.get(chargeEdit.accountId)?.name ?? null) : null}
               rateLabel={needsRate(chargeEdit, chargeCtx) ? { from: chargeEdit.currency, to: mainCurrency } : null}
               forcedTax={isForcedTax(chargeEdit.type)}
@@ -935,7 +1006,10 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
               onRemove={removeCharge}
               onDeduction={(d) => setChargeEdit((e) => e && withDeduction(e, d, chargeCtx))}
               onTax={() => setChargeEdit((e) => e && { ...e, isTax: !e.isTax })}
-              onAccount={() => setChargeSheet('account')}
+              onAccount={() => {
+                setChargeAllAccounts(false);
+                setChargeSheet('account');
+              }}
               onCurrency={() => setChargeSheet('currency')}
               onRate={() => setChargeEdit((e) => e && { ...e, target: 'rate' })}
               onAmount={() => setChargeEdit((e) => e && { ...e, target: 'amount' })}
@@ -964,10 +1038,22 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         <PickerSheet
           visible={chargeSheet === 'account'}
           title={strings.charge.paidFrom}
-          sections={chargeAccountSections}
+          sections={chargeAccountsShown}
           selectedId={chargeEdit?.accountId ?? null}
-          onSelect={(id) => setChargeEdit((e) => e && withAccount(e, id, chargeCtx))}
-          onClose={() => setChargeSheet(null)}
+          onSelect={(id) => {
+            if (id === OTHER_ACCOUNT) {
+              reopenAllAccounts.current = true;
+              setChargeAllAccounts(true);
+            } else setChargeEdit((e) => e && withAccount(e, id, chargeCtx));
+          }}
+          onClose={() => {
+            // "Other account…" closes the short list and opens the full one.
+            if (reopenAllAccounts.current) {
+              reopenAllAccounts.current = false;
+              setChargeSheet(null);
+              setTimeout(() => setChargeSheet('account'), 250);
+            } else setChargeSheet(null);
+          }}
         />
         <CurrencySheet
           visible={chargeSheet === 'currency'}

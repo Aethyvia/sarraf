@@ -1,3 +1,4 @@
+import { chargesAfterAccountChange, chargesAfterKindChange, splitChargeAccounts } from '../charge-edit';
 import type { ChargeDraft } from '@/data/transactions';
 import {
   chargeFromEdit,
@@ -120,3 +121,32 @@ describe('the rate on the same keypad (Owner, Nov 12)', () => {
   });
 });
 
+
+describe('charges follow account changes (council, owner Nov 13)', () => {
+  const CUR: Record<string, string> = { p: 'USD', a: 'PKR', m: 'PKR', c: 'PKR', e: 'EUR' };
+  const cur = (id: string): string | undefined => CUR[id];
+  const bank = { type: 'bank_charge', amount: '150', currency: 'PKR', deduction: 'charged_separately', accountId: 'a' } as const;
+
+  it('a charge from the old account moves to the new one in the same currency', () => {
+    expect(chargesAfterAccountChange([bank], ['p', 'a'], ['p', 'm'], 'm', cur)).toEqual([{ ...bank, accountId: 'm' }]);
+  });
+  it('in another currency it stays and is marked to check (never ₨150 → $150)', () => {
+    expect(chargesAfterAccountChange([bank], ['a'], ['e'], 'e', cur)).toEqual([{ ...bank, check: true }]);
+  });
+  it('a charge paid from an account that was never on the transaction is left alone', () => {
+    const cash = { ...bank, accountId: 'c' };
+    expect(chargesAfterAccountChange([cash], ['a'], ['m'], 'm', cur)).toEqual([cash]);
+  });
+  it('deducted charges are untouched by an account change', () => {
+    const fee = { type: 'transfer_fee', amount: '20', currency: 'USD', deduction: 'already_deducted' } as const;
+    expect(chargesAfterAccountChange([fee], ['p'], ['e'], 'e', cur)).toEqual([fee]);
+  });
+  it('switching kind marks every charge to check', () => {
+    expect(chargesAfterKindChange([bank])).toEqual([{ ...bank, check: true }]);
+  });
+  it('Paid from lists this transaction’s accounts first, in order, and the rest apart', () => {
+    const all = ['p', 'e', 'a', 'c'].map((id) => ({ id }));
+    expect(splitChargeAccounts(all, ['a', 'p'])).toEqual({ here: [{ id: 'a' }, { id: 'p' }], others: [{ id: 'e' }, { id: 'c' }] });
+    expect(splitChargeAccounts(all, ['p', null])).toEqual({ here: [{ id: 'p' }], others: [{ id: 'e' }, { id: 'a' }, { id: 'c' }] });
+  });
+});

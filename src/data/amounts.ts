@@ -78,7 +78,7 @@ export interface AmountResult {
 
 export class AmountError extends Error {
   constructor(
-    readonly code: 'rate_required' | 'known_amount_required' | 'charge_rate_required' | 'invalid_amount',
+    readonly code: 'rate_required' | 'known_amount_required' | 'charge_rate_required' | 'invalid_amount' | 'charges_exceed',
     message: string,
   ) {
     super(message);
@@ -159,6 +159,9 @@ export function computeAmounts(input: AmountInput): AmountResult {
       rate = afterInside.isZero() ? null : rateFromAmounts(toDecimalString(afterInside), toDecimalString(beforeReceivingCharges));
     }
   }
+
+  // Deducted charges can't take more than there is (council, owner Nov 13): Save waits until they fit.
+  if (arrives.isNegative()) throw new AmountError('charges_exceed', 'The deducted charges are more than the amount');
 
   const onTopOnReceiving = sum(
     charges

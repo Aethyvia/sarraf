@@ -148,3 +148,19 @@ describe('vs market', () => {
     expect(vsMarketPercent(null, '1')).toBeNull();
   });
 });
+
+describe('deducted charges bigger than the amount (council, owner Nov 13)', () => {
+  it('is an error, so Save waits', () => {
+    expect(() =>
+      computeAmounts({
+        kind: 'income',
+        amount: '20',
+        currency: 'USD',
+        receivingCurrency: 'USD',
+        receivingAccountId: 'p',
+        rateMode: 'rate_known',
+        charges: [{ amount: '30', currency: 'USD', deduction: 'already_deducted' }],
+      }),
+    ).toThrow(expect.objectContaining({ code: 'charges_exceed' }));
+  });
+});
