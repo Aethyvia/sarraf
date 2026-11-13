@@ -3,7 +3,7 @@ import { and, desc, eq, isNull, lte, ne } from 'drizzle-orm';
 import { accounts, categories, people, transactionCharges, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { today as todayDate } from '@/lib/dates';
-import type { DecimalString } from '@/lib/money';
+import { dec, toDecimalString, type DecimalString } from '@/lib/money';
 import type { TransactionRow } from './transactions';
 
 export type ListKind = 'expense' | 'income' | 'transfer';
@@ -58,10 +58,21 @@ interface Lookups {
   accounts: Map<string, { name: string; currency: string }>;
   categories: Map<string, { name: string; parentId: string | null; icon: string; color: string }>;
   people: Map<string, string>;
+  /** On-top charges by transaction: they leave their own account along with the main amount. */
+  onTop: Map<string, { accountId: string; amount: string }[]>;
 }
 
 function lookups(db: AppDb): Lookups {
+  const onTop = new Map<string, { accountId: string; amount: string }[]>();
+  for (const c of db
+    .select({ tx: transactionCharges.transactionId, accountId: transactionCharges.accountId, amount: transactionCharges.amount })
+    .from(transactionCharges)
+    .where(eq(transactionCharges.deduction, 'charged_separately'))
+    .all()) {
+    if (c.accountId) onTop.set(c.tx, [...(onTop.get(c.tx) ?? []), { accountId: c.accountId, amount: c.amount }]);
+  }
   return {
+    onTop,
     accounts: new Map(db.select({ id: accounts.id, name: accounts.name, currency: accounts.currency }).from(accounts).all().map((a) => [a.id, a])),
     categories: new Map(
       db.select({ id: categories.id, name: categories.name, parentId: categories.parentId, icon: categories.icon, color: categories.color }).from(categories).all().map((c) => [c.id, c]),
@@ -71,6 +82,13 @@ function lookups(db: AppDb): Lookups {
 }
 
 const firstLine = (s: string | null) => s?.split('\n')[0]?.trim() || null;
+
+/** What left the transaction's own account: its amount plus on-top charges paid from that same account. */
+export function totalOut(t: Pick<TransactionRow, 'id' | 'accountId' | 'amount' | 'accountAmount'>, l: Pick<Lookups, 'onTop'>): DecimalString {
+  const base = dec(t.accountAmount ?? t.amount);
+  const extra = (l.onTop.get(t.id) ?? []).filter((c) => c.accountId === t.accountId).reduce((s, c) => s.plus(dec(c.amount)), dec('0'));
+  return toDecimalString(base.plus(extra));
+}
 
 /** A row's display data. */
 export function toListRow(t: TransactionRow, l: Lookups): ListRow {
@@ -98,7 +116,8 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
         title = firstLine(t.notes);
         amount = { value: t.accountAmount ?? t.amount, currency: account?.currency ?? t.currency, tone: 'income' };
       } else if (t.accountId) {
-        amount = { value: t.accountAmount ?? t.amount, currency: account?.currency ?? t.currency, tone: 'expense' };
+        // The total that left the account: the price plus on-top charges from the same account (owner, Nov 13).
+        amount = { value: totalOut(t, l), currency: account?.currency ?? t.currency, tone: 'expense' };
       } else {
         amount = { value: t.amount, currency: t.currency, tone: 'expense' };
       }

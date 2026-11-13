@@ -239,7 +239,16 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
 
   const outOfAccount =
     (form.kind === 'expense' || form.kind === 'transfer') && fromAccount && preview.result ? preview.result.accountAmount : null;
-  const warning = useLive((d) => (fromAccount && outOfAccount ? spendWarning(d, fromAccount.id, outOfAccount) : null), [fromAccount?.id, outOfAccount]);
+  // On-top charges paid from the same account leave it too (owner, Nov 13: 15,000 + 15 on top = 15,015 out).
+  const totalOutOfAccount =
+    outOfAccount && fromAccount
+      ? toDecimalString(
+          form.charges
+            .filter((c) => c.deduction === 'charged_separately' && c.accountId === fromAccount.id && c.amount)
+            .reduce((sum, c) => sum.plus(dec(c.amount)), dec(outOfAccount)),
+        )
+      : null;
+  const warning = useLive((d) => (fromAccount && totalOutOfAccount ? spendWarning(d, fromAccount.id, totalOutOfAccount) : null), [fromAccount?.id, totalOutOfAccount]);
   // Budget warning (Spec §11 — Decided): the category's budget in this ledger only; when this takes it over, or it's already over.
   const budget = useLive(
     (d) =>
@@ -365,13 +374,24 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     const insideBefore = indexed.filter(({ c }) => c.deduction === 'already_deducted' && (!converts || c.currency !== receivingCurrency));
     const insideAfter = indexed.filter(({ c }) => c.deduction === 'already_deducted' && converts && c.currency === receivingCurrency);
     const onTop = indexed.filter(({ c }) => c.deduction === 'charged_separately');
+    // On-top charges from the From account leave it too: the first line names the amount, and a total follows (owner, Nov 13).
+    const onTopHere = fromAccount ? onTop.filter(({ c }) => c.accountId === fromAccount.id && dec(c.amount).gt(0)) : [];
+    const mainLabel = (kind: 'expense' | 'transfer') =>
+      !fromAccount ? r.beforeDeductions : onTopHere.length ? (kind === 'expense' ? strings.detail.expenseAmount : strings.detail.sentFrom(fromAccount.name)) : r.whatLeft(fromAccount.name);
+    const totalLine = () => {
+      const out = preview.result?.accountAmount;
+      if (!fromAccount || !onTopHere.length || !out) return;
+      const total = onTopHere.reduce((sum, { c }) => sum.plus(dec(c.amount)), dec(out));
+      lines.push({ key: 'total', label: strings.detail.totalOut(fromAccount.name), amount: <MoneyInline value={toDecimalString(total)} currency={fromAccount.currency} />, highlight: true });
+    };
 
     if (form.kind === 'expense') {
-      if (amountMoney) lines.push({ key: 'main', label: fromAccount ? r.whatLeft(fromAccount.name) : r.beforeDeductions, amount: amountMoney });
+      if (amountMoney) lines.push({ key: 'main', label: mainLabel('expense'), amount: amountMoney });
       for (const { c, i } of [...insideBefore, ...insideAfter, ...onTop]) lines.push(chargeLine(c, i));
+      totalLine();
       return lines;
     }
-    if (amountMoney) lines.push({ key: 'main', label: form.kind === 'income' ? r.beforeDeductions : fromAccount ? r.whatLeft(fromAccount.name) : r.beforeDeductions, amount: amountMoney });
+    if (amountMoney) lines.push({ key: 'main', label: form.kind === 'income' ? r.beforeDeductions : mainLabel('transfer'), amount: amountMoney });
     for (const { c, i } of insideBefore) lines.push(chargeLine(c, i));
     const res = preview.result;
     if (converts && res?.afterInside && res.rate) {
@@ -385,6 +405,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       lines.push({ key: 'arrives', label: r.arrivesIn(receivingName), amount: <MoneyInline value={res.arrives} currency={receivingCurrency} />, highlight: true });
     }
     for (const { c, i } of onTop) lines.push(chargeLine(c, i));
+    if (form.kind === 'transfer') totalLine();
     return lines;
   }
 

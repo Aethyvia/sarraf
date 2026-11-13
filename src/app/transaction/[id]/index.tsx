@@ -27,6 +27,7 @@ import { deleteStoredFiles, formatBytes } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { useToast } from '@/state/toast';
+import { totalOut } from '@/data/transaction-list';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -92,7 +93,17 @@ export default function TransactionDetailScreen() {
     };
     receipt.push({
       key: 'main',
-      label: t.kind === 'income' ? strings.receipt.beforeDeductions : account ? s.leftAccount(account.name) : strings.receipt.beforeDeductions,
+      // With on-top charges, what left the account is more than the main amount, so the first line names the amount itself.
+      label:
+        t.kind === 'income'
+          ? strings.receipt.beforeDeductions
+          : !account
+            ? strings.receipt.beforeDeductions
+            : onTop.length
+              ? t.kind === 'expense'
+                ? s.expenseAmount
+                : s.sentFrom(account.name)
+              : s.leftAccount(account.name),
       amount: <MoneyInline value={t.amount} currency={t.currency} />,
     });
     before.forEach((c) => receipt.push(charge(c)));
@@ -111,6 +122,15 @@ export default function TransactionDetailScreen() {
       receipt.push({ key: 'charged', label: strings.add.chargedTo(account.name), amount: <MoneyInline value={t.accountAmount} currency={account.currency} />, highlight: true });
     }
     onTop.forEach((c) => receipt.push(charge(c)));
+    // The total that left the account: the amount plus on-top charges paid from that same account (owner, Nov 13).
+    if (account && (t.kind === 'expense' || t.kind === 'transfer') && onTop.some((c) => c.accountId === account.id)) {
+      receipt.push({
+        key: 'total',
+        label: t.status === 'cleared' ? s.totalOut(account.name) : s.willTotalOut(account.name),
+        amount: <MoneyInline value={`-${totalOut(t, { onTop: new Map([[t.id, onTop.map((c) => ({ accountId: c.accountId!, amount: c.amount }))]]) })}`} currency={account.currency} tone="expense" />,
+        strong: true,
+      });
+    }
     if (t.netAmount && receiving && t.kind !== 'expense') {
       receipt.push({ key: 'net', label: t.status === 'cleared' ? s.wentUpBy(receiving.name) : s.willGoUpBy(receiving.name), amount: <MoneyInline value={t.netAmount} currency={receiving.currency} tone="income" />, strong: true });
     }

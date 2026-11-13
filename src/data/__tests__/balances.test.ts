@@ -1,4 +1,7 @@
-import { transactionCharges } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+
+import { transactionCharges, transactions } from '@/db/schema';
+import { toListRowFromDb } from '../transaction-list';
 import { accountBalance, accountBalances } from '../balances';
 import { setup } from '@/test/factories';
 
@@ -73,5 +76,18 @@ describe('account balances', () => {
     const usd = account('Payoneer USD', 'USD');
     tx({ kind: 'expense', accountId: null, paidByPersonId: person('John'), accountAmount: null, amount: '20' });
     expect(accountBalance(db, usd, TODAY)).toBe('0');
+  });
+});
+
+describe('an expense with a charge on top from the same account (owner, Nov 13)', () => {
+  it('takes the price and the charge out of the account, and the row shows the total', async () => {
+    const { account, tx, db } = await setup();
+    const pkr = account('Alfalah PKR', 'PKR');
+    tx({ kind: 'opening_balance', accountId: pkr, amount: '20000', accountAmount: '20000', currency: 'PKR', date: '2026-09-01' });
+    const id = tx({ kind: 'expense', accountId: pkr, amount: '15000', accountAmount: '15000', currency: 'PKR' });
+    db.insert(transactionCharges).values({ id: 'fee', transactionId: id, type: 'bank_charge', amount: '15', currency: 'PKR', deduction: 'charged_separately', accountId: pkr }).run();
+    expect(accountBalance(db, pkr, TODAY)).toBe('4985');
+    const row = toListRowFromDb(db, db.select().from(transactions).where(eq(transactions.id, id)).get()!);
+    expect(row.amount).toMatchObject({ value: '15015', currency: 'PKR', tone: 'expense' });
   });
 });
