@@ -7,15 +7,24 @@ import type { BackupDeps } from './backup-flow';
 import { currentUser, detachPreviousBackup, rememberSignIn } from './backup-flow';
 
 /**
- * Sign out (Settings board): the data stays on this phone; Sarraf asks to sign
- * in again before going on, and backups pause until then.
+ * Sign out (owner, Nov 14): a checkbox, ticked at first, removes this phone's
+ * data too. The Drive backup stays, so signing in again restores it; the screen
+ * backs up first when backup is on and warns when it's off. Unticked, the data
+ * stays and Sarraf asks to sign in again before going on (backups pause).
+ * A guest has no Sign out.
  */
-export async function signOut(deps: BackupDeps, now: string): Promise<void> {
+export async function signOut(deps: BackupDeps, options: { removeData: boolean; deleteFiles: () => void; now: string }): Promise<void> {
   const was = currentUser(deps.db)?.id ?? null;
   await deps.cloud.signOut();
+  if (options.removeData) {
+    await deps.keyStore.clear();
+    options.deleteFiles();
+    wipeLocalData(deps.db);
+    return;
+  }
   deps.db
     .update(deviceState)
-    .set({ signedOutUserId: was, userId: null, userEmail: null, signInMethod: null, signedOutAt: now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
+    .set({ signedOutUserId: was, userId: null, userEmail: null, signInMethod: null, signedOutAt: options.now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
     .where(eq(deviceState.id, 1))
     .run();
 }

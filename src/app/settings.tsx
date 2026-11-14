@@ -14,13 +14,15 @@ import { deleteAllStoredFiles } from '@/services/attachments';
 import { backupDeps, cloud } from '@/services/cloud';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
-import { currentUser, getDeviceState } from '@/data/backup-flow';
+import { currentUser, getDeviceState , backupNow } from '@/data/backup-flow';
 import { useLive } from '@/state/live';
 import { db } from '@/db/client';
 import { settings } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { NUMBER_FORMATS } from '@/lib/money';
 import { useSettings } from '@/state/settings';
+import { backupProblem } from '@/data/backup-errors';
+import { formatShortDate } from '@/lib/format-date';
 import { fonts, useTheme } from '@/theme';
 
 type SettingsChanges = Partial<typeof settings.$inferInsert>;
@@ -56,6 +58,31 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState<DeleteChoice>({ account: true, phone: false, drive: false });
   // Greyed out when there's nothing to delete (owner, Nov 14): a guest has no account or backup; a signed-in person may have no backup.
   const [hasBackup, setHasBackup] = useState<boolean | null>(null);
+  // Sign out: back up first when backup is on; a failed backup says why and offers "Sign out anyway".
+  const [signOutProblem, setSignOutProblem] = useState<string | null>(null);
+  const [eraseText, setEraseText] = useState('');
+  const [removeData, setRemoveData] = useState(true);
+  const openSignOut = () => (setSignOutProblem(null), setEraseText(''), setRemoveData(true), setSheet('signout'));
+  const doSignOut = async (backUpFirst: boolean) => {
+    setBusy(true);
+    try {
+      if (backUpFirst) {
+        const r = await backupNow(backupDeps()).catch((e: unknown) => e);
+        if (!(r && typeof r === 'object' && 'ok' in r && r.ok)) {
+          setSignOutProblem(backupProblem(r));
+          return;
+        }
+      }
+      await signOut(backupDeps(), { removeData, deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
+      setSheet(null);
+      toast({ message: s.signedOut });
+      router.replace('/start');
+    } catch (e) {
+      toast({ message: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
   const openDelete = () => {
     setDeleteText('');
     setDeleting({ account: !!user, phone: !user, drive: false });
@@ -186,7 +213,7 @@ export default function SettingsScreen() {
 
       {user ? (
         <View style={{ gap: 8, marginTop: 10 }}>
-          <Button label={s.signOut} kind="danger" onPress={() => setSheet('signout')} />
+          <Button label={s.signOut} kind="danger" onPress={openSignOut} />
           <Text style={[styles.sheetNote, { color: colors.inkMuted, textAlign: 'center', paddingTop: 0 }]}>{s.signOutNote}</Text>
           <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
         </View>
@@ -214,17 +241,42 @@ export default function SettingsScreen() {
 
       <BottomSheet visible={sheet === 'signout'} onClose={() => setSheet(null)} title={s.signOutConfirm}>
         <View style={{ gap: 12 }}>
-          <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.signOutNote}</Text>
-          <Button
-            label={s.signOut}
-            style={{ backgroundColor: colors.expense }}
-            onPress={async () => {
-              setSheet(null);
-              await signOut(backupDeps(), new Date().toISOString());
-              toast({ message: s.signedOut });
-              router.replace('/start');
-            }}
+          {/* Owner, Nov 14: a box, ticked at first, takes the data off this phone; the Drive backup stays. */}
+          <Check
+            checked={removeData}
+            title={s.removeDataItem}
+            detail={s.removeDataDetail}
+            onPress={() => (setRemoveData((v) => !v), setSignOutProblem(null), setEraseText(''))}
           />
+          {!removeData ? (
+            <>
+              <Text style={[styles.sheetNote, { color: colors.inkMuted }]}>{s.signOutKeepNote}</Text>
+              <Button label={busy ? strings.backup.working : s.signOut} style={{ backgroundColor: colors.expense }} disabled={busy} onPress={() => void doSignOut(false)} />
+            </>
+          ) : device.backupEnabled ? (
+            <>
+              {device.lastBackupAt ? <Text style={[styles.sheetNote, { color: colors.inkMuted }]}>{s.signOutLastBackup(formatShortDate(device.lastBackupAt.slice(0, 10)))}</Text> : null}
+              {signOutProblem ? <Note tone="red">{s.signOutBackupFailed(signOutProblem)}</Note> : null}
+              <Button
+                label={busy ? strings.backup.working : signOutProblem ? s.signOutAnyway : s.backUpAndSignOut}
+                style={{ backgroundColor: colors.expense }}
+                disabled={busy}
+                onPress={() => void doSignOut(!signOutProblem)}
+              />
+            </>
+          ) : (
+            <>
+              <Note tone="red">{s.signOutNoBackup}</Note>
+              <Button label={s.turnOnBackupFirst} onPress={() => (setSheet(null), go('/backup'))} />
+              <Field label={s.typeErase} value={eraseText} onChangeText={setEraseText} autoCapitalize="characters" placeholder="ERASE" />
+              <Button
+                label={busy ? strings.backup.working : s.signOutAndErase}
+                style={{ backgroundColor: colors.expense }}
+                disabled={busy || eraseText.trim() !== 'ERASE'}
+                onPress={() => void doSignOut(false)}
+              />
+            </>
+          )}
           <Button label={strings.common.cancel} kind="secondary" onPress={() => setSheet(null)} />
         </View>
       </BottomSheet>

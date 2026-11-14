@@ -31,10 +31,24 @@ describe('plan', () => {
 });
 
 describe('sign out and delete', () => {
-  it('signing out keeps the data, pauses backups, and signing in again carries on', async () => {
+  it('signing out takes the data off this phone; the Drive backup stays and restores on the next sign-in (owner, Nov 14)', async () => {
+    const store = memoryStore();
+    const p = await phone(store);
+    await turnOnBackup(p, 'pw-12345678');
+    expect(await backupNow(p)).toMatchObject({ ok: true });
+    let filesGone = false;
+    await signOut(p, { removeData: true, deleteFiles: () => (filesGone = true), now: '2026-11-14T00:00:00Z' });
+    expect(filesGone).toBe(true);
+    expect(p.db.select().from(accounts).all()).toHaveLength(0);
+    expect(currentUser(p.db)).toBeNull();
+    expect(await p.keyStore.get()).toBeNull();
+    expect(await p.cloud.findBackup()).not.toBeNull();
+  });
+
+  it('unticked, signing out keeps the data, pauses backups, and signing in again carries on', async () => {
     const p = await phone();
     await turnOnBackup(p, 'pw-12345678');
-    await signOut(p, '2026-10-01T00:00:00Z');
+    await signOut(p, { removeData: false, deleteFiles: () => {}, now: '2026-10-01T00:00:00Z' });
     expect(isSignedOut(p.db)).toBe(true);
     expect(p.db.select().from(accounts).all()).toHaveLength(6);
     expect(await backupNow(p)).toEqual({ ok: false, reason: 'signed_out' });
