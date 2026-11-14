@@ -35,11 +35,12 @@ export default function RestoreScreen() {
   const [tries, setTries] = useState(0);
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [driveEmail, setDriveEmail] = useState('');
 
   useEffect(() => {
     void (async () => {
       try {
-        await cloud.connectDrive();
+        setDriveEmail((await cloud.connectDrive()).email);
         if (!(await cloud.findBackup())) return setMissing(true);
         file.current = await cloud.downloadBackup();
         setHeader(readBackupHeader(file.current).header);
@@ -108,6 +109,15 @@ export default function RestoreScreen() {
         <View style={{ gap: 14 }}>
           <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.confirmBody}</Text>
           <View style={[styles.box, { backgroundColor: colors.filled }]}>
+            {/* Where it is and which phone made it (owner, Nov 14). */}
+            <View style={[styles.boxRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+              <Text style={[styles.body, { color: colors.inkSecondary }]}>{st.googleAccount}</Text>
+              <Text style={[styles.value, { color: colors.ink }]}>{driveEmail || st.unknownGoogle}</Text>
+            </View>
+            <View style={[styles.boxRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+              <Text style={[styles.body, { color: colors.inkSecondary }]}>{st.from}</Text>
+              <Text style={[styles.value, { color: colors.ink }]}>{header.deviceName}</Text>
+            </View>
             <View style={[styles.boxRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
               <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.backupFrom}</Text>
               <Text style={[styles.value, { color: colors.ink }]}>

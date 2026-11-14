@@ -12,7 +12,7 @@ import { parts } from '@/components/parts';
 import { SignInSheet } from '@/components/start/SignInSheet';
 import { AccountsStep, CurrencyStep } from '@/components/start/SetupSteps';
 import { Note, Spinner, StartPage } from '@/components/start/StartPage';
-import { BottomSheet, Button, Card, Field, LinkButton, ToggleRow } from '@/components/ui';
+import { BottomSheet, Button, Card, Field, IconButton, LinkButton, ToggleRow } from '@/components/ui';
 import { WrongSecretError, isRecoveryKeyShape, normalizeRecoveryKey } from '@/lib/backup-crypto';
 import { type BackupProgress, applyRestore, backupNow, currentUser, detachPreviousBackup, getDeviceState, lookInDrive, makeThisTheBackupPhone, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
 import { backupCounts, openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
@@ -55,7 +55,7 @@ type Step =
   | { k: 'hasData'; found: Found | null; switched: boolean }
   | { k: 'driveHas'; found: Found }
   | { k: 'finding'; another?: boolean; forNew?: boolean }
-  | { k: 'noBackup'; driveEmail: string }
+  | { k: 'noBackup'; driveEmail: string; recordDrive?: string }
   | { k: 'refused'; forNew: boolean }
   | { k: 'found'; found: Found }
   | { k: 'secret'; mode: 'password' | 'key' }
@@ -196,7 +196,9 @@ export default function StartScreen() {
       case 'hasData':
         return go({ k: 'hasData', found, switched: isAccountSwitch({ prevUserId, userId: u.id }) });
       case 'found':
-        return go({ k: 'found', found: found! });
+        // The record only says a backup was made: open Drive and read the file itself before
+        // showing it (owner, Nov 14). A record whose file is gone is cleared.
+        return look({ forNew: true, recordDrive: record!.driveEmail });
       case 'setup':
         // "I already use Sarraf" with nothing on record: look in Drive (they may have signed in another way).
         return returning.current ? look({ forNew: true }) : startSetup();
@@ -225,14 +227,19 @@ export default function StartScreen() {
     void online(async () => afterSignIn(await cloud.signIn(method)));
   };
 
-  const look = (options: { another?: boolean; forNew: boolean }) => {
+  const look = (options: { another?: boolean; forNew: boolean; recordDrive?: string }) => {
     go({ k: 'finding', another: options.another, forNew: options.forNew });
     void online(
       async () => {
         const r = await lookInDrive(backupDeps(), { another: options.another });
         setDriveEmail(r.driveEmail);
         if (r.header) replace({ k: 'found', found: { driveEmail: r.driveEmail, deviceId: r.header.deviceId, deviceName: r.header.deviceName, at: r.header.createdAt, counts: r.header.counts } });
-        else replace({ k: 'noBackup', driveEmail: r.driveEmail });
+        else {
+          // Same Google account and no file: the backup was deleted, so its record goes too.
+          const u = currentUser(db);
+          if (u && options.recordDrive && options.recordDrive.toLowerCase() === r.driveEmail.toLowerCase()) await cloud.deleteRecord(u).catch(() => {});
+          replace({ k: 'noBackup', driveEmail: r.driveEmail, recordDrive: options.recordDrive && options.recordDrive.toLowerCase() !== r.driveEmail.toLowerCase() ? options.recordDrive : undefined });
+        }
       },
       () => replace({ k: 'refused', forNew: options.forNew }),
     );
@@ -346,6 +353,12 @@ export default function StartScreen() {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top', 'bottom']}>
           <View style={styles.welcome}>
+            {/* A guest who opened "Sign in to back up" can go back (owner, Nov 14). */}
+            {onboarded && !isSignedOut(db) && router.canGoBack() ? (
+              <View style={{ position: 'absolute', top: 16, left: 16, zIndex: 1 }}>
+                <IconButton icon="back" label={strings.common.back} onPress={() => router.back()} />
+              </View>
+            ) : null}
             <View style={styles.welcomeMain}>
               <View style={{ alignItems: 'center', gap: 14 }}>
                 <View style={[styles.logo, { backgroundColor: colors.accent }]}>
@@ -583,11 +596,13 @@ export default function StartScreen() {
         >
           <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
             {[
+              // Which Google account holds it (owner, Nov 14).
+              [s.googleAccount, step.found.driveEmail || s.unknownGoogle],
               [s.from, step.found.deviceName],
               [s.lastBackedUp, `${formatShortDate(step.found.at.slice(0, 10))}, ${step.found.at.slice(0, 4)}`],
               [s.inside, s.insideCounts(step.found.counts.accounts, step.found.counts.ledgers, step.found.counts.transactions)],
             ].map(([label, value], i) => (
-              <View key={label} style={[styles.infoRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+              <View key={label} style={[styles.infoRow, i < 3 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
                 <Text style={[styles.small, { color: colors.inkMuted, width: 92 }]}>{label}</Text>
                 <Text style={[styles.infoValue, { color: colors.ink }]}>{value}</Text>
               </View>
@@ -619,7 +634,7 @@ export default function StartScreen() {
             </>
           }
         >
-          <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.noBackupHint}</Text>
+          <Text style={[styles.body, { color: colors.inkSecondary }]}>{step.recordDrive ? s.noBackupElsewhere(step.recordDrive) : s.noBackupHint}</Text>
         </StartPage>
       );
 
@@ -669,11 +684,13 @@ export default function StartScreen() {
         >
           <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
             {[
+              // Which Google account holds it (owner, Nov 14).
+              [s.googleAccount, step.found.driveEmail || s.unknownGoogle],
               [s.from, step.found.deviceName],
               [s.lastBackedUp, `${formatShortDate(step.found.at.slice(0, 10))}, ${step.found.at.slice(0, 4)} · ${new Date(step.found.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`],
               [s.inside, s.insideCounts(step.found.counts.accounts, step.found.counts.ledgers, step.found.counts.transactions)],
             ].map(([label, value], i) => (
-              <View key={label} style={[styles.infoRow, i < 2 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+              <View key={label} style={[styles.infoRow, i < 3 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
                 <Text style={[styles.small, { color: colors.inkMuted, width: 92 }]}>{label}</Text>
                 <Text style={[styles.infoValue, { color: colors.ink }]}>{value}</Text>
               </View>
