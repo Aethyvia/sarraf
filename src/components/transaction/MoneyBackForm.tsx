@@ -11,7 +11,7 @@ import { useAccountSections } from '@/components/sheets/pickers';
 import { Field, SelectorRow } from '@/components/ui';
 import { vsMarketPercent } from '@/data/amounts';
 import { addMoneyBack, refundableLeft, type MoneyBackKind } from '@/data/money-back';
-import { chargedCurrencyOf, outstandingOf } from '@/data/owing';
+import { chargedCurrencyOf, chargesOf, outstandingOf } from '@/data/owing';
 import { marketRate } from '@/data/rates';
 import { db } from '@/db/client';
 import { accounts, categories, transactions } from '@/db/schema';
@@ -61,7 +61,9 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
       const currency = chargedCurrencyOf(d, parent);
       const left = kind === 'refund' ? refundableLeft(d, parentId).amount : toDecimalString(outstandingOf(d, parent).outstanding);
       const category = parent.categoryId ? d.select({ name: categories.name }).from(categories).where(eq(categories.id, parent.categoryId)).get()?.name : null;
-      return { parent, currency, left, category: category ?? s.uncategorized };
+      // Reimbursements pay the expense first, then its separate charges (owner, Nov 15).
+      const chargesLeft = kind === 'reimbursement' ? chargesOf(d, parent).left : dec('0');
+      return { parent, currency, left, category: category ?? s.uncategorized, chargesLeft: toDecimalString(chargesLeft) };
     },
     [parentId, kind],
   );
@@ -171,7 +173,22 @@ export function useMoneyBack(parentId: string, kind: MoneyBackKind, onDone: () =
         {kind === 'refund'
           ? s.refundExplain
           : account && amount && countsAs
-            ? parts(s.gotItExplain(money(amount, account.currency, { fontSize: 11.5 }), account.name, base.category, money(countsAs, base.currency, { fontSize: 11.5 })))
+            ? (() => {
+                // The part beyond the expense covers its charges, which lowers Fees & charges instead.
+                const expenseLeft = dec(base.left).minus(dec(base.chargesLeft));
+                const over = dec(countsAs).minus(expenseLeft.isNegative() ? dec('0') : expenseLeft);
+                const chargesPart = over.gt(0) ? (over.gt(dec(base.chargesLeft)) ? dec(base.chargesLeft) : over) : dec('0');
+                const expensePart = toDecimalString(dec(countsAs).minus(chargesPart));
+                return parts(
+                  s.gotItExplain(
+                    money(amount, account.currency, { fontSize: 11.5 }),
+                    account.name,
+                    base.category,
+                    money(expensePart, base.currency, { fontSize: 11.5 }),
+                    chargesPart.gt(0) ? money(toDecimalString(chargesPart), base.currency, { fontSize: 11.5 }) : null,
+                  ),
+                );
+              })()
             : null}
       </Text>
     </>

@@ -1042,11 +1042,12 @@ export const strings = {
     statuses: { awaiting: 'Waiting', partly_back: 'Partly back', reimbursed: 'Reimbursed', written_off: 'Written off' },
     date: 'DATE',
     today: (date: string) => `Today · ${date}`,
-    gotItExplain: (amount: ReactNode, account: string, category: string, counts: ReactNode): ReactNode[] => [
+    gotItExplain: (amount: ReactNode, account: string, category: string, counts: ReactNode, charges: ReactNode | null = null): ReactNode[] => [
       'Adds ',
       amount,
       ` to ${account}, linked to the expense. ${category} spending goes down by `,
       counts,
+      ...(charges ? [' and Fees & charges by ', charges] : []),
       '. If it counts as less than expected, the item stays Partly back until more arrives or you write off the rest.',
     ],
     save: 'Save',
