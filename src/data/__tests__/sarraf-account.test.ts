@@ -59,7 +59,6 @@ describe('sign out and delete', () => {
   });
 
   const NOW = { now: '2026-11-12T00:00:00Z' };
-  const everything = { account: true, phone: true, drive: false };
 
   it('deleting the Sarraf account takes this phone’s data and the Drive backup with it (owner, Nov 14)', async () => {
     const store = memoryStore();
