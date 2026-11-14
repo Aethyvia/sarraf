@@ -37,6 +37,7 @@ import { startAutomaticBackup } from '@/services/auto-backup';
 import { startNotifications } from '@/services/notifications';
 import { refreshRatesIfStale } from '@/services/rates';
 import { setAddedWhileAway } from '@/state/away';
+import { recordOpenProfile } from '@/services/profiles';
 import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -70,6 +71,8 @@ export default function RootLayout() {
       // Recurring auto-adds missed while the app was closed: one per due date, never twice.
       // Owner, Nov 14: no pop-up; Needs review and Home's review card show them.
       const added = backfillRecurring(db);
+      // Data saved per account (owner, Nov 14): note who the open data belongs to.
+      recordOpenProfile();
       setAddedWhileAway(added.map((t) => t.id));
       return { ready: true, error: null, added };
     } catch (e) {

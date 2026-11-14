@@ -16,13 +16,15 @@ import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { currentUser, getDeviceState , backupNow } from '@/data/backup-flow';
 import { useLive } from '@/state/live';
-import { db } from '@/db/client';
+import { db, loadProfiles } from '@/db/client';
 import { settings } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { NUMBER_FORMATS } from '@/lib/money';
 import { useSettings } from '@/state/settings';
 import { backupProblem } from '@/data/backup-errors';
 import { formatShortDate } from '@/lib/format-date';
+import { GUEST, savedElsewhere, type ProfileEntry } from '@/db/profiles';
+import { afterEmptied, recordOpenProfile, removeSaved } from '@/services/profiles';
 import { fonts, useTheme } from '@/theme';
 
 type SettingsChanges = Partial<typeof settings.$inferInsert>;
@@ -58,6 +60,8 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState<DeleteChoice>({ account: true, phone: false, drive: false });
   // Greyed out when there's nothing to delete (owner, Nov 14): a guest has no account or backup; a signed-in person may have no backup.
   const [hasBackup, setHasBackup] = useState<boolean | null>(null);
+  const [saved, setSaved] = useState<ProfileEntry[]>(() => savedElsewhere(loadProfiles()));
+  const [removing, setRemoving] = useState<ProfileEntry | null>(null);
   // Sign out: back up first when backup is on; a failed backup says why and offers "Sign out anyway".
   const [signOutProblem, setSignOutProblem] = useState<string | null>(null);
   const [eraseText, setEraseText] = useState('');
@@ -74,6 +78,9 @@ export default function SettingsScreen() {
         }
       }
       await signOut(backupDeps(), { removeData, deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
+      // Kept: stays saved for this account. Removed: the guest's saved data (if any) is what's left here.
+      if (removeData) await afterEmptied();
+      else recordOpenProfile();
       setSheet(null);
       toast({ message: s.signedOut });
       router.replace('/start');
@@ -205,6 +212,52 @@ export default function SettingsScreen() {
         />
       </View>
 
+      {/* Data saved per account on this phone (owner, Nov 14): what else is kept here, with Remove. */}
+      {saved.length ? (
+        <>
+          <SectionLabel style={styles.section}>{s.savedHere}</SectionLabel>
+          <View>
+            {saved.map((e, i) => (
+              <Row
+                key={e.file}
+                icon={e.owner === GUEST ? 'user' : 'cloud'}
+                title={e.owner === GUEST ? s.savedGuest : (e.email ?? s.savedAccount)}
+                hint={e.owner === GUEST ? s.savedGuestHint : s.savedAccountHint}
+                onPress={() => setRemoving(e)}
+                last={i === saved.length - 1}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
+      <BottomSheet visible={!!removing} onClose={() => setRemoving(null)} title={s.removeSavedTitle}>
+        <View style={{ gap: 12 }}>
+          <Text style={[styles.body, { color: colors.inkSecondary }]}>
+            {removing ? s.removeSavedBody(removing.owner === GUEST ? s.savedGuest : (removing.email ?? s.savedAccount)) : ''}
+          </Text>
+          <Button
+            label={busy ? strings.backup.working : s.removeSaved}
+            style={{ backgroundColor: colors.expense }}
+            disabled={busy}
+            onPress={async () => {
+              if (!removing) return;
+              setBusy(true);
+              try {
+                await removeSaved(removing.file);
+                setSaved(savedElsewhere(loadProfiles()));
+                setRemoving(null);
+                toast({ message: s.removedSaved });
+              } catch (e) {
+                toast({ message: (e as Error).message });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+          <Button label={strings.common.cancel} kind="secondary" onPress={() => setRemoving(null)} />
+        </View>
+      </BottomSheet>
+
       <SectionLabel style={styles.section}>{s.about}</SectionLabel>
       <View>
         <Row icon="document" title={s.terms} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })} />
@@ -333,6 +386,8 @@ export default function SettingsScreen() {
                 setBusy(true);
                 try {
                   await deleteChosen(backupDeps(), deleting, { deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
+                  if (deleting.account && deleting.phone) await afterEmptied();
+                  else recordOpenProfile();
                   setSheet(null);
                   toast({ message: s.deletedWhat(deleting) });
                   if (deleting.account || deleting.phone) router.replace('/start');

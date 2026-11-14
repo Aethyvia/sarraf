@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { Redirect, router } from 'expo-router';
-import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useState } from 'react';
 import { DevSettings, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { loadSampleClock, setSampleClock } from '@/dev/sample-clock';
 import { DEFAULT_KDF, newDataKey, wrapKey } from '@/lib/backup-crypto';
 import { NUMBER_FORMATS } from '@/lib/money';
 import { useSettings } from '@/state/settings';
+import { useLive } from '@/state/live';
 import { BUTTON_HEIGHT, fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -47,7 +47,7 @@ export default function DevRoute() {
 function DevPreview() {
   const s = useSettings();
   const { colors, swatch } = useTheme();
-  const { data: accountRows } = useLiveQuery(db.select().from(accounts).orderBy(accounts.rank));
+  const accountRows = useLive((d) => d.select().from(accounts).orderBy(accounts.rank).all(), []);
 
   // Drizzle queries are lazy: they only run when awaited.
   const update = async (values: Partial<typeof settings.$inferInsert>) => {

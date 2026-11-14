@@ -8,7 +8,9 @@ import { Icon } from '@/components/icons/Icon';
 import { Note } from '@/components/start/StartPage';
 import { BottomSheet, Button, Field, LinkButton } from '@/components/ui';
 import { checkPin, FREE_TRIES, proveWithBackupSecret, setPin, shouldLock, waitLeft, WAITS } from '@/data/app-lock';
-import { db } from '@/db/client';
+import { db, onProfileSwitch } from '@/db/client';
+import { settings } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { strings } from '@/i18n/strings';
 import { currentUser } from '@/data/backup-flow';
 import { cloud, keyStore } from '@/services/cloud';
@@ -56,6 +58,18 @@ export function LockGate() {
   useEffect(() => {
     void (set.hideInRecents ? ScreenCapture.preventScreenCaptureAsync('app-lock') : ScreenCapture.allowScreenCaptureAsync('app-lock')).catch(() => {});
   }, [set.hideInRecents]);
+
+  // Another account's saved data opened (owner, Nov 14): its own PIN applies, if it set one.
+  useEffect(
+    () =>
+      onProfileSwitch(() => {
+        const next = db.select().from(settings).where(eq(settings.id, 1)).get();
+        setPinText('');
+        setLocked(!!next?.appLockEnabled && !!next.pinHash);
+        void keyStore.get().then((k) => setHasBackupKeys(!!k));
+      }),
+    [],
+  );
 
   useEffect(() => {
     void LocalAuthentication.hasHardwareAsync().then(async (hw) => setBioReady(hw && (await LocalAuthentication.isEnrolledAsync())));

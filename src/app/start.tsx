@@ -30,11 +30,12 @@ import { askForNotificationsAfterSignIn } from '@/services/notifications';
 import { refreshPlan } from '@/data/plan';
 import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
-import { deviceState, settings } from '@/db/schema';
+import { settings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { backupProblem, restoreProblem } from '@/data/backup-errors';
+import { openForSignIn, openGuest, recordOpenProfile } from '@/services/profiles';
 import { fonts, useTheme } from '@/theme';
 
 /** What "We found your backup" shows: from the Supabase record or the Drive file's header. */
@@ -177,11 +178,15 @@ export default function StartScreen() {
    * so a different account never quietly takes over this phone's data.
    */
   const afterSignIn = async (u: CloudUser) => {
+    // Data saved per account (owner, Nov 14): this account's own saved data opens first,
+    // or the guest's (to keep or replace), or a new empty file.
+    await openForSignIn(u.id);
     const prevUserId = getDeviceState(db).userId ?? getDeviceState(db).signedOutUserId ?? null;
     const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
     const thisDeviceId = db.select({ id: settings.deviceId }).from(settings).where(eq(settings.id, 1)).get()!.id;
     const record = await cloud.getRecord(u);
     rememberSignIn(db, u);
+    recordOpenProfile();
     setUser(u);
     setSheet(null);
     // The plan is known before anything asks about limits (after the sequence, on Home).
@@ -258,11 +263,15 @@ export default function StartScreen() {
     startSetup();
   };
 
-  /** Signed out with the data kept: use it as a guest (free plan, no backup until signing in). */
-  const continueAsGuestWithData = () => {
-    // Who signed out is kept: if another account signs in later, it's treated as a switch.
-    db.update(deviceState).set({ signedOutAt: null }).where(eq(deviceState.id, 1)).run();
-    router.replace('/');
+  /**
+   * Continue as guest (owner, Nov 14): the guest's own saved data opens (Home), or
+   * setup for a new guest. A signed-out account's data stays saved for that account.
+   */
+  const continueAsGuest = async () => {
+    await openGuest();
+    const ready = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
+    if (ready) router.replace('/');
+    else startSetup();
   };
 
   const startSetup = () => {
@@ -396,10 +405,10 @@ export default function StartScreen() {
             {/* Guest (owner, Nov 14): everything on the phone, free plan; backup and Plus wait for a Sarraf account. */}
             {/* After a sign-out that kept the data, a guest carries on with that data (owner, Nov 14). */}
             {!onboarded || isSignedOut(db) ? (
-              <LinkButton label={s.guest} onPress={onboarded ? continueAsGuestWithData : startSetup} />
+              <LinkButton label={s.guest} onPress={() => void continueAsGuest()} />
             ) : null}
             {!onboarded || isSignedOut(db) ? (
-              <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center', marginTop: -6 }]}>{onboarded ? s.guestKeepNote : s.guestNote}</Text>
+              <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center', marginTop: -6 }]}>{s.guestNote}</Text>
             ) : null}
           </View>
           <SignInSheet

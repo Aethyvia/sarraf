@@ -3,9 +3,10 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 
 import type { BackupDeps, KeyStore, LocalFiles, StoredKeys } from '@/data/backup-flow';
-import { db } from '@/db/client';
+import { activeFile, db } from '@/db/client';
 import { fakeCloud, type FakeStore } from './fake';
 import { realCloud } from './real';
+import { keysName } from '@/db/profiles';
 import type { Cloud } from './types';
 
 /** The dev stand-in keeps its "cloud" in a folder that survives wiping the app's data from /dev. */
@@ -58,21 +59,24 @@ export const cloud: Cloud & { knobs?: ReturnType<typeof fakeCloud>['knobs'] } = 
 /** True when this build talks to the real Supabase and Drive. */
 export const usingRealCloud = !devStore && configured;
 
-const KEYS = 'sarraf.backup-keys';
-
-/** The backup data key and its wrapped copies, in the Android keystore. */
+/** The backup data key and its wrapped copies, in the Android keystore: one set per saved account (owner, Nov 14). */
 export const keyStore: KeyStore = {
   async get() {
-    const raw = await SecureStore.getItemAsync(KEYS);
+    const raw = await SecureStore.getItemAsync(keysName(activeFile()));
     return raw ? (JSON.parse(raw) as StoredKeys) : null;
   },
   async set(keys) {
-    await SecureStore.setItemAsync(KEYS, JSON.stringify(keys), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
+    await SecureStore.setItemAsync(keysName(activeFile()), JSON.stringify(keys), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
   },
   async clear() {
-    await SecureStore.deleteItemAsync(KEYS);
+    await SecureStore.deleteItemAsync(keysName(activeFile()));
   },
 };
+
+/** Removing a saved account's data also removes its backup keys. */
+export async function clearKeysOf(file: string): Promise<void> {
+  await SecureStore.deleteItemAsync(keysName(file));
+}
 
 export const deviceName = Device.modelName ?? 'This phone';
 

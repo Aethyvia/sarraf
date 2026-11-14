@@ -5,6 +5,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 import { strings } from '@/i18n/strings';
+import { db } from '@/db/client';
+import { attachments } from '@/db/schema';
 import { newId } from '@/lib/id';
 
 /**
@@ -135,12 +137,10 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Delete Sarraf account: removes every stored attachment file on this phone. */
+/**
+ * Erasing the open data: removes its attachment files. Only this data's files:
+ * other accounts saved on this phone keep theirs (owner, Nov 14).
+ */
 export function deleteAllStoredFiles(): void {
-  try {
-    const dir = new Directory(Paths.document, FOLDER);
-    if (dir.exists) dir.delete();
-  } catch {
-    // Nothing more to do; the rows are gone with the rest of the data.
-  }
+  deleteStoredFiles(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
 }
