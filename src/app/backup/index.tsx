@@ -20,6 +20,7 @@ import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
 import { useSettings } from '@/state/settings';
 import { useToast } from '@/state/toast';
+import { backupProblem } from '@/data/backup-errors';
 import { fonts, radius, useTheme } from '@/theme';
 
 function when(iso: string): string {
@@ -56,7 +57,7 @@ export default function BackupScreen() {
     try {
       await work();
     } catch (e) {
-      toast({ message: (e as Error).message || s.failed });
+      toast({ message: backupProblem(e) });
     } finally {
       setBusy(false);
     }
@@ -70,7 +71,7 @@ export default function BackupScreen() {
       if (r.ok) toast({ message: s.backedUp });
       else if (r.reason === 'moved') toast({ message: s.moved(r.movedTo ?? '') });
       else if (r.reason === 'existing') setExisting(r.existing);
-      else toast({ message: s.failed });
+      else toast({ message: backupProblem(r) });
     });
 
   const saveSettings = (values: Partial<typeof settings.$inferInsert>) => db.update(settings).set(values).where(eq(settings.id, 1)).run();
@@ -105,7 +106,7 @@ export default function BackupScreen() {
                 void run(async () => {
                   const r = await makeThisTheBackupPhone(backupDeps());
                   setSheet(null);
-                  toast({ message: r.ok ? s.backedUp : s.failed });
+                  toast({ message: r.ok ? s.backedUp : backupProblem(r) });
                 })
               }
             />
@@ -163,6 +164,9 @@ export default function BackupScreen() {
       <Card style={{ padding: 16 }}>
         <Text style={[styles.lbl, { color: colors.inkMuted }]}>{s.lastBackup}</Text>
         <Text style={[styles.title, { color: colors.ink, marginTop: 3 }]}>{state.lastBackupAt ? when(state.lastBackupAt) : s.never}</Text>
+        {state.backupProblem ? (
+          <Text style={[styles.small, { color: colors.expense, marginTop: 8 }]}>{s.lastFailed(state.backupProblem)}</Text>
+        ) : null}
         <Text style={[styles.small, { color: colors.inkMuted, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.line }]}>{s.lastNote}</Text>
       </Card>
       {progress ? <BackupProgressCard progress={progress} /> : null}

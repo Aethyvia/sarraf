@@ -11,9 +11,9 @@ import { backupNow, getDeviceState, startBackupSetup, type BackupProgress, type 
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { backupDeps, cloud } from '@/services/cloud';
-import { DriveRefusedError, OfflineError } from '@/services/cloud/types';
 import { goBack } from '@/state/nav';
 import { useToast } from '@/state/toast';
+import { backupProblem } from '@/data/backup-errors';
 import { fonts, useTheme } from '@/theme';
 
 /** Turning backup on later from Settings: Drive, a backup password, then the recovery key (shown once). */
@@ -42,7 +42,7 @@ export default function TurnOnBackupScreen() {
       finished.current = started.finished;
       setKey(started.recoveryKey);
     } catch (e) {
-      toast({ message: e instanceof OfflineError ? s.offlineTitle : e instanceof DriveRefusedError ? s.refusedTitle : s.failed });
+      toast({ message: backupProblem(e) });
     } finally {
       setBusy(false);
     }
@@ -53,8 +53,10 @@ export default function TurnOnBackupScreen() {
     try {
       const r = await backupNow(backupDeps(), { replaceExisting: true, onProgress: setProgress });
       setExisting(null);
-      toast({ message: r.ok ? strings.backup.backedUp : strings.backup.failed });
+      toast({ message: r.ok ? strings.backup.backedUp : backupProblem(r) });
       router.back();
+    } catch (e) {
+      toast({ message: backupProblem(e) });
     } finally {
       setBusy(false);
     }
@@ -75,8 +77,10 @@ export default function TurnOnBackupScreen() {
       await finished.current;
       const r = await backupNow(backupDeps(), { replaceExisting: params.replace === '1', onProgress: setProgress });
       if (!r.ok && r.reason === 'existing') return setExisting(r.existing);
-      toast({ message: r.ok ? strings.backup.backedUp : strings.backup.failed });
+      toast({ message: r.ok ? strings.backup.backedUp : backupProblem(r) });
       router.back();
+    } catch (e) {
+      toast({ message: backupProblem(e) });
     } finally {
       setBusy(false);
     }

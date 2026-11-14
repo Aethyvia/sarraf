@@ -1,0 +1,1 @@
+ALTER TABLE `device_state` ADD `backup_problem` text;

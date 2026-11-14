@@ -252,7 +252,7 @@ export async function backupNow(
     counts: backupCounts(db),
     format: BACKUP_FORMAT,
   });
-  setDeviceState(db, { lastBackupAt: now, backupFailingSince: null });
+  setDeviceState(db, { lastBackupAt: now, backupFailingSince: null, backupProblem: null });
   report('finish', 1);
   return { ok: true, at: now };
 }
@@ -374,9 +374,9 @@ export function automaticBackupDue(db: AppDb, now: Date, network: { online: bool
 }
 
 /** Records a failed automatic backup; "Backup problems" notifies after 3 days of this. */
-export function noteBackupFailed(db: AppDb, now: string): void {
+export function noteBackupFailed(db: AppDb, now: string, problem: string | null = null): void {
   const state = getDeviceState(db);
-  if (!state.backupFailingSince) setDeviceState(db, { backupFailingSince: now });
+  setDeviceState(db, { backupFailingSince: state.backupFailingSince ?? now, backupProblem: problem });
 }
 
 /** Restore confirm sheet: transactions on this phone added after the backup was made (they'd be lost). */

@@ -5,7 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { AppState } from 'react-native';
 
 import type { BackupRecord, Cloud, CloudUser, SignInMethod } from './types';
-import { BadCodeError, CancelledError, DriveRefusedError, OfflineError } from './types';
+import { BadCodeError, CancelledError, DriveError, DriveRefusedError, OfflineError } from './types';
 
 /**
  * The real services (Decided, CLAUDE.md): Supabase for sign-in, the backup
@@ -28,6 +28,25 @@ function isNetworkError(e: unknown): boolean {
   const m = e instanceof Error ? e.message : String(e);
   return /network request failed|failed to fetch|network error|timed? ?out|ENOTFOUND|ECONNREFUSED/i.test(m);
 }
+/** Turns a failed Drive response into an error that says what happened. */
+async function driveProblem(res: Response): Promise<Error> {
+  let reason = '';
+  let message = '';
+  try {
+    const body = (await res.json()) as { error?: { message?: string; errors?: { reason?: string }[] } };
+    reason = body.error?.errors?.[0]?.reason ?? '';
+    message = body.error?.message ?? '';
+  } catch {
+    // Not JSON: the status says enough.
+  }
+  const detail = `Google Drive ${res.status}${reason ? ` ${reason}` : ''}${message ? `: ${message}` : ''}`;
+  if (reason === 'storageQuotaExceeded' || reason === 'quotaExceeded') return new DriveError('full', res.status, detail);
+  if (res.status === 429 || /rateLimit/i.test(reason)) return new DriveError('busy', res.status, detail);
+  if (res.status === 401 || res.status === 403) return new DriveRefusedError();
+  if (res.status >= 500) return new DriveError('unavailable', res.status, detail);
+  return new DriveError('other', res.status, detail);
+}
+
 async function online<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -110,8 +129,7 @@ export function realCloud(config: RealCloudConfig): Cloud {
         token = await driveToken();
         res = await send();
       }
-      if (res.status === 403) throw new DriveRefusedError();
-      if (!res.ok && res.status !== 404) throw new Error(`Drive said ${res.status}`);
+      if (!res.ok && res.status !== 404) throw await driveProblem(res);
       return res;
     });
   }

@@ -9,6 +9,7 @@ import { strings } from '@/i18n/strings';
 import { backupDeps, cloud } from './cloud';
 import { notificationsAllowed } from './notifications';
 import { eq } from 'drizzle-orm';
+import { backupProblem } from '@/data/backup-errors';
 import { settings } from '@/db/schema';
 
 let running = false;
@@ -23,9 +24,10 @@ export async function runAutomaticBackup(): Promise<void> {
     if (!automaticBackupDue(db, new Date(), network)) return;
     const result = await backupNow(backupDeps());
     if (!result.ok && result.reason === 'moved') await tellMoved(result.movedTo ?? '');
-  } catch {
-    // Tried and failed (offline, Drive error): noted; "Backup problems" speaks up after 3 days.
-    noteBackupFailed(db, new Date().toISOString());
+    else if (!result.ok && result.reason !== 'off') noteBackupFailed(db, new Date().toISOString(), backupProblem(result));
+  } catch (e) {
+    // Tried and failed (offline, Drive error): noted with the reason; "Backup problems" speaks up after 3 days.
+    noteBackupFailed(db, new Date().toISOString(), backupProblem(e));
   } finally {
     running = false;
   }

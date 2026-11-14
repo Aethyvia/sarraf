@@ -65,6 +65,18 @@ export class OfflineError extends Error {
   }
 }
 
+/** Google Drive answered with a problem we can name (owner, Nov 14: say what went wrong). */
+export class DriveError extends Error {
+  constructor(
+    readonly kind: 'full' | 'busy' | 'unavailable' | 'other',
+    readonly status: number,
+    detail: string,
+  ) {
+    super(detail);
+    this.name = 'DriveError';
+  }
+}
+
 /** Google said no to Drive access. */
 export class DriveRefusedError extends Error {
   constructor() {

@@ -47,6 +47,8 @@ export const deviceState = sqliteTable(
     lastBackupAt: text('last_backup_at'),
     /** Set when the last automatic backup failed; cleared by the next one that works. */
     backupFailingSince: text('backup_failing_since'),
+    /** Why the last automatic backup failed, in plain words (owner, Nov 14); cleared by the next one that works. */
+    backupProblem: text('backup_problem'),
     /** Set when another phone restored this account's backup: this phone stops backing up. */
     backupMovedAt: text('backup_moved_at'),
     backupMovedTo: text('backup_moved_to'),

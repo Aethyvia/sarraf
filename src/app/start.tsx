@@ -34,6 +34,7 @@ import { settings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
+import { backupProblem } from '@/data/backup-errors';
 import { fonts, useTheme } from '@/theme';
 
 /** What "We found your backup" shows: from the Supabase record or the Drive file's header. */
@@ -331,8 +332,8 @@ export default function StartScreen() {
       if (withBackup) {
         setBackupProgress({ step: 'check', fraction: 0 });
         backupNow(backupDeps(), { replaceExisting: replaceOk.current, onProgress: setBackupProgress })
-          .then((r) => (r.ok ? undefined : toast({ message: s.failed })))
-          .catch(() => toast({ message: s.failed }));
+          .then((r) => (r.ok ? undefined : toast({ message: backupProblem(r) })))
+          .catch((e) => toast({ message: backupProblem(e) }));
       }
       if (thenPin) router.push({ pathname: '/lock/set', params: offerBio ? { biometrics: '1' } : {} });
     });
