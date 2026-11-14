@@ -1,0 +1,1 @@
+ALTER TABLE `settings` ADD `guest_reminder_at` text;

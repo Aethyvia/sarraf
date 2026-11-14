@@ -132,6 +132,8 @@ export default function StartScreen() {
   const [accountCount, setAccountCount] = useState(0);
   const [offerBio, setOfferBio] = useState(true);
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null);
+  // Setup already done here (a guest opening Sign in from Settings): no "Continue as guest".
+  const onboarded = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
 
   // Still signed in on an emptied phone (Delete → this phone's data): carry on from sign-in, no Welcome.
   useEffect(() => {
@@ -370,6 +372,9 @@ export default function StartScreen() {
             </View>
             <Button label={s.getStarted} onPress={() => ((returning.current = false), setSheet('new'))} />
             <Button label={s.alreadyUse} kind="secondary" onPress={() => ((returning.current = true), setSheet('returning'))} />
+            {/* Guest (owner, Nov 14): everything on the phone, free plan; backup and Plus wait for a Sarraf account. */}
+            {!onboarded ? <LinkButton label={s.guest} onPress={startSetup} /> : null}
+            {!onboarded ? <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center', marginTop: -6 }]}>{s.guestNote}</Text> : null}
           </View>
           <SignInSheet
             mode={sheet}
@@ -870,7 +875,8 @@ export default function StartScreen() {
       );
 
     case 'accounts':
-      return <AccountsStep items={items} everyday={everyday} onChange={setItems} onBack={back} onNext={() => go({ k: 'backup' })} />;
+      // A guest has no Sarraf account to back up to: straight on to the PIN.
+      return <AccountsStep items={items} everyday={everyday} onChange={setItems} onBack={back} onNext={() => go({ k: user ? 'backup' : 'pin' })} />;
 
     case 'backup': {
       const n = items.filter((a) => a.ticked).length;
@@ -989,8 +995,8 @@ export default function StartScreen() {
           body={strings.lock.offerBody}
           footer={
             <>
-              <Button label={busy ? s.working : strings.lock.setPin} disabled={busy} onPress={() => void complete(true, true)} />
-              <LinkButton label={strings.lock.notNow} onPress={() => void complete(true)} />
+              <Button label={busy ? s.working : strings.lock.setPin} disabled={busy} onPress={() => void complete(!!user, true)} />
+              <LinkButton label={strings.lock.notNow} onPress={() => void complete(!!user)} />
             </>
           }
         >
@@ -1031,7 +1037,7 @@ export default function StartScreen() {
             </>
           ) : (
             <Note tone="amber" icon="cloud">
-              {s.backupOff}
+              {user ? s.backupOff : s.guestBackupOff}
             </Note>
           )}
           <Card style={{ gap: 4, padding: 16 }}>

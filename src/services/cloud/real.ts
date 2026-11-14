@@ -14,8 +14,6 @@ import { BadCodeError, CancelledError, DriveRefusedError, OfflineError } from '.
  */
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
-const BACKUP_NAME = 'sarraf-backup.bin';
-const ATTACHMENT_PREFIX = 'att-';
 const DRIVE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 
@@ -150,6 +148,19 @@ export function realCloud(config: RealCloudConfig): Cloud {
     if (file) await drive(`/files/${file.id}`, { method: 'DELETE' });
   }
 
+  /**
+   * Each Sarraf account's files carry its id (owner, Nov 14): two people can
+   * back up to one Google Drive and never see or touch each other's backup.
+   */
+  async function ownerId(): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    const id = data.session?.user.id;
+    if (!id) throw new Error('Not signed in');
+    return id;
+  }
+  const backupName = async () => `sarraf-backup-${await ownerId()}.bin`;
+  const attachmentPrefix = async () => `att-${await ownerId()}-`;
+
   async function session(): Promise<User> {
     const { data, error } = await online(() => supabase.auth.getUser());
     if (error || !data.user) throw new Error('Not signed in');
@@ -259,12 +270,12 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
 
     async findBackup() {
-      const file = await byName(BACKUP_NAME);
+      const file = await byName(await backupName());
       return file ? { modifiedAt: file.modifiedTime, sizeBytes: Number(file.size ?? 0) } : null;
     },
 
     async downloadBackup(onProgress) {
-      const file = await byName(BACKUP_NAME);
+      const file = await byName(await backupName());
       if (!file) throw new Error('No backup in this Drive');
       const total = Number(file.size ?? 0);
       onProgress?.(0, total);
@@ -273,18 +284,19 @@ export function realCloud(config: RealCloudConfig): Cloud {
       return bytes;
     },
 
-    uploadBackup: (file) => writeFile(BACKUP_NAME, file),
+    uploadBackup: async (file) => writeFile(await backupName(), file),
 
     async listAttachments() {
-      const files = await listFiles(`name contains '${ATTACHMENT_PREFIX}' and trashed = false`);
-      return files.filter((f) => f.name.startsWith(ATTACHMENT_PREFIX)).map((f) => f.name.slice(ATTACHMENT_PREFIX.length));
+      const prefix = await attachmentPrefix();
+      const files = await listFiles(`name contains '${prefix}' and trashed = false`);
+      return files.filter((f) => f.name.startsWith(prefix)).map((f) => f.name.slice(prefix.length));
     },
-    uploadAttachment: (name, file) => writeFile(ATTACHMENT_PREFIX + name, file),
+    uploadAttachment: async (name, file) => writeFile((await attachmentPrefix()) + name, file),
     async downloadAttachment(name) {
-      const file = await byName(ATTACHMENT_PREFIX + name);
+      const file = await byName((await attachmentPrefix()) + name);
       return file ? readFile(file.id) : null;
     },
-    deleteAttachment: (name) => removeFile(ATTACHMENT_PREFIX + name),
+    deleteAttachment: async (name) => removeFile((await attachmentPrefix()) + name),
 
     async testSubscribe(_user, kind) {
       const { error } = await online(async () => supabase.rpc('test_subscribe', { kind }));
@@ -298,7 +310,11 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
 
     async deleteBackup() {
-      for (const f of await listFiles('trashed = false')) await drive(`/files/${f.id}`, { method: 'DELETE' });
+      // Only this Sarraf account's files: someone else's backup in the same Drive stays.
+      const [name, prefix] = [await backupName(), await attachmentPrefix()];
+      for (const f of await listFiles('trashed = false')) {
+        if (f.name === name || f.name.startsWith(prefix)) await drive(`/files/${f.id}`, { method: 'DELETE' });
+      }
     },
 
     async deleteAccount(user) {

@@ -18,6 +18,7 @@ import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
+import { clearAddedWhileAway, useAddedWhileAway } from '@/state/away';
 import { fonts, radius, useTheme } from '@/theme';
 
 interface Names {
@@ -60,6 +61,9 @@ export default function ReviewScreen() {
   const [options, setOptions] = useState<TransactionRow | null>(null);
   const [confirming, setConfirming] = useState<TransactionRow | null>(null);
   const [gotIt, setGotIt] = useState<string | null>(null);
+  // Added while Sarraf was closed (owner, Nov 14: shown here instead of a pop-up on open).
+  const awayIds = useAddedWhileAway();
+  const away = data.recurring.filter((t) => awayIds.includes(t.id));
 
   const startConfirm = (t: TransactionRow) => {
     if (needsDetailsToConfirm(t)) {
@@ -118,6 +122,26 @@ export default function ReviewScreen() {
       <Header size={20} title={s.title} subtitle={empty ? undefined : s.summary(data.toConfirm, data.upcomingCount, data.waitingBack.length)} onBack={goBack} />
       {action.ui}
       {empty ? <Text style={[styles.empty, { color: colors.inkSecondary }]}>{s.empty}</Text> : null}
+      {away.length ? (
+        <Card style={[styles.away, { borderColor: colors.warningSoft }]}>
+          <Text style={[styles.awayTitle, { color: colors.ink }]}>{strings.recurring.awayTitle(away.length)}</Text>
+          <Text style={[styles.detail, { color: colors.inkSecondary }]}>{strings.recurring.awayBody(away.length)}</Text>
+          <View style={styles.awayButtons}>
+            <Button kind="secondary" label={strings.recurring.awayGotIt} onPress={clearAddedWhileAway} style={{ flex: 1 }} />
+            <Button
+              kind="danger"
+              label={strings.recurring.cancelAll(away.length)}
+              onPress={() =>
+                action.run(() => {
+                  for (const t of away) cancelTransaction(db, t.id);
+                  clearAddedWhileAway();
+                })
+              }
+              style={{ flex: 1 }}
+            />
+          </View>
+        </Card>
+      ) : null}
       {section(s.recurring, data.recurring, (t) => [s.addedAuto(formatShortDate(t.date)), where(t)].join(' · '), () => 'confirm')}
       {data.reminders.length ? (
         <View style={{ gap: 8 }}>
@@ -276,6 +300,9 @@ function ConfirmDateSheet({
 }
 
 const styles = StyleSheet.create({
+  away: { gap: 8, padding: 16, borderWidth: 1 },
+  awayTitle: { fontFamily: fonts.sansBold, fontSize: 14 },
+  awayButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
   /** Every action on this page is the same size: Paid, Received, Add, Got it, and the date. */
   action: { width: 96, paddingHorizontal: 0 },

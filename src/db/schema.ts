@@ -89,6 +89,8 @@ export const settings = sqliteTable(
     hideInRecents: bool('hide_in_recents').notNull().default(false),
     /** First-visit tours already shown or skipped (JSON list of tour ids). */
     toursSeen: text('tours_seen').notNull().default('[]'),
+    /** Guest (owner, Nov 14): when "Sign in to back up" on Home was last closed; it comes back after 30 days. */
+    guestReminderAt: text('guest_reminder_at'),
     failedPinAttempts: integer('failed_pin_attempts').notNull().default(0),
     pinLockedUntil: text('pin_locked_until'),
     backupFrequency: text('backup_frequency', { enum: ['daily', 'weekly', 'manual'] })

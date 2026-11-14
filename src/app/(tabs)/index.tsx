@@ -12,17 +12,21 @@ import { Card, IconButton, IconChip, LinkButton, SectionLabel } from '@/componen
 import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
 import { budgetStatuses } from '@/data/budgets';
 import { recurringOnHome } from '@/data/recurring';
-import { categories, ledgers } from '@/db/schema';
+import { categories, ledgers, settings, transactions } from '@/db/schema';
+import { db } from '@/db/client';
 import type { AppDb } from '@/db/types';
-import { eq } from 'drizzle-orm';
+import { count, eq, isNull } from 'drizzle-orm';
 import { needsReview } from '@/data/review';
 import { recentTransactions } from '@/data/transaction-list';
 import { strings } from '@/i18n/strings';
-import { today as todayDate } from '@/lib/dates';
+import { nowIso, today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { Tour, TourTarget } from '@/components/tour/Tour';
+import { useAddedWhileAway } from '@/state/away';
+import { showGuestReminder } from '@/data/guest';
+import { currentUser } from '@/data/backup-flow';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -53,21 +57,34 @@ export default function HomeScreen() {
   const s = strings.home;
   const { colors, swatch } = useTheme();
   const { defaultCurrency } = useSettings();
-  const data = useLive((db) => {
+  const data = useLive((d) => {
     const today = todayDate();
     return {
       today,
-      tiles: currencyTiles(db, today),
-      estimate: estimatedTotal(db, defaultCurrency, today),
-      review: needsReview(db, today),
-      recent: recentTransactions(db, 6, today),
-      recurring: recurringOnHome(db, today),
-      budgets: homeBudgets(db, today),
-      categoryLooks: new Map(db.select({ id: categories.id, icon: categories.icon, color: categories.color }).from(categories).all().map((c) => [c.id, c])),
+      tiles: currencyTiles(d, today),
+      estimate: estimatedTotal(d, defaultCurrency, today),
+      review: needsReview(d, today),
+      recent: recentTransactions(d, 6, today),
+      recurring: recurringOnHome(d, today),
+      budgets: homeBudgets(d, today),
+      categoryLooks: new Map(d.select({ id: categories.id, icon: categories.icon, color: categories.color }).from(categories).all().map((c) => [c.id, c])),
+      guestReminder: (() => {
+        const set = d.select({ on: settings.onboardingCompletedAt, at: settings.guestReminderAt }).from(settings).get();
+        return showGuestReminder({
+          signedIn: !!currentUser(d),
+          onboardedAt: set?.on ?? null,
+          transactionCount: d.select({ n: count() }).from(transactions).where(isNull(transactions.deletedAt)).get()?.n ?? 0,
+          dismissedAt: set?.at ?? null,
+          now: nowIso(),
+        });
+      })(),
     };
   }, [defaultCurrency]);
 
-  const { tiles, estimate, review, recent, recurring, budgets, categoryLooks } = data;
+  const { tiles, estimate, review, recent, recurring, budgets, categoryLooks, guestReminder } = data;
+  // Added while Sarraf was closed and still waiting on Needs review (owner, Nov 14: no pop-up).
+  const awayIds = useAddedWhileAway();
+  const away = review.recurring.filter((t) => awayIds.includes(t.id));
   const look = (id: string | null | undefined) => (id ? (categoryLooks.get(id) ?? null) : null);
   const fixed = recurring.filter((r) => r.item.amountType === 'same');
   const bills = recurring.filter((r) => r.item.amountType === 'varies');
@@ -116,6 +133,22 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
+        {guestReminder ? (
+          <Card style={[styles.confirm, { borderColor: colors.warningSoft }]}>
+            <View style={[styles.confirmBadge, { backgroundColor: colors.warningSoft }]}>
+              <Icon name="cloud" size={16} color={swatch('gold').fg} strokeWidth={1.9} />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={[styles.confirmTitle, { color: colors.ink, fontFamily: fonts.sansBold, fontSize: 13.5 }]}>{s.guestTitle}</Text>
+              <Text style={[styles.confirmDetail, { color: colors.inkMuted, fontSize: 11.5 }]}>{s.guestBody}</Text>
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <LinkButton label={s.guestSignIn} onPress={() => router.push('/start')} />
+                <LinkButton label={s.guestNotNow} onPress={() => db.update(settings).set({ guestReminderAt: nowIso() }).run()} />
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
         {review.toConfirm > 0 || review.waitingBack.length > 0 ? (
           <Pressable onPress={() => router.push('/review')} accessibilityRole="button">
             <Card style={[styles.confirm, { borderColor: colors.warningSoft }]}>
@@ -126,7 +159,9 @@ export default function HomeScreen() {
                 <Text style={[styles.confirmTitle, { color: colors.ink, fontFamily: fonts.sansBold, fontSize: 13.5 }]}>
                   {review.toConfirm > 0 ? s.needConfirm(review.toConfirm) : s.waitingOnly(review.waitingBack.length)}
                 </Text>
-                <Text style={[styles.confirmDetail, { color: colors.inkMuted, fontSize: 11.5 }]}>{s.needConfirmDetail}</Text>
+                <Text style={[styles.confirmDetail, { color: away.length ? colors.ink : colors.inkMuted, fontSize: 11.5 }]}>
+                  {away.length ? s.awayDetail(away.length) : s.needConfirmDetail}
+                </Text>
               </View>
               <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
             </Card>

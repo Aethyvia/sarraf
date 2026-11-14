@@ -27,9 +27,6 @@ import { useLive } from '@/state/live';
 import { backfillRecurring } from '@/data/recurring';
 import type { TransactionRow } from '@/data/transactions';
 import { LockGate } from '@/components/lock/LockGate';
-import { AwaySheet } from '@/components/sheets/AwaySheet';
-import { accounts } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { loadSampleClock } from '@/dev/sample-clock';
 import { nowIso } from '@/lib/dates';
 import { deleteStoredFiles } from '@/services/attachments';
@@ -39,6 +36,7 @@ import { ToastProvider } from '@/state/toast';
 import { startAutomaticBackup } from '@/services/auto-backup';
 import { startNotifications } from '@/services/notifications';
 import { refreshRatesIfStale } from '@/services/rates';
+import { setAddedWhileAway } from '@/state/away';
 import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -70,7 +68,9 @@ export default function RootLayout() {
       // Deleted rows kept for Undo are removed for good on the next app open.
       deleteStoredFiles(purgeSoftDeleted(db, nowIso()).attachmentPaths);
       // Recurring auto-adds missed while the app was closed: one per due date, never twice.
+      // Owner, Nov 14: no pop-up; Needs review and Home's review card show them.
       const added = backfillRecurring(db);
+      setAddedWhileAway(added.map((t) => t.id));
       return { ready: true, error: null, added };
     } catch (e) {
       return { ready: false, error: e as Error, added: [] };
@@ -108,20 +108,18 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <ToastProvider>
-        <ThemedStack added={data.added} />
+        <ThemedStack />
       </ToastProvider>
     </SettingsProvider>
   );
 }
 
-function ThemedStack({ added }: { added: TransactionRow[] }) {
+function ThemedStack() {
   const { scheme, colors } = useTheme();
-  const accountName = (id: string | null) => (id ? (db.select({ name: accounts.name }).from(accounts).where(eq(accounts.id, id)).get()?.name ?? '') : '');
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
-      <AwaySheet added={added} accountName={accountName} />
       <PlanEndedPrompt />
       <LockGate />
     </>
