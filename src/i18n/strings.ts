@@ -1192,6 +1192,7 @@ export const strings = {
     getStarted: 'Get started',
     guest: 'Continue as guest',
     guestNote: 'Everything stays on this phone. Sign in any time to back up.',
+    guestKeepNote: 'Keep using what’s on this phone without an account. Sign in any time to back up.',
     alreadyUse: 'I already use Sarraf',
     createTitle: 'Create your account',
     createBody: 'Your account keeps your plan and remembers where your backup is. Your money data never leaves your phone and Drive.',

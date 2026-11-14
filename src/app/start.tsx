@@ -30,7 +30,7 @@ import { askForNotificationsAfterSignIn } from '@/services/notifications';
 import { refreshPlan } from '@/data/plan';
 import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
-import { settings } from '@/db/schema';
+import { deviceState, settings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
@@ -258,6 +258,13 @@ export default function StartScreen() {
     startSetup();
   };
 
+  /** Signed out with the data kept: use it as a guest (free plan, no backup until signing in). */
+  const continueAsGuestWithData = () => {
+    // Who signed out is kept: if another account signs in later, it's treated as a switch.
+    db.update(deviceState).set({ signedOutAt: null }).where(eq(deviceState.id, 1)).run();
+    router.replace('/');
+  };
+
   const startSetup = () => {
     setItems(suggestedAccounts(everyday, also));
     go({ k: 'currency' });
@@ -387,8 +394,13 @@ export default function StartScreen() {
             <Button label={s.getStarted} onPress={() => ((returning.current = false), setSheet('new'))} />
             <Button label={s.alreadyUse} kind="secondary" onPress={() => ((returning.current = true), setSheet('returning'))} />
             {/* Guest (owner, Nov 14): everything on the phone, free plan; backup and Plus wait for a Sarraf account. */}
-            {!onboarded ? <LinkButton label={s.guest} onPress={startSetup} /> : null}
-            {!onboarded ? <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center', marginTop: -6 }]}>{s.guestNote}</Text> : null}
+            {/* After a sign-out that kept the data, a guest carries on with that data (owner, Nov 14). */}
+            {!onboarded || isSignedOut(db) ? (
+              <LinkButton label={s.guest} onPress={onboarded ? continueAsGuestWithData : startSetup} />
+            ) : null}
+            {!onboarded || isSignedOut(db) ? (
+              <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center', marginTop: -6 }]}>{onboarded ? s.guestKeepNote : s.guestNote}</Text>
+            ) : null}
           </View>
           <SignInSheet
             mode={sheet}
