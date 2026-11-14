@@ -1,3 +1,4 @@
+import { BackupTooNewError, NotABackupError } from '@/data/backup-file';
 import type { BackupResult } from '@/data/backup-flow';
 import { strings } from '@/i18n/strings';
 import { DriveError, DriveRefusedError, OfflineError } from '@/services/cloud/types';
@@ -35,5 +36,21 @@ export function backupProblem(problem: BackupResult | unknown): string {
   const message = problem instanceof Error ? problem.message : '';
   if (/not signed in|jwt|session/i.test(message)) return s.signInAgain;
   if (/wrong password|decrypt|authentication tag/i.test(message)) return s.keysChanged;
+  return s.other(message);
+}
+
+/** What stopped a restore, in plain words (owner, Nov 14: "I don't know what's gone wrong"). */
+export function restoreProblem(problem: unknown): string {
+  const s = strings.start.restoreProblems;
+  if (problem instanceof OfflineError) return s.offline;
+  if (problem instanceof DriveRefusedError) return s.driveRefused;
+  if (problem instanceof DriveError) return problem.kind === 'busy' ? s.driveBusy : problem.kind === 'unavailable' ? s.driveDown : s.other(problem.message);
+  if (problem instanceof BackupTooNewError) return s.tooNew;
+  if (problem instanceof NotABackupError) return s.notABackup;
+  const message = problem instanceof Error ? problem.message : '';
+  if (/no backup in this drive/i.test(message)) return s.noBackup;
+  if (/damaged/i.test(message)) return s.damaged;
+  if (/not signed in|jwt|session/i.test(message)) return s.signInAgain;
+  if (/disk|space|full|SQLITE_FULL/i.test(message)) return s.phoneFull;
   return s.other(message);
 }

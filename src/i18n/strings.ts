@@ -1301,8 +1301,22 @@ export const strings = {
     skipForNow: 'Skip for now',
     skipNote: 'Skipping is only offered to new users. Without Drive there’s no backup.',
     interruptedTitle: 'The restore didn’t finish',
-    interruptedBody: (pct: number | null) =>
-      `${pct === null ? 'Something went wrong.' : `The connection dropped at ${pct}%.`} Nothing changed on this phone, and your backup in Drive is safe.`,
+    interruptedBody: (pct: number | null, problem: string | null = null) =>
+      `${pct !== null ? `The connection dropped at ${pct}%.` : (problem ?? 'Something went wrong.')} Nothing changed on this phone, and your backup in Drive is safe.`,
+    // What stopped a restore, in plain words (owner, Nov 14).
+    restoreProblems: {
+      offline: 'You went offline.',
+      driveRefused: 'Sarraf couldn’t open your Google Drive. Try again and allow access to Drive.',
+      driveBusy: 'Google Drive is busy right now. Try again in a few minutes.',
+      driveDown: 'Google Drive isn’t responding.',
+      noBackup: 'The backup file isn’t in this Google Drive any more. It may have been deleted, or it’s in another Google account.',
+      tooNew: 'This backup was made by a newer Sarraf. Update Sarraf from Google Play, then restore.',
+      notABackup: 'The file in Drive isn’t a Sarraf backup Sarraf can read.',
+      damaged: 'The backup file is damaged and can’t be restored.',
+      signInAgain: 'Your sign-in has expired. Go back and sign in again.',
+      phoneFull: 'Your phone is out of space. Free some up, then try again.',
+      other: (detail: string) => (detail ? `It stopped with: ${detail}.` : 'Something went wrong.'),
+    },
     overTitle: (n: number) => `Your backup has ${n} accounts`,
     overBody: (limit: number) =>
       `Free covers ${limit}. Everything is restored and keeps working: nothing is locked, hidden or deleted. You just can’t add another account until you’re under ${limit} or on Plus.`,

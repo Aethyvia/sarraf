@@ -34,7 +34,7 @@ import { settings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
-import { backupProblem } from '@/data/backup-errors';
+import { backupProblem, restoreProblem } from '@/data/backup-errors';
 import { fonts, useTheme } from '@/theme';
 
 /** What "We found your backup" shows: from the Supabase record or the Drive file's header. */
@@ -61,7 +61,7 @@ type Step =
   | { k: 'secret'; mode: 'password' | 'key' }
   | { k: 'cant' }
   | { k: 'restoring' }
-  | { k: 'interrupted'; pct: number | null }
+  | { k: 'interrupted'; pct: number | null; problem?: string }
   | { k: 'over'; header: BackupHeader }
   | { k: 'restored'; header: BackupHeader }
   | { k: 'currency' }
@@ -289,7 +289,7 @@ export default function StartScreen() {
           file.current = null;
           go({ k: 'interrupted', pct: downloaded.current || null });
         } else {
-          go({ k: 'interrupted', pct: null });
+          go({ k: 'interrupted', pct: null, problem: restoreProblem(e) });
         }
       }
     });
@@ -785,7 +785,7 @@ export default function StartScreen() {
           icon="cloud"
           iconTone="warning"
           title={s.interruptedTitle}
-          body={s.interruptedBody(step.pct)}
+          body={s.interruptedBody(step.pct, step.problem ?? null)}
           footer={
             <>
               <Button label={s.tryAgain} onPress={() => (file.current = null, replace({ k: 'secret', mode: 'password' }))} />

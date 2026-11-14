@@ -178,6 +178,10 @@ export function realCloud(config: RealCloudConfig): Cloud {
   }
   const backupName = async () => `sarraf-backup-${await ownerId()}.bin`;
   const attachmentPrefix = async () => `att-${await ownerId()}-`;
+  // Backups made before Nov 14 used one shared name; they're still read, and the next backup moves them to the new name.
+  const LEGACY_BACKUP = 'sarraf-backup.bin';
+  const LEGACY_ATTACHMENT = 'att-';
+  const backupFile = async () => (await byName(await backupName())) ?? (await byName(LEGACY_BACKUP));
 
   async function session(): Promise<User> {
     const { data, error } = await online(() => supabase.auth.getUser());
@@ -288,12 +292,12 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
 
     async findBackup() {
-      const file = await byName(await backupName());
+      const file = await backupFile();
       return file ? { modifiedAt: file.modifiedTime, sizeBytes: Number(file.size ?? 0) } : null;
     },
 
     async downloadBackup(onProgress) {
-      const file = await byName(await backupName());
+      const file = await backupFile();
       if (!file) throw new Error('No backup in this Drive');
       const total = Number(file.size ?? 0);
       onProgress?.(0, total);
@@ -302,7 +306,11 @@ export function realCloud(config: RealCloudConfig): Cloud {
       return bytes;
     },
 
-    uploadBackup: async (file) => writeFile(await backupName(), file),
+    async uploadBackup(file) {
+      await writeFile(await backupName(), file);
+      // Moved to this account's own name: the old shared file goes.
+      await removeFile(LEGACY_BACKUP).catch(() => {});
+    },
 
     async listAttachments() {
       const prefix = await attachmentPrefix();
@@ -311,7 +319,7 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
     uploadAttachment: async (name, file) => writeFile((await attachmentPrefix()) + name, file),
     async downloadAttachment(name) {
-      const file = await byName((await attachmentPrefix()) + name);
+      const file = (await byName((await attachmentPrefix()) + name)) ?? (await byName(LEGACY_ATTACHMENT + name));
       return file ? readFile(file.id) : null;
     },
     deleteAttachment: async (name) => removeFile((await attachmentPrefix()) + name),

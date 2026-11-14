@@ -13,6 +13,7 @@ import { formatShortDate } from '@/lib/format-date';
 import { backupDeps, cloud } from '@/services/cloud';
 import { goBack } from '@/state/nav';
 import { useToast } from '@/state/toast';
+import { restoreProblem } from '@/data/backup-errors';
 import { fonts, radius, useTheme } from '@/theme';
 
 /**
@@ -43,7 +44,7 @@ export default function RestoreScreen() {
         file.current = await cloud.downloadBackup();
         setHeader(readBackupHeader(file.current).header);
       } catch (e) {
-        toast({ message: (e as Error).message || s.failed });
+        toast({ message: restoreProblem(e) });
         goBack();
       }
     })();
@@ -61,7 +62,7 @@ export default function RestoreScreen() {
     } catch (e) {
       setRestoring(false);
       if (e instanceof WrongSecretError) setTries((n) => n + 1);
-      else toast({ message: (e as Error).message || s.failed });
+      else toast({ message: restoreProblem(e) });
     } finally {
       setBusy(false);
     }

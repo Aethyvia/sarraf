@@ -19,3 +19,14 @@ describe('backup problems say what went wrong (owner, Nov 14)', () => {
     expect(backupProblem(undefined)).toBe('Couldn’t back up. Try again.');
   });
 });
+
+describe('restore problems (owner, Nov 14)', () => {
+  const { restoreProblem } = jest.requireActual('../backup-errors') as typeof import('../backup-errors');
+  it('names the cause instead of "Something went wrong"', () => {
+    expect(restoreProblem(new Error('No backup in this Drive'))).toMatch(/isn’t in this Google Drive/);
+    expect(restoreProblem(new OfflineError())).toMatch(/offline/);
+    expect(restoreProblem(new DriveRefusedError())).toMatch(/couldn’t open your Google Drive/);
+    expect(restoreProblem(new Error('The backup is damaged (no settings).'))).toMatch(/damaged/);
+    expect(restoreProblem(new Error('Boom'))).toBe('It stopped with: Boom.');
+  });
+});
