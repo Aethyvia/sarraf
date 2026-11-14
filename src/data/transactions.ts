@@ -5,7 +5,7 @@ import type { AppDb } from '@/db/types';
 import { nowIso, today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { dec, isCurrencyCode, isDecimalString, toDecimalString, type DecimalString } from '@/lib/money';
-import { computeAmounts, type AmountResult, type RateMode } from './amounts';
+import { amountFromArrived, computeAmounts, type AmountResult, type RateMode } from './amounts';
 import { applyAttachmentChanges, type AttachmentChanges } from './attachments';
 import { DataError } from './errors';
 import { shrinkGoalsToFit } from './goals';
@@ -78,8 +78,14 @@ export interface TransactionDraft {
   currency: string;
   rateMode?: RateMode;
   rate?: DecimalString | null;
-  /** "I know what was charged / received". */
+  /** "I know what was charged / received". With enteredAs 'arrived': what arrived. */
   knownAmount?: DecimalString | null;
+  /**
+   * "What arrived" (owner, Nov 15): income, or a transfer between your accounts, typed as what
+   * arrived (knownAmount) instead of the amount before fees. `amount` is then worked out from the
+   * included charges (and `rate`, across currencies); whatever `amount` holds is ignored.
+   */
+  enteredAs?: 'sent' | 'arrived';
   charges?: ChargeDraft[];
   reimbursable?: boolean;
   expectedFromPersonId?: string | null;
@@ -116,7 +122,8 @@ function invalid(message: string): never {
  * Works out a draft's stored amounts and checks it, without saving.
  * Throws DataError (or AmountError) when something needed is missing.
  */
-export function prepareTransaction(db: AppDb, draft: TransactionDraft): AmountResult & { currency: string } {
+export function prepareTransaction(db: AppDb, draft: TransactionDraft): AmountResult & { currency: string; amount: DecimalString } {
+  if (draft.enteredAs === 'arrived') return prepareArrived(db, draft);
   // 0 is allowed for a charge on its own: only separate charges, e.g. a bank fee that posts later (owner, Nov 14).
   const chargeOnly = (draft.charges ?? []).some((c) => c.deduction === 'charged_separately');
   if (!isDecimalString(draft.amount) || dec(draft.amount).isNegative() || (dec(draft.amount).isZero() && !chargeOnly)) {
@@ -192,7 +199,37 @@ export function prepareTransaction(db: AppDb, draft: TransactionDraft): AmountRe
     knownAmount: draft.knownAmount ?? null,
     charges,
   });
-  return { ...amounts, currency };
+  return { ...amounts, currency, amount: toDecimalString(dec(draft.amount)) };
+}
+
+/** Whether "Sent | Arrived" applies: money coming into one of your accounts (income, or a transfer between your accounts). */
+export function canEnterArrived(draft: Pick<TransactionDraft, 'kind' | 'accountId' | 'toAccountId' | 'fromPersonId' | 'toPersonId'>): boolean {
+  if (draft.kind === 'income') return !!draft.accountId;
+  return draft.kind === 'transfer' && !!draft.accountId && !!draft.toAccountId && !draft.fromPersonId && !draft.toPersonId;
+}
+
+/** A draft typed as what arrived: works out the amount before fees, then checks it as usual. */
+function prepareArrived(db: AppDb, draft: TransactionDraft): AmountResult & { currency: string; amount: DecimalString } {
+  if (!canEnterArrived(draft)) invalid('What arrived is for money coming into your account');
+  if (!draft.knownAmount || !isDecimalString(draft.knownAmount) || !dec(draft.knownAmount).gt(0)) invalid('Enter what arrived, above zero');
+  const currency = draft.kind === 'transfer' ? accountCurrency(db, draft.accountId!) : draft.currency;
+  const receivingCurrency = accountCurrency(db, draft.kind === 'transfer' ? draft.toAccountId! : draft.accountId!);
+  for (const c of draft.charges ?? []) {
+    if (!isDecimalString(c.amount) || dec(c.amount).lte(0)) invalid('A charge needs an amount above zero');
+  }
+  const amount = amountFromArrived({ arrived: draft.knownAmount, currency, receivingCurrency, rate: draft.rate ?? null, charges: draft.charges });
+  const converts = currency !== receivingCurrency;
+  const resolved = prepareTransaction(db, {
+    ...draft,
+    enteredAs: 'sent',
+    amount,
+    currency,
+    // Across currencies, what arrived is the known number (saveTransaction keeps the typed rate).
+    rateMode: converts ? 'amount_known' : 'rate_known',
+    rate: null,
+    knownAmount: converts ? draft.knownAmount : null,
+  });
+  return resolved;
 }
 
 /**
@@ -220,6 +257,10 @@ export function saveTransaction(
   return db.transaction((tx) => {
     const existing = options.id ? requireRow(tx.select().from(transactions).where(eq(transactions.id, options.id)).get(), 'transaction') : null;
     const a = prepareTransaction(tx, draft);
+    const arrivedEntry = draft.enteredAs === 'arrived';
+    // Across currencies the rate you typed is kept as the rate got (what arrived is exact; the two differ only by rounding).
+    const typedRate = arrivedEntry && a.converts ? (draft.rate ?? null) : null;
+    if (arrivedEntry) draft = { ...draft, amount: a.amount, rateMode: a.converts ? 'amount_known' : 'rate_known', rate: null, knownAmount: a.converts ? (draft.knownAmount ?? null) : null };
     const split = draft.kind === 'expense' && draft.split ? draft.split : null;
     // Shares are in the currency actually charged: your account's when you paid, the bill's when someone else paid.
     const splitTotal = draft.fromPersonId ? toDecimalString(dec(draft.amount)) : a.accountAmount;
@@ -250,7 +291,7 @@ export function saveTransaction(
       // Someone else paid a split: the expense is your share only (Decided).
       amount: split && draft.fromPersonId ? toDecimalString(dec(yourShare!)) : toDecimalString(dec(draft.amount)),
       currency: a.currency,
-      rate: a.rate,
+      rate: typedRate ?? a.rate,
       rateMode: a.converts ? (draft.rateMode ?? 'rate_known') : null,
       accountAmount: draft.accountId ? a.accountAmount : null,
       toAccountId: draft.kind === 'transfer' ? (draft.toAccountId ?? null) : null,
@@ -269,6 +310,7 @@ export function saveTransaction(
       personAmount: personSettle ? personSettle.amount : null,
       marketRateAtEntry: a.converts ? (options.marketRate?.rate ?? existing?.marketRateAtEntry ?? null) : null,
       marketRateFetchedAt: a.converts ? (options.marketRate?.fetchedAt ?? existing?.marketRateFetchedAt ?? null) : null,
+      enteredAs: arrivedEntry ? 'arrived' : null,
       updatedAt: nowIso(),
     };
 
@@ -343,6 +385,12 @@ export function saveTransaction(
       entry(draft.fromPersonId, negate(amount), 'paid_by_person');
     }
 
+    // "Sent | Arrived" is remembered per account: the account money comes into (owner, Nov 15).
+    if (canEnterArrived(draft)) {
+      const into = (draft.kind === 'transfer' ? draft.toAccountId : draft.accountId)!;
+      tx.update(accounts).set({ enterArrived: arrivedEntry }).where(eq(accounts.id, into)).run();
+    }
+
     // Paid / Added for a recurring item's due date: the item moves on to its next date.
     if (!existing && draft.recurringId && draft.recurringDueDate && !draft.autoAdded) {
       noteRecurringHandled(tx, draft.recurringId, draft.recurringDueDate, toDecimalString(dec(draft.amount)));
@@ -384,9 +432,14 @@ export function draftFromTransaction(db: AppDb, id: string): TransactionDraft {
     toPersonId: toPerson,
     amount,
     currency: t.currency,
-    rateMode: t.rateMode ?? 'rate_known',
-    rate: t.rateMode === 'amount_known' ? null : t.rate,
-    knownAmount: t.rateMode === 'amount_known' ? (t.kind === 'transfer' ? t.toAmount : t.accountAmount) : null,
+    ...(t.enteredAs === 'arrived'
+      ? // Typed as what arrived: Edit opens the same way, with what arrived (and, across currencies, the rate it implies).
+        { enteredAs: 'arrived' as const, rateMode: 'rate_known' as const, rate: t.rate, knownAmount: t.kind === 'transfer' ? t.toAmount : t.accountAmount }
+      : {
+          rateMode: t.rateMode ?? 'rate_known',
+          rate: t.rateMode === 'amount_known' ? null : t.rate,
+          knownAmount: t.rateMode === 'amount_known' ? (t.kind === 'transfer' ? t.toAmount : t.accountAmount) : null,
+        }),
     charges: charges.map((c) => ({
       type: c.type,
       label: c.label,

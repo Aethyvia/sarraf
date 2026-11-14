@@ -131,7 +131,10 @@ export function ConversionTrio({
   onUseMarket,
   vsMarket,
   footer,
+  hint,
 }: {
+  /** The instruction at the top; defaults to "Type the number you know…". */
+  hint?: string;
   amount: TrioAmount;
   counter: TrioAmount;
   /** 1 {from} = {text} {to}. `expression` while typed, `value` when worked out. */
@@ -193,7 +196,7 @@ export function ConversionTrio({
   return (
     <View style={[styles.trio, { backgroundColor: colors.surface, borderColor: colors.outline }]}>
       {/* The instruction (Owner, Nov 12): three numbers would otherwise read as three answers. */}
-      <Text style={[styles.instruction, { color: colors.inkMuted }]}>{strings.add.trioHint}</Text>
+      <Text style={[styles.instruction, { color: colors.inkMuted }]}>{hint ?? strings.add.trioHint}</Text>
       {moneySlot('amount', amount)}
       <Pressable
         onPress={() => onFocus('rate')}

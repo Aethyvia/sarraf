@@ -153,6 +153,8 @@ export const accounts = sqliteTable('accounts', {
   color: text('color').notNull(),
   rank: integer('rank').notNull().default(0),
   archivedAt: text('archived_at'),
+  /** Money into this account is usually typed as what arrived ("Sent | Arrived", remembered per account; owner, Nov 15). */
+  enterArrived: bool('enter_arrived').notNull().default(false),
   ...timestamps,
 });
 
@@ -276,6 +278,8 @@ export const transactions = sqliteTable(
     countsAsAmount: money('counts_as_amount'),
     /** A reimbursement that also covered the expense's separate charges: that part, in the expense's currency (owner, Nov 15). */
     chargesBack: money('charges_back'),
+    /** Income or a transfer typed as what arrived, not the amount before fees (owner, Nov 15): Edit opens the same way. */
+    enteredAs: text('entered_as', { enum: ['arrived'] }),
     countsAsRate: money('counts_as_rate'),
     /**
      * A transfer with a person paid in another currency (Decided Nov 12): the

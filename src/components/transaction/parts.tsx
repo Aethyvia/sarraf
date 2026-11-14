@@ -308,6 +308,8 @@ export function receiptLines(
     pending?: boolean;
     onCharge?: (key: string) => void;
     editingKey?: string | null;
+    /** Typed as what arrived: the base amount was worked out from it. */
+    baseWorked?: boolean;
   },
 ): ReceiptLine[] {
   const r = strings.receipt;
@@ -327,7 +329,7 @@ export function receiptLines(
       case 'left':
         return { key: row.key, label: r.whatLeft(row.account!.name), amount: money, highlight: true };
       case 'base':
-        return { key: row.key, label: r.base, amount: money };
+        return { key: row.key, label: ctx.baseWorked ? r.baseWorked : r.base, amount: money };
       case 'converted': {
         const c = row.conversion!;
         return { key: row.key, label: parts(r.convertedAt(<MoneyInline value={c.amount} currency={c.from} />, `1 ${c.from} = ${trimRate(c.rate)} ${c.to}`)) };

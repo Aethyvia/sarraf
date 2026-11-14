@@ -1,4 +1,4 @@
-import { applyKey, draftFromForm, focusConversion, initialForm, switchKind } from '../transaction-form';
+import { applyKey, arrivedApplies, draftFromForm, focusConversion, formFromDraft, initialForm, setEnterArrived, switchKind, type FormState } from '../transaction-form';
 
 const base = () => initialForm({ date: '2026-09-28', ledgerId: 'personal', accountId: 'alfalah' });
 
@@ -100,5 +100,47 @@ describe('money in another currency (option D)', () => {
     let f = focusConversion({ ...base(), rateText: '0.0035971223' }, 'rate');
     f = applyKey(f, '7', 2);
     expect(f.rateText).toBe('0.0035971223');
+  });
+});
+
+describe('Before fees | What arrived (owner, Nov 15)', () => {
+  const income = (patch: Partial<FormState> = {}): FormState => ({
+    ...initialForm({ date: '2026-09-30', ledgerId: null, accountId: 'usd', kind: 'income' }),
+    ...patch,
+  });
+
+  it('applies to income into an account and to transfers between your accounts only', () => {
+    expect(arrivedApplies(income())).toBe(true);
+    expect(arrivedApplies({ kind: 'expense', from: { type: 'account', id: 'a' }, to: null })).toBe(false);
+    expect(arrivedApplies({ kind: 'transfer', from: { type: 'account', id: 'a' }, to: { type: 'person', id: 'p' } })).toBe(false);
+    expect(arrivedApplies({ kind: 'transfer', from: { type: 'account', id: 'a' }, to: { type: 'account', id: 'b' } })).toBe(true);
+  });
+
+  it('in one currency, the typed number becomes what arrived', () => {
+    const f = setEnterArrived(income({ expression: '980' }), true, false);
+    expect(f).toMatchObject({ enterArrived: true, expression: '980' });
+    expect(draftFromForm(f, { amount: '980', knownAmount: null, rate: null, mainCurrency: 'USD', converts: false })).toMatchObject({
+      enteredAs: 'arrived',
+      knownAmount: '980',
+      rate: null,
+    });
+  });
+
+  it('across currencies, the keypad moves to what arrived and the rate is typed', () => {
+    const f = setEnterArrived(income({ rateMode: 'amount_known', knownExpression: '272440' }), true, true);
+    expect(f).toMatchObject({ enterArrived: true, target: 'known', rateMode: 'rate_known', knownExpression: '272440' });
+    expect(focusConversion(f, 'amount')).toBe(f);
+    expect(focusConversion(f, 'rate').target).toBe('rate');
+    expect(draftFromForm(f, { amount: '0', knownAmount: '272440', rate: '278', mainCurrency: 'USD', converts: true })).toMatchObject({
+      enteredAs: 'arrived',
+      knownAmount: '272440',
+      rate: '278',
+    });
+    expect(setEnterArrived(f, false, true)).toMatchObject({ enterArrived: false, target: 'amount' });
+  });
+
+  it('Edit opens typed as what arrived', () => {
+    const f = formFromDraft({ kind: 'income', date: '2026-09-30', status: 'cleared', accountId: 'usd', amount: '1000', currency: 'USD', enteredAs: 'arrived', knownAmount: '980' });
+    expect(f).toMatchObject({ enterArrived: true, expression: '980', knownExpression: '980' });
   });
 });

@@ -47,6 +47,33 @@ export interface FormState {
   recurringDueDate: string | null;
   /** A settlement paid in another currency: what it clears in the person's currency (kept as is on edit). */
   personSettle: { currency: string; amount: string } | null;
+  /**
+   * "Before fees | Arrived" (owner, Nov 15): income or a transfer between your accounts typed as
+   * what arrived. Same currency: `expression` is what arrived. Across currencies: `knownExpression`
+   * is what arrived and `rateText` the rate; the amount before fees is worked out.
+   */
+  enterArrived: boolean;
+}
+
+/** Whether "Before fees | Arrived" applies: money coming into one of your accounts. */
+export function arrivedApplies(s: Pick<FormState, 'kind' | 'from' | 'to'>): boolean {
+  if (s.kind === 'income') return s.from?.type === 'account';
+  return s.kind === 'transfer' && s.from?.type === 'account' && s.to?.type === 'account';
+}
+
+/** Typed as what arrived, and it applies. */
+export const isArrivedEntry = (s: FormState) => s.enterArrived && arrivedApplies(s);
+
+/**
+ * Switches between "Before fees" and "Arrived". The typed number stays; across currencies the
+ * keypad moves to what arrived (Arrived) or the amount (Before fees), and the rate is the typed one.
+ */
+export function setEnterArrived(state: FormState, on: boolean, converts: boolean): FormState {
+  if (state.enterArrived === on) return state;
+  if (!converts) return { ...state, enterArrived: on };
+  return on
+    ? { ...state, enterArrived: true, rateMode: 'rate_known', target: 'known', knownExpression: state.rateMode === 'amount_known' ? state.knownExpression : '' }
+    : { ...state, enterArrived: false, target: 'amount' };
 }
 
 export function initialForm(defaults: { date: string; ledgerId: string | null; accountId: string | null; kind?: FormKind }): FormState {
@@ -77,6 +104,7 @@ export function initialForm(defaults: { date: string; ledgerId: string | null; a
     recurringId: null,
     recurringDueDate: null,
     personSettle: null,
+    enterArrived: false,
   };
 }
 
@@ -107,6 +135,8 @@ export const RATE_MAX_DECIMALS = 10;
  * then worked out instead. No "I know the rate / amount" switch.
  */
 export function focusConversion(state: FormState, slot: 'amount' | 'rate' | 'known'): FormState {
+  // Typed as what arrived: the amount before fees is worked out; the rate and what arrived are typed.
+  if (isArrivedEntry(state)) return slot === 'amount' ? state : { ...state, target: slot };
   if (slot === 'amount') return { ...state, target: 'amount' };
   if (slot === 'rate') {
     return state.rateMode === 'rate_known' ? { ...state, target: 'rate' } : { ...state, rateMode: 'rate_known', rateText: '', target: 'rate' };
@@ -152,6 +182,10 @@ export function formFromDraft(d: TransactionDraft): FormState {
     recurringId: d.recurringId ?? null,
     recurringDueDate: d.recurringDueDate ?? null,
     personSettle: d.personCurrency && d.personAmount ? { currency: d.personCurrency, amount: d.personAmount } : null,
+    ...(d.enteredAs === 'arrived' && d.knownAmount
+      ? // What arrived goes in both places: the amount (same currency) or what arrived (across currencies).
+        { enterArrived: true, expression: d.knownAmount, knownExpression: d.knownAmount, rateMode: 'rate_known' as const, rateText: d.rate ?? '', target: 'known' as const }
+      : { enterArrived: false }),
   };
 }
 
@@ -174,9 +208,10 @@ export function splitForTotal(split: SplitDraft, total: string, currency: string
 /** The draft to save, from the form and its worked-out amount. */
 export function draftFromForm(
   s: FormState,
-  values: { amount: string; knownAmount: string | null; rate: string | null; mainCurrency: string },
+  values: { amount: string; knownAmount: string | null; rate: string | null; mainCurrency: string; converts?: boolean },
 ): TransactionDraft {
   if (s.kind === 'savings') throw new Error('Savings is not a transaction');
+  const arrived = isArrivedEntry(s);
   return {
     kind: s.kind,
     date: s.date,
@@ -191,9 +226,14 @@ export function draftFromForm(
     toPersonId: s.kind === 'transfer' && s.to?.type === 'person' ? s.to.id : null,
     amount: values.amount,
     currency: values.mainCurrency,
-    rateMode: s.rateMode,
-    rate: s.rateMode === 'rate_known' ? values.rate : null,
-    knownAmount: s.rateMode === 'amount_known' ? values.knownAmount : null,
+    ...(arrived
+      ? // What arrived: the amount typed (same currency) or the known amount (across currencies).
+        { enteredAs: 'arrived' as const, rateMode: 'rate_known' as const, rate: values.converts ? values.rate : null, knownAmount: values.converts ? values.knownAmount : values.amount }
+      : {
+          rateMode: s.rateMode,
+          rate: s.rateMode === 'rate_known' ? values.rate : null,
+          knownAmount: s.rateMode === 'amount_known' ? values.knownAmount : null,
+        }),
     charges: s.charges,
     reimbursable: s.kind === 'expense' && s.reimbursable,
     expectedFromPersonId: s.kind === 'expense' && s.reimbursable ? s.expectedFromPersonId : null,

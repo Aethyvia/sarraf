@@ -24,7 +24,7 @@ import {
   usePeopleItems,
 } from '@/components/sheets/pickers';
 import { BottomSheet, Button, Header, IconButton, IconChip, Segmented, ToggleRow } from '@/components/ui';
-import { vsMarketPercent, type AmountResult } from '@/data/amounts';
+import { vsMarketPercent } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { accountBalances } from '@/data/balances';
 import { addToGoal, stillToGo } from '@/data/goals';
@@ -64,7 +64,19 @@ import {
   type ChargeContext,
   type ChargeEdit,
 } from '@/state/charge-edit';
-import { RATE_MAX_DECIMALS, applyKey, draftFromForm, focusConversion, splitForTotal, switchKind, type FormKind, type FormState } from '@/state/transaction-form';
+import {
+  RATE_MAX_DECIMALS,
+  applyKey,
+  arrivedApplies,
+  draftFromForm,
+  focusConversion,
+  isArrivedEntry,
+  setEnterArrived,
+  splitForTotal,
+  switchKind,
+  type FormKind,
+  type FormState,
+} from '@/state/transaction-form';
 import { fonts, useTheme } from '@/theme';
 import { ChargeEditor, ChargeEditorHint } from './ChargeEditor';
 import { SplitEditor } from './SplitEditor';
@@ -151,8 +163,21 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const receivingCurrency =
     form.kind === 'transfer' ? (toAccount?.currency ?? mainCurrency) : (fromAccount?.currency ?? mainCurrency);
   const converts = !isSavings && mainCurrency !== receivingCurrency && (form.kind !== 'transfer' || (!!fromAccount && !!toAccount));
-  const amount = expressionValue(form.expression, getCurrency(mainCurrency).minorUnits);
+  /** The number typed on the main amount (before fees; or, typed as what arrived in one currency, what arrived). */
+  const typedAmount = expressionValue(form.expression, getCurrency(mainCurrency).minorUnits);
   const known = expressionValue(form.knownExpression, getCurrency(receivingCurrency).minorUnits);
+  // "Before fees | What arrived" (owner, Nov 15): money coming into your account, typed as the number the bank shows.
+  const arrivedShown = !isSavings && arrivedApplies(form);
+  const arrivedMode = !isSavings && isArrivedEntry(form);
+  const arrivedValue = arrivedMode ? (converts ? known : typedAmount) : null;
+  // Remembered per account: a new entry starts the way money into this account was last typed.
+  const receivingId = form.kind === 'transfer' ? (toAccount?.id ?? null) : (fromAccount?.id ?? null);
+  const [arrivedFor, setArrivedFor] = useState<string | null>(editId ? receivingId : null);
+  if (receivingId !== arrivedFor) {
+    setArrivedFor(receivingId);
+    const remembered = !!(receivingId && ref.accounts.get(receivingId)?.enterArrived);
+    if (receivingId && remembered !== form.enterArrived) setForm((f) => setEnterArrived(f, remembered, converts));
+  }
   // The rate is typed on the keypad (option D); only a positive result counts.
   const typedRate = expressionValue(form.rateText, RATE_MAX_DECIMALS);
   const rate = typedRate && isDecimalString(typedRate) && dec(typedRate).gt(0) ? typedRate : null;
@@ -240,14 +265,17 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   };
 
   // What the draft would save, worked out on every render (a few synchronous reads).
-  const preview: { result: AmountResult | null; error: string | null } = (() => {
-    if (isSavings || !amount || dec(amount).isNegative()) return { result: null, error: null };
+  const preview: { result: ReturnType<typeof prepareTransaction> | null; error: string | null } = (() => {
+    if (isSavings) return { result: null, error: null };
+    if (arrivedMode ? !arrivedValue || !dec(arrivedValue).gt(0) : !typedAmount || dec(typedAmount).isNegative()) return { result: null, error: null };
     try {
-      return { result: prepareTransaction(db, draftFromForm(liveForm, { amount, knownAmount: known, rate, mainCurrency })), error: null };
+      return { result: prepareTransaction(db, draftFromForm(liveForm, { amount: typedAmount ?? '0', knownAmount: known, rate, mainCurrency, converts })), error: null };
     } catch (e) {
       return { result: null, error: (e as { code?: string }).code ?? null };
     }
   })();
+  /** The amount before fees: as typed, or worked out from what arrived. */
+  const amount = arrivedMode ? (preview.result?.amount ?? null) : typedAmount;
 
   const outOfAccount =
     (form.kind === 'expense' || form.kind === 'transfer') && fromAccount && preview.result ? preview.result.accountAmount : null;
@@ -334,7 +362,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         if (isSavings) {
           addToGoal(db, { goalId: goal!.id, accountId: goalAccount!.id, amount, date: form.date, notes: form.notes, attachments: add });
         } else {
-          const draft = draftFromForm(form, { amount, knownAmount: known, rate, mainCurrency });
+          const draft = draftFromForm(form, { amount: typedAmount ?? '0', knownAmount: known, rate, mainCurrency, converts });
           // Equal and Percent shares follow the amount as it is now.
           if (draft.split) {
             const total = draft.fromPersonId ? amount : preview.result?.accountAmount;
@@ -440,6 +468,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       pending: form.status !== 'cleared',
       onCharge: (key) => (key === 'new' ? undefined : selectCharge(Number(key))),
       editingKey: chargeEdit ? (chargeEdit.index === null ? 'new' : String(chargeEdit.index)) : null,
+      baseWorked: arrivedMode,
     });
   }
 
@@ -751,29 +780,42 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       </ScrollView>
 
       <TourTarget id="add.amount" style={styles.bottom}>
+        {arrivedShown ? (
+          <Segmented
+            options={[
+              { value: 'before', label: s.enterBefore },
+              { value: 'arrived', label: s.enterArrived },
+            ]}
+            value={form.enterArrived ? 'arrived' : 'before'}
+            onChange={(v) => setForm((f) => setEnterArrived(f, v === 'arrived', converts))}
+            small
+          />
+        ) : null}
         {converts ? (
           <ConversionTrio
             amount={{
               label: (form.kind === 'expense' ? s.trioPaid : form.kind === 'income' ? s.trioPaidIncome : s.trioSent).toUpperCase(),
               currency: mainCurrency,
               onCurrency: form.kind === 'expense' || form.kind === 'income' ? () => setSheet('currency') : undefined,
-              expression: form.expression,
+              expression: arrivedMode ? '' : form.expression,
               value: amount,
+              worked: arrivedMode,
             }}
             rate={{
               from: mainCurrency,
               to: receivingCurrency,
               expression: form.rateText,
-              value: form.rateMode === 'rate_known' ? rate : (r?.rate ?? null),
-              worked: form.rateMode !== 'rate_known',
+              value: form.rateMode === 'rate_known' || arrivedMode ? rate : (r?.rate ?? null),
+              worked: !arrivedMode && form.rateMode !== 'rate_known',
             }}
             counter={{
               label: (form.kind === 'expense' ? s.trioCharged(receivingName ?? '') : s.trioArrived(receivingName ?? '')).toUpperCase(),
               currency: receivingCurrency,
               expression: form.knownExpression,
-              value: form.rateMode === 'amount_known' ? known : r ? (form.kind === 'transfer' ? (r.toAmount ?? null) : r.accountAmount) : null,
-              worked: form.rateMode !== 'amount_known',
+              value: arrivedMode || form.rateMode === 'amount_known' ? known : r ? (form.kind === 'transfer' ? (r.toAmount ?? null) : r.accountAmount) : null,
+              worked: !arrivedMode && form.rateMode !== 'amount_known',
             }}
+            hint={arrivedMode ? s.arrivedHint : undefined}
             focused={form.target === 'known' ? 'counter' : form.target}
             onFocus={(slot) => setForm((f) => focusConversion(f, slot === 'counter' ? 'known' : slot))}
             onBackspace={() => onKey('back')}
@@ -795,8 +837,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             expression={formatTyped(form.expression, mainCurrency, settings.numberFormat)}
             showExpression={hasOperator(form.expression)}
             value={
-              hasOperator(form.expression) && amount
-                ? formatAmount(amount, mainCurrency, { numberFormat: settings.numberFormat, showCurrency: false }).text
+              hasOperator(form.expression) && typedAmount
+                ? formatAmount(typedAmount, mainCurrency, { numberFormat: settings.numberFormat, showCurrency: false }).text
                 : formatTyped(form.expression, mainCurrency, settings.numberFormat)
             }
             currency={mainCurrency}
@@ -806,6 +848,11 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
             focused={false}
             onBackspace={() => onKey('back')}
             onClear={() => onKey('clear')}
+            converted={
+              arrivedMode && amount && typedAmount && amount !== typedAmount ? (
+                <Text style={[styles.trioDate, { color: colors.inkMuted }]}>{parts(s.beforeFeesWorked(<MoneyInline value={amount} currency={mainCurrency} size={12} />))}</Text>
+              ) : undefined
+            }
           />
         )}
         <View style={styles.utilRow}>

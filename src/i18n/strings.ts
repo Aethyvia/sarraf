@@ -431,6 +431,11 @@ export const strings = {
     trioSent: 'You sent',
     trioCharged: (account: string) => `Charged to ${account}`,
     trioArrived: (account: string) => `Arrived in ${account}`,
+    // "What arrived" (owner, Nov 15): type the number the bank or Payoneer shows.
+    enterBefore: 'Before fees',
+    enterArrived: 'What arrived',
+    arrivedHint: 'Type what arrived and the rate. Sarraf works out the amount before fees.',
+    beforeFeesWorked: (amount: ReactNode): ReactNode[] => ['Before fees ', amount, ' · worked out'],
     receivedIn: (account: string) => `received in ${account}`,
     tapToEnter: 'tap to enter',
     notes: 'Notes',
@@ -481,6 +486,7 @@ export const strings = {
     onTop: 'separate',
     // Statement-style receipt (owner, Nov 13)
     base: 'Base amount',
+    baseWorked: 'Base amount · worked out',
     separatelyFrom: (account: string) => `separate, from ${account}`,
     wentUp: (account: string) => `${account} went up by`,
     willGoUp: (account: string) => `${account} will go up by`,

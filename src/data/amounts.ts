@@ -17,6 +17,7 @@ import {
   convert,
   dec,
   rateFromAmounts,
+  roundToMinor,
   toDecimalString,
   type DecimalString,
   type DecimalValue,
@@ -194,6 +195,42 @@ export function computeAmounts(input: AmountInput): AmountResult {
     arrives: arrivesText,
     netAmount: toDecimalString(arrives.minus(onTopOnReceiving)),
   };
+}
+
+/**
+ * "What arrived" (owner, Nov 15): income or a transfer typed as the number the bank or
+ * Payoneer shows. Works out the amount before fees (what Sarraf stores as the amount)
+ * from the included charges, so that what arrives is exactly what was typed.
+ * - No conversion: amount = arrived + included charges.
+ * - With a conversion (rate typed): arrived + included charges in the receiving currency,
+ *   converted back at the rate (rounded to the main currency's minor units), plus the
+ *   included charges in other currencies. Saved as "what arrived is known", so the
+ *   arrived amount stays exact; the rate you typed is kept as the rate got.
+ */
+export interface ArrivedInput {
+  /** What arrived, in the receiving currency. */
+  arrived: DecimalString;
+  currency: string;
+  receivingCurrency: string;
+  /** With a conversion: 1 unit of `currency` = rate units of `receivingCurrency`. */
+  rate?: DecimalString | null;
+  charges?: ChargeInput[];
+}
+
+export function amountFromArrived(input: ArrivedInput): DecimalString {
+  const arrived = dec(input.arrived);
+  if (!arrived.gt(0)) throw new AmountError('invalid_amount', 'Enter what arrived, above zero');
+  const converts = input.currency !== input.receivingCurrency;
+  const inside = (input.charges ?? []).filter((c) => c.deduction === 'already_deducted');
+  const beforeConversion = converts ? inside.filter((c) => c.currency !== input.receivingCurrency) : inside;
+  const afterConversion = converts ? inside.filter((c) => c.currency === input.receivingCurrency) : [];
+  const insideMain = sum(beforeConversion.map((c) => insideChargeInMain(c, input.currency)));
+  if (!converts) return toDecimalString(arrived.plus(insideMain));
+  if (!input.rate || dec(input.rate).lte(0)) throw new AmountError('rate_required', 'Enter the rate you got');
+  const beforeReceivingCharges = arrived.plus(sum(afterConversion.map((c) => dec(c.amount))));
+  const afterInside = dec(roundToMinor(beforeReceivingCharges.div(dec(input.rate)), input.currency));
+  if (!afterInside.gt(0)) throw new AmountError('invalid_amount', 'That rate is too small for this amount');
+  return toDecimalString(afterInside.plus(insideMain));
 }
 
 /** "−0.2% vs market": how the rate got compares with the market rate, to one decimal. Null without a market rate. */
