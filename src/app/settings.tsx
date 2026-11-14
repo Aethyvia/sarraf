@@ -8,13 +8,14 @@ import { Icon } from '@/components/icons/Icon';
 import { CurrencySheet } from '@/components/sheets/CurrencySheet';
 import { BottomSheet, Button, Field, Header, LinkButton, Screen, SectionLabel, SheetOption, ToggleRow } from '@/components/ui';
 import { Note } from '@/components/start/StartPage';
+import { BackupProgressCard } from '@/components/backup/BackupProgressCard';
 import { FREE_LIMITS, usage } from '@/data/limits';
 import { deleteChosen, signOut, type DeleteChoice } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
 import { backupDeps, cloud } from '@/services/cloud';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
-import { currentUser, getDeviceState , backupNow } from '@/data/backup-flow';
+import { currentUser, getDeviceState, backupNow, type BackupProgress } from '@/data/backup-flow';
 import { useLive } from '@/state/live';
 import { db, loadProfiles } from '@/db/client';
 import { settings } from '@/db/schema';
@@ -66,12 +67,17 @@ export default function SettingsScreen() {
   const [signOutProblem, setSignOutProblem] = useState<string | null>(null);
   const [eraseText, setEraseText] = useState('');
   const [removeData, setRemoveData] = useState(true);
-  const openSignOut = () => (setSignOutProblem(null), setEraseText(''), setRemoveData(true), setSheet('signout'));
+  // Owner, Nov 15: back up first (with a progress bar), or sign out without backing up.
+  const [backUpFirst, setBackUpFirst] = useState(true);
+  const [signOutProgress, setSignOutProgress] = useState<BackupProgress | null>(null);
+  const openSignOut = () => (setSignOutProblem(null), setEraseText(''), setRemoveData(true), setBackUpFirst(true), setSignOutProgress(null), setSheet('signout'));
   const doSignOut = async (backUpFirst: boolean) => {
     setBusy(true);
     try {
       if (backUpFirst) {
-        const r = await backupNow(backupDeps()).catch((e: unknown) => e);
+        const r = await backupNow(backupDeps(), { onProgress: setSignOutProgress })
+          .catch((e: unknown) => e)
+          .finally(() => setSignOutProgress(null));
         if (!(r && typeof r === 'object' && 'ok' in r && r.ok)) {
           setSignOutProblem(backupProblem(r));
           return;
@@ -302,22 +308,29 @@ export default function SettingsScreen() {
             detail={s.removeDataDetail}
             onPress={() => (setRemoveData((v) => !v), setSignOutProblem(null), setEraseText(''))}
           />
-          {!removeData ? (
+          {!removeData ? <Text style={[styles.sheetNote, { color: colors.inkMuted }]}>{s.signOutKeepNote}</Text> : null}
+          {device.backupEnabled ? (
             <>
-              <Text style={[styles.sheetNote, { color: colors.inkMuted }]}>{s.signOutKeepNote}</Text>
-              <Button label={busy ? strings.backup.working : s.signOut} style={{ backgroundColor: colors.expense }} disabled={busy} onPress={() => void doSignOut(false)} />
-            </>
-          ) : device.backupEnabled ? (
-            <>
-              {device.lastBackupAt ? <Text style={[styles.sheetNote, { color: colors.inkMuted }]}>{s.signOutLastBackup(formatShortDate(device.lastBackupAt.slice(0, 10)))}</Text> : null}
+              {/* Owner, Nov 15: back up first, or sign out without backing up. */}
+              <Check checked={backUpFirst} title={s.signOutBackUpFirst} detail={s.signOutBackUpFirstDetail} onPress={() => (setBackUpFirst(true), setSignOutProblem(null))} />
+              <Check
+                checked={!backUpFirst}
+                title={s.signOutSkipBackup}
+                detail={s.signOutSkipBackupDetail(device.lastBackupAt ? formatShortDate(device.lastBackupAt.slice(0, 10)) : null)}
+                onPress={() => (setBackUpFirst(false), setSignOutProblem(null))}
+              />
+              {!backUpFirst && removeData ? <Note tone="red">{s.signOutSkipLoses}</Note> : null}
+              {signOutProgress ? <BackupProgressCard progress={signOutProgress} /> : null}
               {signOutProblem ? <Note tone="red">{s.signOutBackupFailed(signOutProblem)}</Note> : null}
               <Button
-                label={busy ? strings.backup.working : signOutProblem ? s.signOutAnyway : s.backUpAndSignOut}
+                label={busy ? strings.backup.working : signOutProblem ? s.signOutAnyway : backUpFirst ? s.backUpAndSignOut : s.signOut}
                 style={{ backgroundColor: colors.expense }}
                 disabled={busy}
-                onPress={() => void doSignOut(!signOutProblem)}
+                onPress={() => void doSignOut(backUpFirst && !signOutProblem)}
               />
             </>
+          ) : !removeData ? (
+            <Button label={busy ? strings.backup.working : s.signOut} style={{ backgroundColor: colors.expense }} disabled={busy} onPress={() => void doSignOut(false)} />
           ) : (
             <>
               <Note tone="red">{s.signOutNoBackup}</Note>

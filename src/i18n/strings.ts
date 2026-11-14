@@ -110,7 +110,14 @@ export const strings = {
     removeDataItem: 'Remove my data from this phone',
     removeDataDetail: 'Transactions, accounts, people, attachments and settings. Sign in again to restore them from your backup.',
     signOutKeepNote: 'Your data stays on this phone, and Sarraf asks you to sign in again before you go on. Backups pause until then.',
-    signOutLastBackup: (date: string) => `Last backup: ${date}. Sarraf backs up once more before signing out.`,
+    signOutLastBackup: (date: string) => `Last backup: ${date}.`,
+    // Owner, Nov 15: back up first, or sign out without backing up; a progress bar while it backs up.
+    signOutBackUpFirst: 'Back up first',
+    signOutBackUpFirstDetail: 'Everything up to now goes to your Google Drive backup, then you’re signed out.',
+    signOutSkipBackup: 'Sign out without backing up',
+    signOutSkipBackupDetail: (date: string | null) =>
+      date ? `Your backup stays as it was on ${date}.` : 'Your backup stays as it was.',
+    signOutSkipLoses: 'Anything you changed since the last backup won’t be in it, and it’s removed from this phone.',
     backUpAndSignOut: 'Back up and sign out',
     signOutBackupFailed: (problem: string) => `The backup didn’t work, so nothing was signed out. ${problem}`,
     signOutAnyway: 'Sign out anyway (changes since the last backup are lost)',

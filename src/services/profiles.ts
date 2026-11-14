@@ -47,8 +47,17 @@ export async function removeSaved(file: string): Promise<void> {
   saveProfiles(withoutFile(loadProfiles(), file));
 }
 
-const dbDir = () => new Directory(defaultDatabaseDirectory);
-const dbExists = (file: string) => new File(dbDir(), file).exists;
+/** expo-sqlite gives a plain path; expo-file-system wants a file:// URI (a plain path throws on use). */
+const dbDirUri = () => (defaultDatabaseDirectory.startsWith('file://') ? defaultDatabaseDirectory : `file://${defaultDatabaseDirectory}`);
+const dbDir = () => new Directory(dbDirUri());
+const dbExists = (file: string) => {
+  try {
+    return new File(dbDir(), file).exists;
+  } catch {
+    // Can't tell: treat it as there, so saved data is never forgotten or swept by mistake.
+    return true;
+  }
+};
 
 /** The file and its write-ahead log and journal: nothing of it stays behind. */
 function deleteDbLeftovers(file: string): void {
