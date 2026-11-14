@@ -109,7 +109,7 @@ export default function PlansScreen() {
 
       <BottomSheet visible={codeOpen} onClose={() => setCodeOpen(false)} title={s.codeTitle}>
         <View style={{ gap: 12 }}>
-          <Text style={[styles.itemText, { color: colors.inkSecondary }]}>{s.codeBody}</Text>
+          <Text style={[styles.codeBody, { color: colors.inkSecondary }]}>{s.codeBody}</Text>
           <Field label={s.codeLabel} value={code} onChangeText={(v) => (setCode(v), setCodeError(null))} autoCapitalize="characters" autoCorrect={false} placeholder="SARRAF-XXXX-XXXX" />
           {codeError ? <Text style={[styles.small, { color: colors.expense }]}>{codeError}</Text> : null}
           <Button label={busy ? strings.backup.working : s.codeUse} disabled={busy || !code.trim()} onPress={() => void redeem()} />
@@ -127,4 +127,5 @@ const styles = StyleSheet.create({
   small: { fontFamily: fonts.sans, fontSize: 11.5, lineHeight: 16 },
   item: { flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   itemText: { flex: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
+  codeBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
 });
