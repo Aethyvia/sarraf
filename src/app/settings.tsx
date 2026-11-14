@@ -11,7 +11,7 @@ import { Note } from '@/components/start/StartPage';
 import { FREE_LIMITS, usage } from '@/data/limits';
 import { deleteChosen, signOut, type DeleteChoice } from '@/data/sarraf-account';
 import { deleteAllStoredFiles } from '@/services/attachments';
-import { backupDeps } from '@/services/cloud';
+import { backupDeps, cloud } from '@/services/cloud';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
 import { currentUser, getDeviceState } from '@/data/backup-flow';
@@ -30,7 +30,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function Check({ checked, locked, title, detail, onPress }: { checked: boolean; locked?: boolean; title: string; detail: string; onPress?: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable onPress={onPress} disabled={locked} accessibilityRole="checkbox" accessibilityState={{ checked, disabled: locked }} style={styles.check}>
+    <Pressable onPress={onPress} disabled={locked} accessibilityRole="checkbox" accessibilityState={{ checked, disabled: locked }} style={[styles.check, locked && { opacity: 0.45 }]}>
       <View style={[styles.box, checked ? { backgroundColor: colors.expense } : { borderWidth: 1.5, borderColor: colors.border }]}>
         {checked ? <Icon name="tick" size={12} color="#FFFFFF" strokeWidth={3} /> : null}
       </View>
@@ -54,7 +54,21 @@ export default function SettingsScreen() {
   const [deleteText, setDeleteText] = useState('');
   // Each part is chosen on its own (owner, Nov 12). Starts with just the account ticked.
   const [deleting, setDeleting] = useState<DeleteChoice>({ account: true, phone: false, drive: false });
-  const openDelete = () => (setDeleteText(''), setDeleting({ account: true, phone: false, drive: false }), setSheet('delete'));
+  // Greyed out when there's nothing to delete (owner, Nov 14): a guest has no account or backup; a signed-in person may have no backup.
+  const [hasBackup, setHasBackup] = useState<boolean | null>(null);
+  const openDelete = () => {
+    setDeleteText('');
+    setDeleting({ account: !!user, phone: !user, drive: false });
+    setHasBackup(user ? (device.lastBackupAt ? true : null) : false);
+    setSheet('delete');
+    // Another phone may have made the backup: the record says so.
+    if (user && !device.lastBackupAt) {
+      void cloud
+        .getRecord(user)
+        .then((r) => setHasBackup(!!r))
+        .catch(() => setHasBackup(null));
+    }
+  };
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const plan = usePlan();
@@ -176,7 +190,11 @@ export default function SettingsScreen() {
           <Text style={[styles.sheetNote, { color: colors.inkMuted, textAlign: 'center', paddingTop: 0 }]}>{s.signOutNote}</Text>
           <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
         </View>
-      ) : null}
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <LinkButton label={s.deleteEllipsis} danger onPress={openDelete} />
+        </View>
+      )}
 
       <BottomSheet visible={sheet === 'fiscal'} onClose={() => setSheet(null)} title={s.fiscalYearStarts}>
         <ScrollView style={{ maxHeight: 480 }}>
@@ -231,12 +249,19 @@ export default function SettingsScreen() {
             <Text style={[styles.body, { color: colors.inkSecondary }]}>{s.deleteWhatBody}</Text>
             <Check
               checked={deleting.account}
+              locked={!user}
               title={s.deleteAccountItem}
-              detail={s.deleteAccountDetail(user?.email ?? '')}
+              detail={user ? s.deleteAccountDetail(user.email) : s.deleteNoAccount}
               onPress={() => setDeleting((d) => ({ ...d, account: !d.account }))}
             />
             <Check checked={deleting.phone} title={s.deletePhoneItem} detail={s.deletePhoneDetail} onPress={() => setDeleting((d) => ({ ...d, phone: !d.phone }))} />
-            <Check checked={deleting.drive} title={s.deleteDriveItem} detail={s.deleteDriveDetail} onPress={() => setDeleting((d) => ({ ...d, drive: !d.drive }))} />
+            <Check
+              checked={deleting.drive}
+              locked={hasBackup === false}
+              title={s.deleteDriveItem}
+              detail={!user ? s.deleteNoBackupGuest : hasBackup === false ? s.deleteNoBackup : s.deleteDriveDetail}
+              onPress={() => setDeleting((d) => ({ ...d, drive: !d.drive }))}
+            />
             {deleting.account && !deleting.phone ? <Note tone="teal">{s.keepsPhoneData}</Note> : null}
             {deleting.phone && !deleting.drive && !device.lastBackupAt ? <Note tone="red">{s.noBackupWarn}</Note> : null}
             {deleting.account ? (
