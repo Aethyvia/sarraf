@@ -19,9 +19,10 @@ const targets = new Map<string, View>();
 export function TourTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const ref = useRef<View>(null);
   useEffect(() => {
-    if (ref.current) targets.set(id, ref.current);
+    const node = ref.current;
+    if (node) targets.set(id, node);
     return () => {
-      if (targets.get(id) === ref.current) targets.delete(id);
+      if (targets.get(id) === node) targets.delete(id);
     };
   }, [id]);
   return (
@@ -84,15 +85,13 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, enabled, focused]);
 
-  // Leaving the screen mid-tour: put it away (it shows again next visit).
-  useEffect(() => {
-    if (!focused && shown) {
-      if (activeTour === id) activeTour = null;
-      setShown(null);
-    }
-  }, [focused, shown, id]);
+  // Leaving the screen mid-tour: put it away (it shows again next visit). Done while rendering, not in an effect.
+  if (!focused && shown) {
+    if (activeTour === id) activeTour = null;
+    setShown(null);
+  }
 
-  if (!shown) return null;
+  if (!shown || !focused) return null;
   const finish = () => {
     if (activeTour === id) activeTour = null;
     markTourSeen(db, id);
