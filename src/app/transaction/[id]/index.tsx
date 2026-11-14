@@ -13,7 +13,7 @@ import { amountSign, rowTitle } from '@/components/transaction/TransactionRow';
 import { BottomSheet, Button, Card, Header, IconChip, LinkButton, Screen } from '@/components/ui';
 import { vsMarketPercent } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
-import { chargedCurrencyOf } from '@/data/owing';
+import { chargedCurrencyOf , chargesOf } from '@/data/owing';
 import { splitOf } from '@/data/splits';
 import { cancelTransaction } from '@/data/review';
 import { deleteTransaction, deletionSet, restoreCancelled } from '@/data/transaction-ops';
@@ -22,7 +22,8 @@ import { db } from '@/db/client';
 import { accounts, categories, ledgers, people, transactionCharges, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
-import { dec } from '@/lib/money';
+import { dec, toDecimalString } from '@/lib/money';
+import { parts } from '@/components/parts';
 import { deleteStoredFiles, formatBytes } from '@/services/attachments';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
@@ -122,6 +123,16 @@ export default function TransactionDetailScreen() {
       `${s.reimbursement[t.reimbursementStatus]}${t.expectedFromPersonId ? s.fromPerson(data.people.get(t.expectedFromPersonId) ?? '') : ''}`,
       t.reimbursementStatus === 'reimbursed' ? colors.income : undefined,
     ]);
+    // Its separate charges are expected back too: show how much of them came back (owner, Nov 15).
+    const ch = chargesOf(db, t);
+    if (ch.total.gt(0)) {
+      const money = (v: string) => <Money value={v} currency={ch.currency} allowCompact={false} />;
+      fields.push([
+        s.chargesBackLabel,
+        <>{parts(ch.back.gte(ch.total) ? s.chargesAllBack(money(toDecimalString(ch.total))) : s.chargesSomeBack(money(toDecimalString(ch.back)), money(toDecimalString(ch.total))))}</>,
+        ch.back.gte(ch.total) ? colors.income : undefined,
+      ]);
+    }
   }
   if (vs) fields.push([s.vsMarket, strings.add.signedPct(vs)]);
   // The first line of the notes is the title when nothing else names it; show only the rest.

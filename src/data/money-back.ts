@@ -6,7 +6,7 @@ import { nowIso, today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { dec, isDecimalString, rateFromAmounts, toDecimalString, type DecimalString } from '@/lib/money';
 import { DataError } from './errors';
-import { chargedCurrencyOf, outstandingOf } from './owing';
+import { chargedCurrencyOf, chargesOf, outstandingOf } from './owing';
 
 export type MoneyBackKind = 'refund' | 'reimbursement';
 
@@ -52,17 +52,22 @@ export function addMoneyBack(db: AppDb, draft: MoneyBackDraft, today: string = t
       countsAs = toDecimalString(dec(draft.countsAs));
     }
 
-    // All money back together (refunds and reimbursements) can't be more than the original
-    // (owner, Nov 14: a ₨1,500 bill got ₨1,200 back and then a ₨350 refund).
-    const back = tx
-      .select({ c: transactions.countsAsAmount })
+    // What came back pays the expense first; for a reimbursement, anything beyond that is its
+    // separate charges coming back (owner, Nov 15). Never more than expense + those charges.
+    const expenseBack = tx
+      .select({ c: transactions.countsAsAmount, ch: transactions.chargesBack })
       .from(transactions)
       .where(and(eq(transactions.parentId, parent.id), inArray(transactions.linkType, ['refund', 'reimbursement']), isNull(transactions.deletedAt)))
       .all()
-      .reduce((sum, r) => sum.plus(dec(r.c ?? '0')), dec('0'));
-    if (dec(countsAs).plus(back).gt(dec(parent.accountAmount ?? parent.amount))) {
-      throw new DataError('invalid_amount', draft.kind === 'refund' ? 'A refund can’t be more than what’s left of the original' : 'Money back can’t be more than the original');
+      .reduce((sum, r) => sum.plus(dec(r.c ?? '0')).minus(dec(r.ch ?? '0')), dec('0'));
+    const expenseLeft = dec(parent.accountAmount ?? parent.amount).minus(expenseBack);
+    const charges = draft.kind === 'reimbursement' ? chargesOf(tx, parent) : null;
+    const room = expenseLeft.plus(charges?.left ?? 0);
+    if (dec(countsAs).gt(room)) {
+      throw new DataError('invalid_amount', draft.kind === 'refund' ? 'A refund can’t be more than what’s left of the original' : 'That’s more than the expense and its charges');
     }
+    const over = dec(countsAs).minus(expenseLeft.isNegative() ? dec('0') : expenseLeft);
+    const chargesBack = charges && over.gt(0) ? toDecimalString(over) : null;
 
     const id = newId();
     tx.insert(transactions)
@@ -79,6 +84,7 @@ export function addMoneyBack(db: AppDb, draft: MoneyBackDraft, today: string = t
         parentId: parent.id,
         linkType: draft.kind,
         countsAsAmount: countsAs,
+        chargesBack,
         countsAsRate: account.currency !== originalCurrency ? rateFromAmounts(amount, countsAs) : null,
         notes: draft.notes?.trim() || null,
       })
@@ -115,7 +121,8 @@ export function syncReimbursementStatus(db: AppDb, parentIds: string[]): void {
     .all();
   for (const p of parents) {
     const { outstanding } = outstandingOf(db, p);
-    const charged = dec(p.accountAmount ?? p.amount);
+    // Expected: the expense and its separate charges (owner, Nov 15).
+    const charged = dec(p.accountAmount ?? p.amount).plus(chargesOf(db, p).total);
     const status =
       outstanding.lte(0) ? 'reimbursed' : p.reimbursementStatus === 'written_off' ? 'written_off' : outstanding.lt(charged) ? 'partly_back' : 'awaiting';
     if (status !== p.reimbursementStatus) {
@@ -142,7 +149,7 @@ export function refundableLeft(db: AppDb, parentId: string): { currency: string;
   // What came back already, as a refund or a reimbursement.
   const refunded = moneyBackOf(db, parentId)
     .filter((r) => r.linkType === 'refund' || r.linkType === 'reimbursement')
-    .reduce((sum, r) => sum.plus(dec(r.countsAsAmount ?? '0')), dec('0'));
+    .reduce((sum, r) => sum.plus(dec(r.countsAsAmount ?? '0')).minus(dec(r.chargesBack ?? '0')), dec('0'));
   return { currency: chargedCurrencyOf(db, parent), amount: toDecimalString(dec(parent.accountAmount ?? parent.amount).minus(refunded)) };
 }
 

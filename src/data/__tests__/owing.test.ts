@@ -357,3 +357,69 @@ describe('a refund on a split you paid (Decided Nov 8: option a)', () => {
     expect(w.balance(w.john)).toEqual({ USD: '0' });
   });
 });
+
+describe('reimbursable expense with separate charges (owner, Nov 15)', () => {
+  const bill = (w: Awaited<ReturnType<typeof world>>) =>
+    w.save({
+      accountId: w.pkr,
+      currency: 'PKR',
+      amount: '5000',
+      reimbursable: true,
+      charges: [{ type: 'bank_charge', amount: '200', currency: 'PKR', deduction: 'charged_separately', accountId: w.pkr }],
+    });
+
+  it('expects the expense and its charges back; a partial payment pays the expense first', async () => {
+    const w = await world();
+    const exp = bill(w);
+    const { outstandingOf, chargesOf } = jest.requireActual('../owing') as typeof import('../owing');
+    expect(outstandingOf(w.db, w.row(exp)).outstanding.toString()).toBe('5200');
+    const first = addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '3000', date: '2026-09-25' }, TODAY);
+    expect(w.row(first).chargesBack).toBeNull();
+    expect(w.row(exp).reimbursementStatus).toBe('partly_back');
+    const second = addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '2100', date: '2026-09-26' }, TODAY);
+    expect(w.row(second).chargesBack).toBe('100');
+    expect(chargesOf(w.db, w.row(exp)).back.toString()).toBe('100');
+    expect(outstandingOf(w.db, w.row(exp)).outstanding.toString()).toBe('100');
+    expect(w.row(exp).reimbursementStatus).toBe('partly_back');
+    addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '100', date: '2026-09-27' }, TODAY);
+    expect(w.row(exp).reimbursementStatus).toBe('reimbursed');
+  });
+
+  it('never more than the expense and its charges', async () => {
+    const w = await world();
+    const exp = bill(w);
+    expect(() => addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '5201', date: '2026-09-25' }, TODAY)).toThrow(
+      expect.objectContaining({ code: 'invalid_amount' }),
+    );
+  });
+
+  it('a refund still only covers the expense itself', async () => {
+    const w = await world();
+    const exp = bill(w);
+    expect(refundableLeft(w.db, exp).amount).toBe('5000');
+    addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '5200', date: '2026-09-25' }, TODAY);
+    expect(refundableLeft(w.db, exp).amount).toBe('0');
+  });
+});
+
+describe('charges that came back lower Fees & charges (owner, Nov 15)', () => {
+  it('the expense part lowers its category; the charges part lowers Fees & charges', async () => {
+    const { flows } = jest.requireActual('../spending') as typeof import('../spending');
+    const { feesCategoryId } = jest.requireActual('../categories') as typeof import('../categories');
+    const w = await world();
+    const travel = w.category('Travel');
+    const exp = w.save({
+      accountId: w.pkr,
+      currency: 'PKR',
+      amount: '5000',
+      categoryId: travel,
+      reimbursable: true,
+      charges: [{ type: 'bank_charge', amount: '200', currency: 'PKR', deduction: 'charged_separately', accountId: w.pkr }],
+    });
+    addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '5200', date: '2026-09-25' }, TODAY);
+    const f = flows(w.db, { from: '2026-09-01', to: '2026-09-30', currency: 'PKR' });
+    const by = Object.fromEntries(f.spending.map((x) => [x.categoryId, x.amount]));
+    expect(by[travel] ?? '0').toBe('0');
+    expect(by[feesCategoryId(w.db)] ?? '0').toBe('0');
+  });
+});

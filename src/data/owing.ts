@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { accounts, ledgers, people, personEntries, transactions } from '@/db/schema';
+import { accounts, ledgers, people, personEntries, transactionCharges, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { today as todayDate } from '@/lib/dates';
 import { newId } from '@/lib/id';
@@ -257,8 +257,33 @@ export function outstandingOf(db: AppDb, t: typeof transactions.$inferSelect): {
     .where(and(eq(transactions.parentId, t.id), eq(transactions.linkType, 'reimbursement'), isNull(transactions.deletedAt)))
     .all()
     .reduce((s, r) => s.plus(dec(r.countsAs ?? '0')), new Decimal(0));
-  const charged = dec(t.accountAmount ?? t.amount);
+  // Expected back: the expense and its separate charges (owner, Nov 15).
+  const charged = dec(t.accountAmount ?? t.amount).plus(chargesOf(db, t).total);
   return { currency: chargedCurrencyOf(db, t), outstanding: charged.minus(back) };
+}
+
+/**
+ * An expense's separate charges paid from its own account, in its currency,
+ * and how much of them already came back with a reimbursement (owner, Nov 15).
+ */
+export function chargesOf(db: AppDb, parent: typeof transactions.$inferSelect): { total: DecimalValue; back: DecimalValue; left: DecimalValue; currency: string } {
+  const currency = chargedCurrencyOf(db, parent);
+  const total = parent.accountId
+    ? db
+        .select({ a: transactionCharges.amount })
+        .from(transactionCharges)
+        .where(and(eq(transactionCharges.transactionId, parent.id), eq(transactionCharges.deduction, 'charged_separately'), eq(transactionCharges.accountId, parent.accountId)))
+        .all()
+        .reduce((sum, r) => sum.plus(dec(r.a)), new Decimal(0))
+    : new Decimal(0);
+  const back = db
+    .select({ ch: transactions.chargesBack })
+    .from(transactions)
+    .where(and(eq(transactions.parentId, parent.id), eq(transactions.linkType, 'reimbursement'), isNull(transactions.deletedAt)))
+    .all()
+    .reduce((sum, r) => sum.plus(dec(r.ch ?? '0')), new Decimal(0));
+  const left = total.minus(back);
+  return { total, back, left: left.isNegative() ? new Decimal(0) : left, currency };
 }
 
 /** The currency an expense was charged in: its account's, or the bill's when someone else paid. */

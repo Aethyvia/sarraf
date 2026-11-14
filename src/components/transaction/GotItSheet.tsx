@@ -8,7 +8,7 @@ import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { BottomSheet, Button, LinkButton } from '@/components/ui';
 import { writeOff } from '@/data/money-back';
-import { chargedCurrencyOf, outstandingOf } from '@/data/owing';
+import { chargedCurrencyOf, chargesOf, outstandingOf } from '@/data/owing';
 import { db } from '@/db/client';
 import { people, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -32,7 +32,8 @@ export function GotItSheet({ expenseId, onClose }: { expenseId: string | null; o
       const t = d.select().from(transactions).where(eq(transactions.id, expenseId)).get();
       if (!t) return null;
       const person = t.expectedFromPersonId ? (d.select({ name: people.name }).from(people).where(eq(people.id, t.expectedFromPersonId)).get()?.name ?? null) : null;
-      return { t, person, currency: chargedCurrencyOf(d, t), left: toDecimalString(outstandingOf(d, t).outstanding) };
+      const charges = chargesOf(d, t);
+      return { t, person, currency: chargedCurrencyOf(d, t), left: toDecimalString(outstandingOf(d, t).outstanding), charges };
     },
     [expenseId],
   );
@@ -75,6 +76,18 @@ export function GotItSheet({ expenseId, onClose }: { expenseId: string | null; o
       ) : info ? (
         <View style={{ gap: 12 }}>
           <Text style={[styles.sub, { color: colors.inkMuted }]}>{parts(s.expectedFrom(title || s.uncategorized, left, info.person))}</Text>
+          {/* Separate charges are expected back too; what comes back pays the expense first (owner, Nov 15). */}
+          {info.charges.total.gt(0) ? (
+            <Text style={[styles.sub, { color: colors.inkMuted, marginTop: -4 }]}>
+              {parts(
+                s.withCharges(
+                  <Money value={info.t.accountAmount ?? info.t.amount} currency={info.currency} allowCompact={false} style={styles.mono} />,
+                  <Money value={toDecimalString(info.charges.total)} currency={info.currency} allowCompact={false} style={styles.mono} />,
+                  info.charges.back.gt(0) ? <Money value={toDecimalString(info.charges.back)} currency={info.currency} allowCompact={false} style={styles.mono} /> : null,
+                ),
+              )}
+            </Text>
+          ) : null}
           {form.actionUi}
           {form.rows}
           <LinkButton danger label={s.writeOff} onPress={() => setConfirmingWriteOff(true)} />

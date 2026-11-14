@@ -757,6 +757,9 @@ export const strings = {
     deleteN: (n: number) => (n === 1 ? 'Delete' : `Delete ${n} entries`),
     keep: (n: number) => (n === 1 ? 'Keep it' : 'Keep them'),
     deletedToast: 'Deleted',
+    chargesBackLabel: 'Charges back',
+    chargesAllBack: (total: ReactNode): ReactNode[] => ['All ', total, ' back'],
+    chargesSomeBack: (back: ReactNode, total: ReactNode): ReactNode[] => [back, ' of ', total, ' back'],
   },
   fixBalance: {
     title: 'Fix balance',
@@ -1030,6 +1033,8 @@ export const strings = {
     countsAs: 'COUNTS AS (IN THE EXPENSE’S CURRENCY)',
     atRate: (rate: string) => `at ${rate}, today`,
     stillExpected: 'Still expected after this',
+    withCharges: (expense: ReactNode, charges: ReactNode, back: ReactNode | null): ReactNode[] =>
+      back ? ['Expense ', expense, ' + charges ', charges, ' (', back, ' of the charges back)'] : ['Expense ', expense, ' + charges ', charges, '. What comes back pays the expense first.'],
     statuses: { awaiting: 'Waiting', partly_back: 'Partly back', reimbursed: 'Reimbursed', written_off: 'Written off' },
     date: 'DATE',
     today: (date: string) => `Today · ${date}`,

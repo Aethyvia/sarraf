@@ -112,7 +112,12 @@ export function flows(db: AppDb, filter: FlowFilter): Flows {
       const p = parents.get(t.parentId);
       if (!p || !inLedger(p)) continue;
       const pc = p.accountId ? currencyOf.get(p.accountId) : p.currency;
-      if (pc === filter.currency) addTo(spend, top(p.categoryId), dec(t.countsAsAmount ?? t.accountAmount ?? t.amount).negated(), t.id);
+      if (pc === filter.currency) {
+        // The part that covered the expense's separate charges lowers Fees & charges instead (owner, Nov 15).
+        const chargesPart = dec(t.chargesBack ?? '0');
+        addTo(spend, top(p.categoryId), dec(t.countsAsAmount ?? t.accountAmount ?? t.amount).minus(chargesPart).negated(), t.id);
+        if (chargesPart.gt(0)) addTo(spend, fees, chargesPart.negated(), t.id);
+      }
       continue;
     }
     if (!inLedger(t)) continue;

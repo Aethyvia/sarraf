@@ -274,6 +274,8 @@ export const transactions = sqliteTable(
     linkType: text('link_type', { enum: ['refund', 'reimbursement'] }),
     /** Linked money back: what it counts as in the original expense's currency, and the rate used. */
     countsAsAmount: money('counts_as_amount'),
+    /** A reimbursement that also covered the expense's separate charges: that part, in the expense's currency (owner, Nov 15). */
+    chargesBack: money('charges_back'),
     countsAsRate: money('counts_as_rate'),
     /**
      * A transfer with a person paid in another currency (Decided Nov 12): the
