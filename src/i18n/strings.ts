@@ -487,8 +487,6 @@ export const strings = {
     tax: 'tax',
     convertedAt: (amount: ReactNode, rate: string): ReactNode[] => [amount, ` converted at ${rate}`],
     arrivesIn: (account: string) => `Arrives in ${account}`,
-    goesUpBy: (account: string) => `${account.toUpperCase()} GOES UP BY`,
-    goesUpDetail: (arrives: ReactNode, onTop: ReactNode): ReactNode[] => [arrives, ' arrives, then ', onTop, ' separate comes out'],
     addCharge: '+ Add charge',
     none: 'No charges. Fees and taxes on this transaction go here.',
     remove: 'Remove',

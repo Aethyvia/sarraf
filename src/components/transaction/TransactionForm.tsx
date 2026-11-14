@@ -443,8 +443,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     });
   }
 
-  const onTopOnReceiving = form.charges.filter((c) => c.deduction === 'charged_separately' && c.accountId === (form.kind === 'transfer' ? toAccount?.id : fromAccount?.id));
-
   // ── Rows ──
   const accountChip = (a: { icon: string; color: string }) => (
     <View style={[styles.rowIcon, { backgroundColor: swatch(a.color).bg }]}>
@@ -722,23 +720,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   const r = preview.result;
   // The account the charges page shows: where the money arrives (income, transfer) or leaves (expense).
   const chargesAccount = form.kind === 'transfer' ? (toAccount ?? fromAccount) : fromAccount;
-  const goesUp =
-    (form.kind === 'income' || (form.kind === 'transfer' && toAccount)) && r?.netAmount && receivingName ? (
-      <View style={[styles.goesUp, { backgroundColor: colors.accentSoft }]}>
-        <Text style={[styles.goesUpLabel, { color: colors.accent }]}>{strings.receipt.goesUpBy(receivingName)}</Text>
-        <Money value={r.netAmount} currency={receivingCurrency} allowCompact={false} style={[styles.goesUpAmount, { color: colors.ink }]} />
-        {onTopOnReceiving.length && r.arrives ? (
-          <Text style={[styles.goesUpDetail, { color: colors.accent }]}>
-            {parts(
-              strings.receipt.goesUpDetail(
-                <MoneyInline value={r.arrives} currency={receivingCurrency} />,
-                <MoneyInline value={add(...onTopOnReceiving.map((c) => c.amount))} currency={receivingCurrency} />,
-              ),
-            )}
-          </Text>
-        ) : null}
-      </View>
-    ) : null;
 
 
 
@@ -988,7 +969,6 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
                   {strings.charge.exceed}
                 </RowNote>
               ) : null}
-              {goesUp}
             </ScrollView>
           </View>
           {chargeEdit ? (
@@ -1120,10 +1100,6 @@ const styles = StyleSheet.create({
   goalText: { fontFamily: fonts.sansSemiBold, fontSize: 13 },
   discardBody: { fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19 },
   chargesPage: { flex: 1, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 16, gap: 11 },
-  goesUp: { borderRadius: 16, paddingHorizontal: 17, paddingVertical: 15 },
-  goesUpLabel: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
-  goesUpAmount: { fontFamily: fonts.mono, fontSize: 34, marginTop: 2 },
-  goesUpDetail: { fontFamily: fonts.sans, fontSize: 12, marginTop: 4 },
   converted: { fontFamily: fonts.sans, fontSize: 11.5, flexShrink: 1, textAlign: 'right' },
   convertedValue: { fontFamily: fonts.monoSemiBold, fontSize: 14 },
   notes: { borderRadius: 12, padding: 14, minHeight: 140, textAlignVertical: 'top', fontFamily: fonts.sans, fontSize: 14.5 },
