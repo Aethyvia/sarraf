@@ -38,11 +38,11 @@ describe('Delete backup picks only this account’s files (owner, Nov 14)', () =
   const other = 'bbbbbbbb-1111-2222-3333-444444444444';
   const att = 'cccccccc-1111-2222-3333-444444444444.bin';
   const check = (f: string) => isThisAccountsFile(f, `sarraf-backup-${me}.bin`, `att-${me}-`);
-  it('mine and the old shared names go; another account’s stay', () => {
+  it('only mine go; another account’s and the unsupported old shared names stay', () => {
     expect(check(`sarraf-backup-${me}.bin`)).toBe(true);
     expect(check(`att-${me}-${att}`)).toBe(true);
-    expect(check('sarraf-backup.bin')).toBe(true);
-    expect(check(`att-${att}`)).toBe(true);
+    expect(check('sarraf-backup.bin')).toBe(false);
+    expect(check(`att-${att}`)).toBe(false);
     expect(check(`sarraf-backup-${other}.bin`)).toBe(false);
     expect(check(`att-${other}-${att}`)).toBe(false);
   });

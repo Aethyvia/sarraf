@@ -95,7 +95,7 @@ export function getDeviceState(db: AppDb): DeviceState {
   return db.select().from(deviceState).where(eq(deviceState.id, 1)).get()!;
 }
 
-function setDeviceState(db: AppDb, values: Partial<DeviceState>): void {
+export function setDeviceState(db: AppDb, values: Partial<DeviceState>): void {
   db.update(deviceState).set(values).where(eq(deviceState.id, 1)).run();
 }
 

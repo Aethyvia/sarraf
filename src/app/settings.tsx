@@ -92,7 +92,8 @@ export default function SettingsScreen() {
   };
   const openDelete = () => {
     setDeleteText('');
-    setDeleting({ account: !!user, phone: !user, drive: false });
+    // Nothing ticked at first for a signed-in person; a guest has only this phone's data.
+    setDeleting({ account: false, phone: !user, drive: false, signOut: false, keepBackingUp: true });
     setHasBackup(user ? (device.lastBackupAt ? true : null) : false);
     setSheet('delete');
     // Another phone may have made the backup: the record says so.
@@ -357,17 +358,35 @@ export default function SettingsScreen() {
               locked={!user}
               title={s.deleteAccountItem}
               detail={user ? s.deleteAccountDetail(user.email) : s.deleteNoAccount}
-              onPress={() => setDeleting((d) => ({ ...d, account: !d.account }))}
+              // The account takes this phone's data and its backup with it (owner, Nov 14).
+              onPress={() => setDeleting((d) => (d.account ? { ...d, account: false } : { ...d, account: true, phone: true, drive: hasBackup !== false }))}
             />
-            <Check checked={deleting.phone} title={s.deletePhoneItem} detail={s.deletePhoneDetail} onPress={() => setDeleting((d) => ({ ...d, phone: !d.phone }))} />
+            <Check
+              checked={deleting.phone}
+              locked={deleting.account}
+              title={s.deletePhoneItem}
+              detail={deleting.account ? s.goesWithAccount : s.deletePhoneDetail}
+              onPress={() => setDeleting((d) => ({ ...d, phone: !d.phone }))}
+            />
+            {deleting.phone && !deleting.account && user ? (
+              <View style={{ marginLeft: 34 }}>
+                <Check checked={!!deleting.signOut} title={s.alsoSignOut} detail={s.alsoSignOutDetail} onPress={() => setDeleting((d) => ({ ...d, signOut: !d.signOut }))} />
+              </View>
+            ) : null}
             <Check
               checked={deleting.drive}
-              locked={hasBackup === false}
+              locked={hasBackup === false || deleting.account}
               title={s.deleteDriveItem}
-              detail={!user ? s.deleteNoBackupGuest : hasBackup === false ? s.deleteNoBackup : s.deleteDriveDetail}
+              detail={!user ? s.deleteNoBackupGuest : hasBackup === false ? s.deleteNoBackup : deleting.account ? s.goesWithAccount : s.deleteDriveDetail}
               onPress={() => setDeleting((d) => ({ ...d, drive: !d.drive }))}
             />
-            {deleting.account && !deleting.phone ? <Note tone="teal">{s.keepsPhoneData}</Note> : null}
+            {deleting.drive && !deleting.account && !deleting.phone ? (
+              <View style={{ marginLeft: 34, gap: 4 }}>
+                <Text style={[styles.sheetNote, { color: colors.inkSecondary, paddingHorizontal: 0 }]}>{s.afterBackupDeleted}</Text>
+                <Check checked={!!deleting.keepBackingUp} title={s.keepBackingUp} detail={s.keepBackingUpDetail} onPress={() => setDeleting((d) => ({ ...d, keepBackingUp: true }))} />
+                <Check checked={!deleting.keepBackingUp} title={s.pauseBackup} detail={s.pauseBackupDetail} onPress={() => setDeleting((d) => ({ ...d, keepBackingUp: false }))} />
+              </View>
+            ) : null}
             {deleting.phone && !deleting.drive && !device.lastBackupAt ? <Note tone="red">{s.noBackupWarn}</Note> : null}
             {deleting.account ? (
               <View style={[styles.note, { backgroundColor: colors.warningSoft }]}>
@@ -386,8 +405,11 @@ export default function SettingsScreen() {
                 setBusy(true);
                 try {
                   await deleteChosen(backupDeps(), deleting, { deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
-                  if (deleting.account && deleting.phone) await afterEmptied();
+                  const signedOut = deleting.account || (deleting.phone && !!deleting.signOut);
+                  if (signedOut) await afterEmptied();
                   else recordOpenProfile();
+                  // Backup deleted, keep backing up: a new one is made now.
+                  if (deleting.drive && !deleting.account && !deleting.phone && deleting.keepBackingUp) void backupNow(backupDeps()).catch(() => {});
                   setSheet(null);
                   toast({ message: s.deletedWhat(deleting) });
                   if (deleting.account || deleting.phone) router.replace('/start');

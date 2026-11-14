@@ -48,13 +48,12 @@ async function driveProblem(res: Response): Promise<Error> {
 }
 
 /**
- * Files Delete backup removes: this account's backup and attachments, plus the
- * old shared names from before Nov 14 (sarraf-backup.bin, att-<one id>.bin).
- * Another account's files (att-<their id>-…) are never matched.
+ * Files Delete backup removes: this account's backup and attachments only.
+ * Old shared names from before Nov 14 aren't supported (council, owner Nov 14:
+ * pre-release, only test backups had them), and another account's files are never matched.
  */
 export function isThisAccountsFile(file: string, backupName: string, attachmentPrefix: string): boolean {
-  if (file === backupName || file.startsWith(attachmentPrefix)) return true;
-  return file === 'sarraf-backup.bin' || /^att-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.bin$/i.test(file);
+  return file === backupName || file.startsWith(attachmentPrefix);
 }
 
 async function online<T>(run: () => Promise<T>): Promise<T> {
@@ -188,16 +187,7 @@ export function realCloud(config: RealCloudConfig): Cloud {
   }
   const backupName = async () => `sarraf-backup-${await ownerId()}.bin`;
   const attachmentPrefix = async () => `att-${await ownerId()}-`;
-  // Backups made before Nov 14 used one shared name; they're still read, and the next backup moves them to the new name.
-  const LEGACY_BACKUP = 'sarraf-backup.bin';
-  const LEGACY_ATTACHMENT = 'att-';
-  // The old shared file counts only for an account that has a backup on record: a deleted
-  // account's old backup is never offered to a new account (owner, Nov 14).
-  const hasRecord = async () => {
-    const { data } = await supabase.from('backup_records').select('user_id').eq('user_id', await ownerId()).maybeSingle();
-    return !!data;
-  };
-  const backupFile = async () => (await byName(await backupName())) ?? ((await hasRecord()) ? await byName(LEGACY_BACKUP) : null);
+  const backupFile = async () => byName(await backupName());
 
   async function session(): Promise<User> {
     const { data, error } = await online(() => supabase.auth.getUser());
@@ -324,8 +314,6 @@ export function realCloud(config: RealCloudConfig): Cloud {
 
     async uploadBackup(file) {
       await writeFile(await backupName(), file);
-      // Moved to this account's own name: the old shared file goes.
-      await removeFile(LEGACY_BACKUP).catch(() => {});
     },
 
     async listAttachments() {
@@ -335,7 +323,7 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
     uploadAttachment: async (name, file) => writeFile((await attachmentPrefix()) + name, file),
     async downloadAttachment(name) {
-      const file = (await byName((await attachmentPrefix()) + name)) ?? (await byName(LEGACY_ATTACHMENT + name));
+      const file = await byName((await attachmentPrefix()) + name);
       return file ? readFile(file.id) : null;
     },
     deleteAttachment: async (name) => removeFile((await attachmentPrefix()) + name),
@@ -361,7 +349,6 @@ export function realCloud(config: RealCloudConfig): Cloud {
 
     async deleteBackup() {
       // Only this Sarraf account's files: someone else's backup in the same Drive stays.
-      // Backups from before Nov 14 (one shared name, read as this account's backup) go too.
       const [name, prefix] = [await backupName(), await attachmentPrefix()];
       for (const f of await listFiles('trashed = false')) {
         if (isThisAccountsFile(f.name, name, prefix)) await drive(`/files/${f.id}`, { method: 'DELETE' });

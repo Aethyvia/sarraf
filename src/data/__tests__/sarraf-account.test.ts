@@ -61,34 +61,29 @@ describe('sign out and delete', () => {
   const NOW = { now: '2026-11-12T00:00:00Z' };
   const everything = { account: true, phone: true, drive: false };
 
-  it('delete account and phone: the account, the record and everything here; the Drive backup only if chosen', async () => {
+  it('deleting the Sarraf account takes this phone’s data and the Drive backup with it (owner, Nov 14)', async () => {
     const store = memoryStore();
     const p = await phone(store);
     await turnOnBackup(p, 'pw-12345678');
     await backupNow(p);
     let filesGone = false;
-    await deleteChosen(p, everything, { ...NOW, deleteFiles: () => (filesGone = true) });
+    await deleteChosen(p, { account: true, phone: false, drive: false }, { ...NOW, deleteFiles: () => (filesGone = true) });
     expect(filesGone).toBe(true);
     expect(p.db.select().from(accounts).all()).toHaveLength(0);
     expect(p.db.select().from(deviceState).get()!.userId).toBeNull();
     expect(await p.keyStore.get()).toBeNull();
     expect(await p.cloud.getRecord({ id: 'dev-user', email: '', method: 'dev' })).toBeNull();
-    expect((await lookInDrive(p)).header).not.toBeNull();
-
-    const q = await phone(store);
-    await deleteChosen(q, { ...everything, drive: true }, { ...NOW, deleteFiles: () => {} });
-    expect((await lookInDrive(q)).header).toBeNull();
+    expect((await lookInDrive(p)).header).toBeNull();
   });
 
-  it('delete the account only: the data stays here, signed out, and the old backup keys go', async () => {
+  it('this phone’s data, signing out too: erased and signed out; the backup stays', async () => {
     const p = await phone();
     await turnOnBackup(p, 'pw-12345678');
     await backupNow(p);
-    await deleteChosen(p, { account: true, phone: false, drive: false }, { ...NOW, deleteFiles: () => {} });
-    expect(p.db.select().from(accounts).all()).toHaveLength(6);
-    expect(isSignedOut(p.db)).toBe(true);
-    expect(getDeviceState(p.db)).toMatchObject({ userId: null, signedOutUserId: 'dev-user', backupEnabled: false });
-    expect(await p.keyStore.get()).toBeNull();
+    await deleteChosen(p, { account: false, phone: true, drive: false, signOut: true }, { ...NOW, deleteFiles: () => {} });
+    expect(p.db.select().from(accounts).all()).toHaveLength(0);
+    expect(currentUser(p.db)).toBeNull();
+    expect((await lookInDrive(p)).header).not.toBeNull();
   });
 
   it('delete this phone’s data only: still signed in, the account and backup stay', async () => {
@@ -108,7 +103,18 @@ describe('sign out and delete', () => {
     expect(p.db.select().from(settings).get()!.deviceId).toBe(before);
   });
 
-  it('delete the Drive backup only: the record goes too and backup turns off here', async () => {
+  it('delete the Drive backup only, keep backing up: the old one goes and the next backup is a new one', async () => {
+    const p = await phone();
+    await turnOnBackup(p, 'pw-12345678');
+    await backupNow(p);
+    await deleteChosen(p, { account: false, phone: false, drive: true, keepBackingUp: true }, { ...NOW, deleteFiles: () => {} });
+    expect(getDeviceState(p.db)).toMatchObject({ backupEnabled: true, lastBackupAt: null });
+    expect((await lookInDrive(p)).header).toBeNull();
+    expect(await backupNow(p)).toMatchObject({ ok: true });
+    expect((await lookInDrive(p)).header).not.toBeNull();
+  });
+
+  it('delete the Drive backup only, turn backup off: the record goes too and backup turns off here', async () => {
     const p = await phone();
     await turnOnBackup(p, 'pw-12345678');
     await backupNow(p);

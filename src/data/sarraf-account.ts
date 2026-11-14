@@ -5,7 +5,7 @@ import { compactDatabase } from '@/db/compact';
 import { deviceState, settings } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import type { BackupDeps } from './backup-flow';
-import { currentUser, detachPreviousBackup, rememberSignIn } from './backup-flow';
+import { currentUser, detachPreviousBackup, rememberSignIn, setDeviceState } from './backup-flow';
 
 /**
  * Sign out (owner, Nov 14): a checkbox, ticked at first, removes this phone's
@@ -63,24 +63,30 @@ export function wipeLocalData(db: AppDb): void {
 }
 
 export interface DeleteChoice {
-  /** The sign-in, the backup record and the subscription row (Supabase). */
+  /** The sign-in, the backup record and the subscription row (Supabase). Takes the phone's data and the backup with it. */
   account: boolean;
   /** Everything Sarraf keeps on this phone. */
   phone: boolean;
   /** The backup file and attachments in Google Drive. */
   drive: boolean;
+  /** Phone data without the account: sign out too, or stay signed in (owner, Nov 14). */
+  signOut?: boolean;
+  /** Backup only: keep backing up this phone (a new backup starts), or turn backup off (owner, Nov 14). */
+  keepBackingUp?: boolean;
 }
 
 /**
- * Delete (owner, Nov 12 — replaces "account and phone always go together",
- * Spec §5): each part is chosen on its own.
- * - Account only: this phone's data stays, signed out; its backup keys and
- *   Drive go (they belonged to that account). Signing in again offers Keep.
- * - Phone only: the data is erased; still signed in, so setup (or restore) follows.
- * - Drive only: the backup and its record go; backup turns off on this phone.
+ * Delete (owner, Nov 14 — replaces Nov 12's independent choices):
+ * - The Sarraf account always takes this phone's data and the backup with it
+ *   (nothing is left under an account that no longer exists).
+ * - Phone data only: erased; the person chooses to stay signed in (setup or
+ *   restore follows) or sign out too.
+ * - Backup only: the backup and its record go; the person chooses to keep
+ *   backing up (a new backup is made) or turn backup off.
  * Doesn't cancel a store subscription (the sheet says so).
  */
-export async function deleteChosen(deps: BackupDeps, choice: DeleteChoice, options: { deleteFiles: () => void; now: string }): Promise<void> {
+export async function deleteChosen(deps: BackupDeps, picked: DeleteChoice, options: { deleteFiles: () => void; now: string }): Promise<void> {
+  const choice = picked.account ? { ...picked, phone: true, drive: true, signOut: true } : picked;
   const user = currentUser(deps.db);
   if (choice.drive) {
     await deps.cloud.deleteBackup();
@@ -88,19 +94,17 @@ export async function deleteChosen(deps: BackupDeps, choice: DeleteChoice, optio
   }
   if (choice.account && user) await deps.cloud.deleteAccount(user);
   if (choice.phone) {
+    if (choice.signOut && !choice.account) await deps.cloud.signOut();
     await deps.keyStore.clear();
     options.deleteFiles();
     wipeLocalData(deps.db);
-    // Keeping the account: stay signed in on the emptied phone.
-    if (!choice.account && user) rememberSignIn(deps.db, user);
+    // Staying signed in: the emptied phone carries on under this account.
+    if (!choice.signOut && user) rememberSignIn(deps.db, user);
     return;
   }
-  if (choice.account || choice.drive) await detachPreviousBackup(deps);
-  if (choice.account) {
-    deps.db
-      .update(deviceState)
-      .set({ signedOutUserId: user?.id ?? null, userId: null, userEmail: null, signInMethod: null, signedOutAt: options.now, plan: 'free', planRenewsAt: null, planCheckedAt: null })
-      .where(eq(deviceState.id, 1))
-      .run();
+  if (choice.drive) {
+    // Keep backing up: the same keys make a fresh backup; else backup turns off here.
+    if (choice.keepBackingUp) setDeviceState(deps.db, { lastBackupAt: null, backupFailingSince: null, backupProblem: null });
+    else await detachPreviousBackup(deps);
   }
 }
