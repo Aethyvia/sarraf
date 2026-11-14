@@ -15,6 +15,11 @@ let activeTour: string | null = null;
 /** Every TourTarget on screen, by id, so a tour can find and measure it. */
 const targets = new Map<string, View>();
 
+/** Lets the next tour show (this one finished or was put away). */
+function releaseTour(id: string): void {
+  if (activeTour === id) activeTour = null;
+}
+
 /** Marks a part of a screen a tour can point at. */
 export function TourTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const ref = useRef<View>(null);
@@ -87,7 +92,7 @@ export function Tour({ id, steps, delay = 600, enabled = true }: { id: string; s
 
   // Leaving the screen mid-tour: put it away (it shows again next visit). Done while rendering, not in an effect.
   if (!focused && shown) {
-    if (activeTour === id) activeTour = null;
+    releaseTour(id);
     setShown(null);
   }
 
