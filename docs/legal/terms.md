@@ -1,10 +1,8 @@
 # Sarraf — Terms of Use
 
-_Last updated: November 12, 2026_
+_Last updated: November 14, 2026_
 
-> Draft — to be reviewed before release. Items in [brackets] need the owner's details.
-
-These terms apply when you use Sarraf, made by [Aethyvia — legal name and address]. By creating a Sarraf account you agree to them. Questions: [contact email].
+These terms apply when you use Sarraf, made by Aethyvia. By creating a Sarraf account you agree to them. Questions: help@aethyvia.com.
 
 ## What Sarraf is
 
@@ -40,4 +38,4 @@ You can stop using Sarraf and delete your account at any time in Settings. We ma
 
 ## Law
 
-These terms are governed by the laws of [country / jurisdiction].
+These terms are governed by the laws of Pakistan.

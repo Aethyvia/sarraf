@@ -114,6 +114,22 @@ export function computeAmounts(input: AmountInput): AmountResult {
     return input.knownAmount;
   };
 
+  // A charge on its own (owner, Nov 14): the amount is 0 and only separate charges move money. Nothing converts.
+  if (amount.isZero()) {
+    if (inside.length) throw new AmountError('charges_exceed', 'The included charges are more than the amount');
+    const here = charges.filter((c) => c.deduction === 'charged_separately' && c.accountId && c.accountId === input.receivingAccountId);
+    const money = input.kind === 'expense' ? null : '0';
+    return {
+      converts,
+      rate: null,
+      accountAmount: '0',
+      toAmount: input.kind === 'transfer' ? '0' : null,
+      afterInside: money,
+      arrives: money,
+      netAmount: money === null ? null : toDecimalString(dec('0').minus(sum(here.map((c) => dec(c.amount))))),
+    };
+  }
+
   if (input.kind === 'expense') {
     // Inside charges are only a breakdown of what left the account.
     for (const c of inside) if (c.currency !== input.receivingCurrency) insideChargeInMain(c, input.currency);

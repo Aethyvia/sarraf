@@ -1,9 +1,8 @@
 {
-  "updated": "November 12, 2026",
-  "draft": "Draft — to be reviewed before release. Items in [brackets] need the owner's details.",
+  "updated": "November 14, 2026",
   "privacy": {
     "title": "Privacy Policy",
-    "intro": "Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by [Aethyvia — legal name and address]. Questions: [contact email].",
+    "intro": "Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by Aethyvia. Questions: help@aethyvia.com.",
     "sections": [
       { "heading": "The short version", "paragraphs": [
         "Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone. They are never sent to our servers.",
@@ -54,7 +53,7 @@
   },
   "terms": {
     "title": "Terms of Use",
-    "intro": "These terms apply when you use Sarraf, made by [Aethyvia — legal name and address]. By creating a Sarraf account you agree to them. Questions: [contact email].",
+    "intro": "These terms apply when you use Sarraf, made by Aethyvia. By creating a Sarraf account you agree to them. Questions: help@aethyvia.com.",
     "sections": [
       { "heading": "What Sarraf is", "paragraphs": [
         "Sarraf is a personal record-keeping app for money in several currencies. It is not a bank, payment service, exchange or financial adviser. It does not move money; it records what you enter."
@@ -80,7 +79,7 @@
         "You can stop using Sarraf and delete your account at any time in Settings. We may suspend accounts that misuse the service."
       ]},
       { "heading": "Law", "paragraphs": [
-        "These terms are governed by the laws of [country / jurisdiction]."
+        "These terms are governed by the laws of Pakistan."
       ]}
     ]
   }

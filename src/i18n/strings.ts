@@ -502,7 +502,7 @@ export const strings = {
     otherAccountDetail: 'Every account',
     check: 'Check this charge',
     checkCharges: 'Check charges',
-    amountFirst: 'Enter the amount first',
+    amountFirst: 'Enter the amount first (0 for a charge on its own)',
     rateFirst: 'Enter the rate first',
     exceed: 'Deducted charges are more than the amount. Lower them or raise the amount.',
     taxShort: 'Tax',

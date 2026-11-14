@@ -241,7 +241,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
 
   // What the draft would save, worked out on every render (a few synchronous reads).
   const preview: { result: AmountResult | null; error: string | null } = (() => {
-    if (isSavings || !amount || dec(amount).lte(0)) return { result: null, error: null };
+    if (isSavings || !amount || dec(amount).isNegative()) return { result: null, error: null };
     try {
       return { result: prepareTransaction(db, draftFromForm(liveForm, { amount, knownAmount: known, rate, mainCurrency })), error: null };
     } catch (e) {
@@ -305,10 +305,14 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
     });
   };
 
-  const canSave = isSavings ? !!(goal && goalAccount && amount && dec(amount).gt(0)) : !!amount && dec(amount).gt(0) && preview.error !== 'charges_exceed';
-  // Charges wait for the amount (and, across currencies, the rate): a charge with no base means nothing (council, owner Nov 13).
-  const amountReady = !!amount && dec(amount).gt(0);
-  const rateReady = !converts || (form.rateMode === 'rate_known' ? !!rate : !!known && dec(known).gt(0));
+  // 0 saves only as a charge on its own: separate charges and nothing else (owner, Nov 14).
+  const chargeOnly = !!amount && dec(amount).isZero() && form.charges.some((c) => c.deduction === 'charged_separately');
+  const canSave = isSavings
+    ? !!(goal && goalAccount && amount && dec(amount).gt(0))
+    : !!amount && (dec(amount).gt(0) || chargeOnly) && preview.error !== 'charges_exceed';
+  // Charges wait for an amount, 0 included (council, owner Nov 13–14); across currencies, also the rate.
+  const amountReady = !!amount && !dec(amount).isNegative();
+  const rateReady = !converts || (!!amount && dec(amount).isZero()) || (form.rateMode === 'rate_known' ? !!rate : !!known && dec(known).gt(0));
   const chargesNeedCheck = form.charges.some((c) => c.check);
   const tapCharges = () => {
     if (!form.charges.length && (!amountReady || !rateReady)) {

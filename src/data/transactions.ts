@@ -117,7 +117,11 @@ function invalid(message: string): never {
  * Throws DataError (or AmountError) when something needed is missing.
  */
 export function prepareTransaction(db: AppDb, draft: TransactionDraft): AmountResult & { currency: string } {
-  if (!isDecimalString(draft.amount) || dec(draft.amount).lte(0)) invalid('Enter an amount above zero');
+  // 0 is allowed for a charge on its own: only separate charges, e.g. a bank fee that posts later (owner, Nov 14).
+  const chargeOnly = (draft.charges ?? []).some((c) => c.deduction === 'charged_separately');
+  if (!isDecimalString(draft.amount) || dec(draft.amount).isNegative() || (dec(draft.amount).isZero() && !chargeOnly)) {
+    invalid('Enter an amount above zero');
+  }
   if (!isCurrencyCode(draft.currency)) throw new DataError('invalid_currency', `Unknown currency ${draft.currency}`);
   if (draft.notes && draft.notes.length > NOTES_MAX) invalid('Notes are too long');
 
