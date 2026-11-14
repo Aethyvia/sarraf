@@ -23,7 +23,7 @@ import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
 import { isCurrencyCode } from '@/lib/money';
-import { backupDeps, cloud, usingRealCloud } from '@/services/cloud';
+import { backupDeps, cloud, keyStore, usingRealCloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
 import { store } from '@/services/store';
 import { askForNotificationsAfterSignIn } from '@/services/notifications';
@@ -254,6 +254,7 @@ export default function StartScreen() {
   const startOver = () => {
     const u = user;
     deleteAllStoredFiles();
+    void keyStore.clear();
     wipeLocalData(db);
     if (u) rememberSignIn(db, u);
     setOverSheet(false);

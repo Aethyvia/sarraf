@@ -1,8 +1,12 @@
+import { Directory, File, Paths } from 'expo-file-system';
+import { defaultDatabaseDirectory } from 'expo-sqlite';
+
 import { getDeviceState } from '@/data/backup-flow';
 import { activeFile, db, deleteFile, loadProfiles, peekFile, saveProfiles, switchToFile } from '@/db/client';
-import { GUEST, fileForGuest, fileForSignIn, recordActive, withoutFile } from '@/db/profiles';
+import { GUEST, MAIN_FILE, fileForGuest, fileForSignIn, recordActive, withoutFile } from '@/db/profiles';
+import { attachments } from '@/db/schema';
 import { newId } from '@/lib/id';
-import { deleteStoredFiles } from './attachments';
+import { clearTempFiles, deleteStoredFiles } from './attachments';
 import { clearKeysOf } from './cloud';
 
 /**
@@ -35,17 +39,39 @@ export async function openGuest(): Promise<void> {
 
 /** Removes data saved on this phone that isn't open: its file, attachments and backup keys. */
 export async function removeSaved(file: string): Promise<void> {
-  const paths = peekFile(file, (h) => {
+  const paths = attachmentPathsOf(file);
+  deleteStoredFiles(paths);
+  await clearKeysOf(file);
+  deleteFile(file);
+  deleteDbLeftovers(file);
+  saveProfiles(withoutFile(loadProfiles(), file));
+}
+
+const dbDir = () => new Directory(defaultDatabaseDirectory);
+const dbExists = (file: string) => new File(dbDir(), file).exists;
+
+/** The file and its write-ahead log and journal: nothing of it stays behind. */
+function deleteDbLeftovers(file: string): void {
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    try {
+      const f = new File(dbDir(), file + suffix);
+      if (f.exists) f.delete();
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+/** A saved file's attachment paths, read without opening it for use (and never creating it). */
+function attachmentPathsOf(file: string): string[] {
+  if (!dbExists(file)) return [];
+  return peekFile(file, (h) => {
     try {
       return h.getAllSync<{ file_path: string }>('SELECT file_path FROM attachments').map((r) => r.file_path);
     } catch {
       return [];
     }
   });
-  deleteStoredFiles(paths);
-  await clearKeysOf(file);
-  deleteFile(file);
-  saveProfiles(withoutFile(loadProfiles(), file));
 }
 
 /**
@@ -62,4 +88,40 @@ export async function afterEmptied(): Promise<void> {
   const emptied = activeFile();
   await switchToFile(guest.file);
   await removeSaved(emptied);
+}
+
+/**
+ * On app open (owner, Nov 14: no residue): forgets saved entries whose file is
+ * gone, deletes stray Sarraf database files nobody lists, and deletes attachment
+ * files that no saved data points to (left by an abandoned draft or a failed delete).
+ */
+export async function sweepResidue(): Promise<void> {
+  clearTempFiles();
+  let p = loadProfiles();
+  for (const e of p.list) if (e.file !== p.active && !dbExists(e.file)) p = withoutFile(p, e.file);
+  saveProfiles(p);
+  const listed = new Set([p.active, MAIN_FILE, ...p.list.map((e) => e.file)]);
+  try {
+    for (const item of dbDir().list()) {
+      if (!(item instanceof File)) continue;
+      const m = /^(sarraf-[A-Za-z0-9-]+\.db)(-wal|-shm|-journal)?$/.exec(item.name);
+      if (m && !listed.has(m[1])) {
+        if (!m[2]) await clearKeysOf(m[1]);
+        item.delete();
+      }
+    }
+  } catch {
+    // No database folder yet.
+  }
+  const wanted = new Set(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  for (const e of p.list) if (e.file !== p.active) for (const path of attachmentPathsOf(e.file)) wanted.add(path);
+  try {
+    const dir = new Directory(Paths.document, 'attachments');
+    if (!dir.exists) return;
+    for (const item of dir.list()) {
+      if (item instanceof File && !wanted.has(`attachments/${item.name}`)) item.delete();
+    }
+  } catch {
+    // Nothing to sweep.
+  }
 }

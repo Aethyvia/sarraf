@@ -143,4 +143,20 @@ export function formatBytes(bytes: number): string {
  */
 export function deleteAllStoredFiles(): void {
   deleteStoredFiles(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  clearTempFiles();
+}
+
+/**
+ * Copies left in the app's cache: exports and the recovery key shared from
+ * Sarraf, photos and files picked or shrunk (owner, Nov 14: no residue).
+ */
+export function clearTempFiles(): void {
+  try {
+    for (const item of new Directory(Paths.cache).list()) {
+      if (item instanceof File && /\.(csv|pdf|json|txt|sarraf)$/i.test(item.name)) item.delete();
+      else if (item instanceof Directory && /^(ImagePicker|ImageManipulator|DocumentPicker)$/.test(item.name)) item.delete();
+    }
+  } catch {
+    // Nothing cached.
+  }
 }

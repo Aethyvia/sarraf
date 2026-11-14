@@ -264,5 +264,22 @@ describe('attachments in backups', () => {
     fresh.db.delete(attachments).run();
     await backupNow(freshDeps);
     expect(await cloud.listAttachments()).toEqual([]);
+
+    // What the restore replaced leaves no files behind (owner, Nov 14).
+    const guest = await phone('Pixel 8', cloud, true);
+    const guestFiles = new Map<string, Uint8Array>([['attachments/guest.jpg', new TextEncoder().encode('GUEST')]]);
+    const gtx = snapshot(guest.db).transactions[0].id as string;
+    guest.db.insert(attachments).values({ id: 'att-g', transactionId: gtx, filePath: 'attachments/guest.jpg', mimeType: 'image/jpeg', sizeBytes: 5 }).run();
+    const guestDeps = {
+      ...guest,
+      files: {
+        read: (p: string) => guestFiles.get(p) ?? null,
+        write: (p: string, d: Uint8Array) => void guestFiles.set(p, d),
+        remove: (paths: string[]) => paths.forEach((p) => guestFiles.delete(p)),
+      },
+    };
+    await lookInDrive(guestDeps);
+    await restoreFromDrive(guestDeps, 'pw-12345678');
+    expect([...guestFiles.keys()]).toEqual([]);
   });
 });

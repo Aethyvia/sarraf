@@ -7,6 +7,7 @@ import { activeFile, db } from '@/db/client';
 import { fakeCloud, type FakeStore } from './fake';
 import { realCloud } from './real';
 import { keysName } from '@/db/profiles';
+import { deleteStoredFiles } from '@/services/attachments';
 import type { Cloud } from './types';
 
 /** The dev stand-in keeps its "cloud" in a folder that survives wiping the app's data from /dev. */
@@ -92,6 +93,7 @@ const files: LocalFiles = {
     if (!f.exists) f.create();
     f.write(data);
   },
+  remove: (paths) => deleteStoredFiles(paths),
 };
 
 export function backupDeps(): BackupDeps {

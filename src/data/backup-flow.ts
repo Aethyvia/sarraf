@@ -5,6 +5,7 @@ import type { AppDb } from '@/db/types';
 import { nowIso } from '@/lib/dates';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
+import { compactDatabase } from '@/db/compact';
 import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
 
 /** The data key and its two wrapped copies, kept on this phone (Android keystore). */
@@ -25,6 +26,8 @@ export interface KeyStore {
 export interface LocalFiles {
   read(path: string): Uint8Array | null;
   write(path: string, data: Uint8Array): void;
+  /** Deletes stored files no row points to any more (no residue, owner Nov 14). */
+  remove?(paths: string[]): void;
 }
 
 export interface BackupDeps {
@@ -297,7 +300,12 @@ export async function applyRestore(
   const { db, cloud } = deps;
   onProgress?.('replace', 0, 1);
   const me = deviceId(db);
+  // What was here before (a guest's data, say) is replaced: its attachment files go too (owner, Nov 14).
+  const before = db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path);
   restoreSnapshot(db, opened.data, { deviceId: me });
+  const kept = new Set(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  deps.files?.remove?.(before.filter((p) => !kept.has(p)));
+  compactDatabase(db);
   // A restored phone is set up, whatever the backup's settings row says.
   db.update(settings).set({ onboardingCompletedAt: nowIso() }).where(and(eq(settings.id, 1), isNull(settings.onboardingCompletedAt))).run();
   await downloadAttachments(deps, opened.dataKey, (done, total) => onProgress?.('attachments', done, total));

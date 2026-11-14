@@ -1274,7 +1274,7 @@ export const strings = {
     startFresh: 'Start fresh',
     foundTitle: 'We found your backup',
     foundOn: (email: string) => (email ? `On Google Drive · ${email}` : 'On Google Drive'),
-    googleAccount: 'Google account',
+    googleAccount: 'Google Drive',
     unknownGoogle: 'Not recorded',
     noBackupElsewhere: (email: string) => `Your last backup was made to ${email}’s Google Drive. Tap “Try another Google account” and pick that one.`,
     from: 'From',

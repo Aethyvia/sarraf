@@ -37,7 +37,7 @@ import { startAutomaticBackup } from '@/services/auto-backup';
 import { startNotifications } from '@/services/notifications';
 import { refreshRatesIfStale } from '@/services/rates';
 import { setAddedWhileAway } from '@/state/away';
-import { recordOpenProfile } from '@/services/profiles';
+import { recordOpenProfile, sweepResidue } from '@/services/profiles';
 import { useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -73,6 +73,8 @@ export default function RootLayout() {
       const added = backfillRecurring(db);
       // Data saved per account (owner, Nov 14): note who the open data belongs to.
       recordOpenProfile();
+      // Anything left behind by an earlier erase, removal or abandoned draft goes (owner, Nov 14).
+      void sweepResidue().catch(() => {});
       setAddedWhileAway(added.map((t) => t.id));
       return { ready: true, error: null, added };
     } catch (e) {

@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
+import { compactDatabase } from '@/db/compact';
 import { deviceState, settings } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import type { BackupDeps } from './backup-flow';
@@ -57,6 +58,8 @@ export function wipeLocalData(db: AppDb): void {
   }
   ensureBaseData(db);
   if (keepDeviceId) db.update(settings).set({ deviceId: keepDeviceId }).where(eq(settings.id, 1)).run();
+  // Deleted rows mustn't linger in the file's free pages (owner, Nov 14: no residue).
+  compactDatabase(db);
 }
 
 export interface DeleteChoice {
