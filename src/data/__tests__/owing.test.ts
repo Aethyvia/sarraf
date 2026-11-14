@@ -393,12 +393,26 @@ describe('reimbursable expense with separate charges (owner, Nov 15)', () => {
     );
   });
 
-  it('a refund still only covers the expense itself', async () => {
+  it('a refund and a reimbursement are limited separately: both can arrive in full (owner, Nov 15)', async () => {
     const w = await world();
-    const exp = bill(w);
-    expect(refundableLeft(w.db, exp).amount).toBe('5000');
-    addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '5200', date: '2026-09-25' }, TODAY);
-    expect(refundableLeft(w.db, exp).amount).toBe('0');
+    const exp = w.save({
+      accountId: w.pkr,
+      currency: 'PKR',
+      amount: '5000',
+      reimbursable: true,
+      charges: [{ type: 'bank_charge', amount: '1000', currency: 'PKR', deduction: 'charged_separately', accountId: w.pkr }],
+    });
+    // The shop refunds ₨1,000 of the bill; the client still reimburses the full ₨6,000.
+    addMoneyBack(w.db, { parentId: exp, kind: 'refund', accountId: w.pkr, amount: '1000', date: '2026-09-24' }, TODAY);
+    expect(refundableLeft(w.db, exp).amount).toBe('4000');
+    addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '6000', date: '2026-09-25' }, TODAY);
+    expect(w.row(exp).reimbursementStatus).toBe('reimbursed');
+    // A refund can still come after it was reimbursed.
+    addMoneyBack(w.db, { parentId: exp, kind: 'refund', accountId: w.pkr, amount: '500', date: '2026-09-26' }, TODAY);
+    expect(refundableLeft(w.db, exp).amount).toBe('3500');
+    expect(() => addMoneyBack(w.db, { parentId: exp, kind: 'reimbursement', accountId: w.pkr, amount: '1', date: '2026-09-26' }, TODAY)).toThrow(
+      expect.objectContaining({ code: 'invalid_amount' }),
+    );
   });
 });
 

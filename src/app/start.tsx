@@ -137,14 +137,6 @@ export default function StartScreen() {
   // Setup already done here (a guest opening Sign in from Settings): no "Continue as guest".
   const onboarded = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
 
-  // Still signed in on an emptied phone (Delete → this phone's data): carry on from sign-in, no Welcome.
-  useEffect(() => {
-    const u = currentUser(db);
-    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
-    if (u && !hasData && !isSignedOut(db)) void online(() => afterSignIn(u));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Android back walks back through the steps; nothing to go back to past Welcome.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -198,8 +190,26 @@ export default function StartScreen() {
         void askForNotificationsAfterSignIn();
         router.replace('/');
         return;
-      case 'hasData':
-        return go({ k: 'hasData', found, switched: isAccountSwitch({ prevUserId, userId: u.id }) });
+      case 'hasData': {
+        const switched = isAccountSwitch({ prevUserId, userId: u.id });
+        if (!record) return go({ k: 'hasData', found: null, switched });
+        // Like "We found your backup" (owner, Nov 14–15): the details come from the file in Drive, not the record.
+        go({ k: 'finding', forNew: false });
+        return void online(
+          async () => {
+            const r = await lookInDrive(backupDeps());
+            setDriveEmail(r.driveEmail);
+            if (!r.header && record.driveEmail.toLowerCase() === r.driveEmail.toLowerCase()) await cloud.deleteRecord(u).catch(() => {});
+            replace({
+              k: 'hasData',
+              switched,
+              found: r.header ? { driveEmail: r.driveEmail, deviceId: r.header.deviceId, deviceName: r.header.deviceName, at: r.header.createdAt, counts: r.header.counts } : null,
+            });
+          },
+          // Drive not allowed: what the record says, as before.
+          () => replace({ k: 'hasData', found, switched }),
+        );
+      }
       case 'found':
         // The record only says a backup was made: open Drive and read the file itself before
         // showing it (owner, Nov 14). A record whose file is gone is cleared.
@@ -362,7 +372,15 @@ export default function StartScreen() {
       if (thenPin) router.push({ pathname: '/lock/set', params: offerBio ? { biometrics: '1' } : {} });
     });
 
-  const methodName = s.methods[user?.method ?? 'dev'];
+  // Still signed in on an emptied phone (Delete → this phone's data): carry on from sign-in, no Welcome.
+  // (After the functions it uses are defined.)
+  useEffect(() => {
+    const u = currentUser(db);
+    const hasData = !!db.select({ o: settings.onboardingCompletedAt }).from(settings).get()?.o;
+    if (u && !hasData && !isSignedOut(db)) void online(() => afterSignIn(u));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const groups = recoveryKey?.split('-') ?? [];
 
   switch (step.k) {

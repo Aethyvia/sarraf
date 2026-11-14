@@ -368,10 +368,17 @@ export default function SettingsScreen() {
               detail={deleting.account ? s.goesWithAccount : s.deletePhoneDetail}
               onPress={() => setDeleting((d) => ({ ...d, phone: !d.phone }))}
             />
+            {/* This phone's data (owner, Nov 15): with a backup, restore it or sign out; without one, you're signed out. */}
             {deleting.phone && !deleting.account && user ? (
-              <View style={{ marginLeft: 34 }}>
-                <Check checked={!!deleting.signOut} title={s.alsoSignOut} detail={s.alsoSignOutDetail} onPress={() => setDeleting((d) => ({ ...d, signOut: !d.signOut }))} />
-              </View>
+              hasBackup === false || deleting.drive ? (
+                <Note tone="amber">{s.phoneThenSignedOut}</Note>
+              ) : (
+                <View style={{ marginLeft: 34, gap: 4 }}>
+                  <Text style={[styles.sheetNote, { color: colors.inkSecondary, paddingHorizontal: 0 }]}>{s.afterPhoneDeleted}</Text>
+                  <Check checked={!deleting.signOut} title={s.thenRestore} detail={s.thenRestoreDetail} onPress={() => setDeleting((d) => ({ ...d, signOut: false }))} />
+                  <Check checked={!!deleting.signOut} title={s.thenSignOut} detail={s.thenSignOutDetail} onPress={() => setDeleting((d) => ({ ...d, signOut: true }))} />
+                </View>
+              )
             ) : null}
             <Check
               checked={deleting.drive}
@@ -404,8 +411,10 @@ export default function SettingsScreen() {
               onPress={async () => {
                 setBusy(true);
                 try {
-                  await deleteChosen(backupDeps(), deleting, { deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
-                  const signedOut = deleting.account || (deleting.phone && !!deleting.signOut);
+                  // No backup left to restore (none, or deleted with it): this phone's data means signing out.
+                  const choice = deleting.phone && !deleting.account && user && (hasBackup === false || deleting.drive) ? { ...deleting, signOut: true } : deleting;
+                  await deleteChosen(backupDeps(), choice, { deleteFiles: deleteAllStoredFiles, now: new Date().toISOString() });
+                  const signedOut = choice.account || (choice.phone && !!choice.signOut);
                   if (signedOut) await afterEmptied();
                   else recordOpenProfile();
                   // Backup deleted, keep backing up: a new one is made now.

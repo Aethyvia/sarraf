@@ -52,12 +52,13 @@ export function addMoneyBack(db: AppDb, draft: MoneyBackDraft, today: string = t
       countsAs = toDecimalString(dec(draft.countsAs));
     }
 
-    // What came back pays the expense first; for a reimbursement, anything beyond that is its
-    // separate charges coming back (owner, Nov 15). Never more than expense + those charges.
+    // Refunds and reimbursements are limited separately (owner, Nov 15): a shop's refund and a
+    // client's reimbursement can both arrive in full. Refunds: up to the expense. Reimbursements:
+    // up to the expense and its separate charges, paying the expense first, then the charges.
     const expenseBack = tx
       .select({ c: transactions.countsAsAmount, ch: transactions.chargesBack })
       .from(transactions)
-      .where(and(eq(transactions.parentId, parent.id), inArray(transactions.linkType, ['refund', 'reimbursement']), isNull(transactions.deletedAt)))
+      .where(and(eq(transactions.parentId, parent.id), eq(transactions.linkType, draft.kind), isNull(transactions.deletedAt)))
       .all()
       .reduce((sum, r) => sum.plus(dec(r.c ?? '0')).minus(dec(r.ch ?? '0')), dec('0'));
     const expenseLeft = dec(parent.accountAmount ?? parent.amount).minus(expenseBack);
@@ -142,14 +143,14 @@ export function parentsOf(db: AppDb, ids: string[]): string[] {
   return [...new Set(rows.map((r) => r.parentId!))];
 }
 
-/** What can still come back on an expense (refund or reimbursement), in the currency it was charged in. */
+/** What can still be refunded on an expense, in the currency it was charged in. */
 export function refundableLeft(db: AppDb, parentId: string): { currency: string; amount: DecimalString } {
   const parent = db.select().from(transactions).where(eq(transactions.id, parentId)).get();
   if (!parent) throw new DataError('not_found', 'No transaction');
-  // What came back already, as a refund or a reimbursement.
+  // Refunds only: a reimbursement is limited on its own (owner, Nov 15).
   const refunded = moneyBackOf(db, parentId)
-    .filter((r) => r.linkType === 'refund' || r.linkType === 'reimbursement')
-    .reduce((sum, r) => sum.plus(dec(r.countsAsAmount ?? '0')).minus(dec(r.chargesBack ?? '0')), dec('0'));
+    .filter((r) => r.linkType === 'refund')
+    .reduce((sum, r) => sum.plus(dec(r.countsAsAmount ?? '0')), dec('0'));
   return { currency: chargedCurrencyOf(db, parent), amount: toDecimalString(dec(parent.accountAmount ?? parent.amount).minus(refunded)) };
 }
 
