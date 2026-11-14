@@ -6,7 +6,7 @@ import { nowIso } from '@/lib/dates';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
 import { compactDatabase } from '@/db/compact';
-import { BACKUP_FORMAT, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
+import { BACKUP_FORMAT, BackupOwnerError, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
 
 /** The data key and its two wrapped copies, kept on this phone (Android keystore). */
 export interface StoredKeys {
@@ -240,7 +240,7 @@ export async function backupNow(
   }
   if (!getDeviceState(db).driveEmail) setDeviceState(db, { driveEmail: (await cloud.connectDrive()).email });
   report('encrypt', 0.15);
-  const file = buildBackup(db, { dataKey: unb64(stored.dataKey), keys: stored.keys, deviceId: me, deviceName: deps.deviceName, createdAt: now });
+  const file = buildBackup(db, { dataKey: unb64(stored.dataKey), keys: stored.keys, deviceId: me, deviceName: deps.deviceName, createdAt: now, ownerId: user.id });
   report('attachments', 0.3);
   await uploadNewAttachments(deps, unb64(stored.dataKey), (done, total) => report('attachments', 0.3 + (total ? (done / total) * 0.4 : 0.4), done, total));
   report('upload', 0.75);
@@ -300,6 +300,9 @@ export async function applyRestore(
   const { db, cloud } = deps;
   onProgress?.('replace', 0, 1);
   const me = deviceId(db);
+  // A backup only restores into the account it belongs to (council, owner Nov 14).
+  const owner = currentUser(db);
+  if (opened.header.ownerId && owner && opened.header.ownerId !== owner.id) throw new BackupOwnerError();
   // What was here before (a guest's data, say) is replaced: its attachment files go too (owner, Nov 14).
   const before = db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path);
   restoreSnapshot(db, opened.data, { deviceId: me });

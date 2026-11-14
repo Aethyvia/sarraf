@@ -6,7 +6,7 @@ import { attachments, deviceState, settings } from '@/db/schema';
 import { WrongSecretError } from '@/lib/backup-crypto';
 import { fakeCloud, memoryStore } from '@/services/cloud/fake';
 import { createTestDb } from '@/test/db';
-import { snapshot } from '../backup-file';
+import { BackupOwnerError, snapshot } from '../backup-file';
 import {
   addedSince,
   automaticBackupDue,
@@ -14,6 +14,7 @@ import {
   changeBackupPassword,
   detachPreviousBackup,
   getDeviceState,
+  restoreFromFile,
   lookInDrive,
   makeThisTheBackupPhone,
   memoryKeyStore,
@@ -281,5 +282,20 @@ describe('attachments in backups', () => {
     await lookInDrive(guestDeps);
     await restoreFromDrive(guestDeps, 'pw-12345678');
     expect([...guestFiles.keys()]).toEqual([]);
+  });
+});
+
+describe('a backup only restores into its own account (council, owner Nov 14)', () => {
+  it('another Sarraf account gets a clear refusal, and nothing on its phone changes', async () => {
+    const cloud = fakeCloud(memoryStore());
+    const mine = await phone('Pixel 7', cloud, true);
+    await turnOnBackup(mine, 'pw-12345678');
+    expect(await backupNow(mine)).toMatchObject({ ok: true });
+    const file = await cloud.downloadBackup();
+
+    const theirs = await phone('Pixel 9', cloud);
+    rememberSignIn(theirs.db, { id: 'someone-else', email: 'sana@x.com', method: 'google' });
+    await expect(restoreFromFile(theirs, file, 'pw-12345678')).rejects.toBeInstanceOf(BackupOwnerError);
+    expect(getDeviceState(theirs.db).userId).toBe('someone-else');
   });
 });

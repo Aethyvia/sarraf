@@ -1,4 +1,4 @@
-import { BackupTooNewError, NotABackupError } from '@/data/backup-file';
+import { BackupOwnerError, BackupTooNewError, NotABackupError } from '@/data/backup-file';
 import type { BackupResult } from '@/data/backup-flow';
 import { strings } from '@/i18n/strings';
 import { DriveError, DriveRefusedError, OfflineError } from '@/services/cloud/types';
@@ -47,6 +47,7 @@ export function restoreProblem(problem: unknown): string {
   if (problem instanceof DriveError) return problem.kind === 'busy' ? s.driveBusy : problem.kind === 'unavailable' ? s.driveDown : s.other(problem.message);
   if (problem instanceof BackupTooNewError) return s.tooNew;
   if (problem instanceof NotABackupError) return s.notABackup;
+  if (problem instanceof BackupOwnerError) return s.otherAccount;
   const message = problem instanceof Error ? problem.message : '';
   if (/no backup in this drive/i.test(message)) return s.noBackup;
   if (/damaged/i.test(message)) return s.damaged;

@@ -1345,6 +1345,7 @@ export const strings = {
       noBackup: 'The backup file isn’t in this Google Drive any more. It may have been deleted, or it’s in another Google account.',
       tooNew: 'This backup was made by a newer Sarraf. Update Sarraf from Google Play, then restore.',
       notABackup: 'The file in Drive isn’t a Sarraf backup Sarraf can read.',
+      otherAccount: 'This backup belongs to another Sarraf account, so it can’t be restored here. Sign in with that account instead.',
       damaged: 'The backup file is damaged and can’t be restored.',
       signInAgain: 'Your sign-in has expired. Go back and sign in again.',
       phoneFull: 'Your phone is out of space. Free some up, then try again.',

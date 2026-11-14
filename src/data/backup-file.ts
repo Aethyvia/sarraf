@@ -53,7 +53,25 @@ export interface BackupHeader {
   deviceName: string;
   counts: BackupCounts;
   keys: { password: WrappedKey; recovery: WrappedKey };
+  /**
+   * Whose backup this is: the Sarraf account id, and the file's own layout
+   * version (council, owner Nov 14). Both are bound into the encryption, so
+   * they can't be edited; a backup never restores into another account,
+   * whatever its file name. Absent on files made before Nov 15.
+   */
+  ownerId?: string;
+  fileVersion?: number;
   nonce: string;
+}
+
+/** The file's own layout (header + sealed body). `format` is the database's schema version. */
+export const FILE_VERSION = 2;
+
+export class BackupOwnerError extends Error {
+  constructor() {
+    super('This backup belongs to another Sarraf account.');
+    this.name = 'BackupOwnerError';
+  }
 }
 
 export class BackupTooNewError extends Error {
@@ -93,7 +111,7 @@ const decoder = new TextDecoder();
 /** Builds an encrypted backup of the whole database. */
 export function buildBackup(
   db: AppDb,
-  input: { dataKey: Uint8Array; keys: BackupHeader['keys']; deviceId: string; deviceName: string; createdAt: string },
+  input: { dataKey: Uint8Array; keys: BackupHeader['keys']; deviceId: string; deviceName: string; createdAt: string; ownerId?: string },
 ): Uint8Array {
   const body = encoder.encode(JSON.stringify(snapshot(db)));
   const base = {
@@ -104,6 +122,7 @@ export function buildBackup(
     deviceName: input.deviceName,
     counts: backupCounts(db),
     keys: input.keys,
+    ...(input.ownerId ? { ownerId: input.ownerId, fileVersion: FILE_VERSION } : {}),
   };
   // The nonce is chosen by seal(); the header minus the nonce is what's bound in.
   const aad = encoder.encode(JSON.stringify(base));
