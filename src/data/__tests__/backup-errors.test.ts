@@ -30,3 +30,20 @@ describe('restore problems (owner, Nov 14)', () => {
     expect(restoreProblem(new Error('Boom'))).toBe('It stopped with: Boom.');
   });
 });
+
+describe('Delete backup picks only this account’s files (owner, Nov 14)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { isThisAccountsFile } = require('@/services/cloud/real') as typeof import('@/services/cloud/real');
+  const me = 'aaaaaaaa-1111-2222-3333-444444444444';
+  const other = 'bbbbbbbb-1111-2222-3333-444444444444';
+  const att = 'cccccccc-1111-2222-3333-444444444444.bin';
+  const check = (f: string) => isThisAccountsFile(f, `sarraf-backup-${me}.bin`, `att-${me}-`);
+  it('mine and the old shared names go; another account’s stay', () => {
+    expect(check(`sarraf-backup-${me}.bin`)).toBe(true);
+    expect(check(`att-${me}-${att}`)).toBe(true);
+    expect(check('sarraf-backup.bin')).toBe(true);
+    expect(check(`att-${att}`)).toBe(true);
+    expect(check(`sarraf-backup-${other}.bin`)).toBe(false);
+    expect(check(`att-${other}-${att}`)).toBe(false);
+  });
+});

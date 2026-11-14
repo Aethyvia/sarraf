@@ -47,6 +47,16 @@ async function driveProblem(res: Response): Promise<Error> {
   return new DriveError('other', res.status, detail);
 }
 
+/**
+ * Files Delete backup removes: this account's backup and attachments, plus the
+ * old shared names from before Nov 14 (sarraf-backup.bin, att-<one id>.bin).
+ * Another account's files (att-<their id>-…) are never matched.
+ */
+export function isThisAccountsFile(file: string, backupName: string, attachmentPrefix: string): boolean {
+  if (file === backupName || file.startsWith(attachmentPrefix)) return true;
+  return file === 'sarraf-backup.bin' || /^att-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.bin$/i.test(file);
+}
+
 async function online<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -181,7 +191,13 @@ export function realCloud(config: RealCloudConfig): Cloud {
   // Backups made before Nov 14 used one shared name; they're still read, and the next backup moves them to the new name.
   const LEGACY_BACKUP = 'sarraf-backup.bin';
   const LEGACY_ATTACHMENT = 'att-';
-  const backupFile = async () => (await byName(await backupName())) ?? (await byName(LEGACY_BACKUP));
+  // The old shared file counts only for an account that has a backup on record: a deleted
+  // account's old backup is never offered to a new account (owner, Nov 14).
+  const hasRecord = async () => {
+    const { data } = await supabase.from('backup_records').select('user_id').eq('user_id', await ownerId()).maybeSingle();
+    return !!data;
+  };
+  const backupFile = async () => (await byName(await backupName())) ?? ((await hasRecord()) ? await byName(LEGACY_BACKUP) : null);
 
   async function session(): Promise<User> {
     const { data, error } = await online(() => supabase.auth.getUser());
@@ -345,9 +361,10 @@ export function realCloud(config: RealCloudConfig): Cloud {
 
     async deleteBackup() {
       // Only this Sarraf account's files: someone else's backup in the same Drive stays.
+      // Backups from before Nov 14 (one shared name, read as this account's backup) go too.
       const [name, prefix] = [await backupName(), await attachmentPrefix()];
       for (const f of await listFiles('trashed = false')) {
-        if (f.name === name || f.name.startsWith(prefix)) await drive(`/files/${f.id}`, { method: 'DELETE' });
+        if (isThisAccountsFile(f.name, name, prefix)) await drive(`/files/${f.id}`, { method: 'DELETE' });
       }
     },
 
