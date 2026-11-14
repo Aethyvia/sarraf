@@ -18,6 +18,14 @@ export const store = {
     await cloud.testSubscribe(user, kind);
     return (await refreshPlan(db, cloud, user, new Date())) === 'plus';
   },
+  /** "Have a code?": a supporter code (owner, Nov 14). Needs a Sarraf account. */
+  async redeem(code: string): Promise<'ok' | 'used' | 'unknown' | 'signIn'> {
+    const user = currentUser(db);
+    if (!user) return 'signIn';
+    const r = await cloud.redeemCode(user, code);
+    if (r === 'ok') await refreshPlan(db, cloud, user, new Date());
+    return r;
+  },
   async restore(): Promise<boolean> {
     const user = currentUser(db);
     if (!user || !cloud.ready) return false;

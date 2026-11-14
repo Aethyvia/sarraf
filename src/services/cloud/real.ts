@@ -304,9 +304,17 @@ export function realCloud(config: RealCloudConfig): Cloud {
     },
 
     async getSubscription(user) {
-      const { data, error } = await online(async () => supabase.from('subscriptions').select('plan, renews_at').eq('user_id', user.id).maybeSingle());
+      // A supporter's email on the owner's list becomes lifetime Plus here (owner, Nov 14).
+      await online(async () => supabase.rpc('claim_supporter')).catch(() => {});
+      const { data, error } = await online(async () => supabase.from('subscriptions').select('plan, renews_at, source').eq('user_id', user.id).maybeSingle());
       if (error) throw error;
-      return data ? { plan: 'plus', renewsAt: data.renews_at ?? null } : null;
+      return data ? { plan: 'plus', renewsAt: data.renews_at ?? null, lifetime: data.source === 'supporter' } : null;
+    },
+
+    async redeemCode(_user, code) {
+      const { data, error } = await online(async () => supabase.rpc('redeem_supporter_code', { code }));
+      if (error) throw error;
+      return data === 'ok' || data === 'used' ? data : 'unknown';
     },
 
     async deleteBackup() {

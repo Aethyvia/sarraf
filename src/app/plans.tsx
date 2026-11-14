@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/icons/Icon';
-import { Button, Card, Header, LinkButton, Screen } from '@/components/ui';
+import { BottomSheet, Button, Card, Field, Header, LinkButton, Screen } from '@/components/ui';
 import { deviceState } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { formatShortDate } from '@/lib/format-date';
@@ -12,6 +12,7 @@ import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
 import { usePlan } from '@/state/plan';
 import { useToast } from '@/state/toast';
+import { isLifetime } from '@/data/plan';
 import { fonts, useTheme } from '@/theme';
 
 /** Plans (board): Free vs Sarraf Plus. Prices are placeholders until set in the store (owner, open). */
@@ -22,6 +23,26 @@ export default function PlansScreen() {
   const plan = usePlan();
   const renews = useLive((db) => db.select({ r: deviceState.planRenewsAt }).from(deviceState).where(eq(deviceState.id, 1)).get()?.r ?? null, []);
   const [busy, setBusy] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  const redeem = async () => {
+    setBusy(true);
+    setCodeError(null);
+    try {
+      const r = await store.redeem(code);
+      if (r === 'ok') {
+        setCodeOpen(false);
+        setCode('');
+        toast({ message: s.codeOk });
+      } else setCodeError(r === 'used' ? s.codeUsed : r === 'signIn' ? s.codeSignIn : s.codeUnknown);
+    } catch (e) {
+      setCodeError((e as Error).message || strings.start.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const buy = async (kind: 'monthly' | 'yearly') => {
     if (!store.ready) return toast({ message: s.notReady });
@@ -64,7 +85,9 @@ export default function PlansScreen() {
           <Text style={[styles.price, { color: colors.ink }]}>{s.plusPrice}</Text>
         </View>
         <Text style={[styles.small, { color: colors.inkMuted }]}>
-          {plan === 'plus' ? [s.plusNow, renews ? s.renews(formatShortDate(renews.slice(0, 10))) : null].filter(Boolean).join(' · ') : s.plusYearly}
+          {plan === 'plus'
+            ? [s.plusNow, isLifetime(renews) ? s.lifetime : renews ? s.renews(formatShortDate(renews.slice(0, 10))) : null].filter(Boolean).join(' · ')
+            : s.plusYearly}
         </Text>
         {list(s.plusItems)}
       </Card>
@@ -81,7 +104,17 @@ export default function PlansScreen() {
           toast({ message: (await store.restore()) ? s.restored : s.nothingToRestore });
         }}
       />
+      {plan === 'free' ? <LinkButton label={s.haveCode} onPress={() => (setCode(''), setCodeError(null), setCodeOpen(true))} /> : null}
       <Text style={[styles.small, { color: colors.inkMuted, textAlign: 'center' }]}>{s.note}</Text>
+
+      <BottomSheet visible={codeOpen} onClose={() => setCodeOpen(false)} title={s.codeTitle}>
+        <View style={{ gap: 12 }}>
+          <Text style={[styles.itemText, { color: colors.inkSecondary }]}>{s.codeBody}</Text>
+          <Field label={s.codeLabel} value={code} onChangeText={(v) => (setCode(v), setCodeError(null))} autoCapitalize="characters" autoCorrect={false} placeholder="SARRAF-XXXX-XXXX" />
+          {codeError ? <Text style={[styles.small, { color: colors.expense }]}>{codeError}</Text> : null}
+          <Button label={busy ? strings.backup.working : s.codeUse} disabled={busy || !code.trim()} onPress={() => void redeem()} />
+        </View>
+      </BottomSheet>
     </Screen>
   );
 }

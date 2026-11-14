@@ -46,7 +46,9 @@ export interface Cloud {
   downloadAttachment(name: string): Promise<Uint8Array | null>;
   deleteAttachment(name: string): Promise<void>;
   /** The Sarraf Plus subscription on record (Supabase), or null for Free. */
-  getSubscription(user: CloudUser): Promise<{ plan: 'plus'; renewsAt: string | null } | null>;
+  getSubscription(user: CloudUser): Promise<{ plan: 'plus'; renewsAt: string | null; lifetime?: boolean } | null>;
+  /** "Have a code?" (owner, Nov 14): a supporter code gives lifetime Plus. A code works once. */
+  redeemCode(user: CloudUser, code: string): Promise<'ok' | 'used' | 'unknown'>;
   /** Until Play Billing (owner, Nov 12): Subscribe records Plus for this user directly. */
   testSubscribe(user: CloudUser, kind: 'monthly' | 'yearly'): Promise<void>;
   /** Delete Sarraf account: the backup file and attachments in Drive. */

@@ -1542,6 +1542,17 @@ export const strings = {
     restored: 'Purchase restored',
     nothingToRestore: 'No Sarraf Plus purchase found for this account.',
     renews: (date: string) => `Renews ${date}`,
+    // Supporter codes (owner, Nov 14): lifetime Plus.
+    lifetime: 'Lifetime',
+    haveCode: 'Have a code?',
+    codeTitle: 'Enter your code',
+    codeBody: 'A supporter code gives you Sarraf Plus for life, on this Sarraf account. Each code works once.',
+    codeLabel: 'Code',
+    codeUse: 'Use code',
+    codeOk: 'You’re on Sarraf Plus for life. Thank you for your support!',
+    codeUsed: 'That code has already been used.',
+    codeUnknown: 'That code isn’t right. Check it and try again.',
+    codeSignIn: 'Sign in first: the code goes on your Sarraf account.',
   },
   // When Sarraf Plus ends (Owner, Nov 12).
   planEnded: {

@@ -120,7 +120,16 @@ export function fakeCloud(store: FakeStore, knobs: FakeKnobs = { offline: false,
     async getSubscription() {
       online();
       const raw = store.read('subscription.json');
-      return raw ? (JSON.parse(dec.decode(raw)) as { plan: 'plus'; renewsAt: string | null }) : null;
+      return raw ? (JSON.parse(dec.decode(raw)) as { plan: 'plus'; renewsAt: string | null; lifetime?: boolean }) : null;
+    },
+    async redeemCode(_u, code) {
+      online();
+      // Dev stand-in: SARRAF-TEST works once.
+      if (code.trim().toUpperCase() !== 'SARRAF-TEST') return 'unknown';
+      if (store.read('code-used')) return 'used';
+      store.write('code-used', enc.encode('1'));
+      store.write('subscription.json', enc.encode(JSON.stringify({ plan: 'plus', renewsAt: null, lifetime: true })));
+      return 'ok';
     },
     async deleteBackup() {
       online();
