@@ -19,6 +19,8 @@ import { formatShortDate } from '@/lib/format-date';
 import { useAction } from '@/state/actions';
 import { useLive } from '@/state/live';
 import { clearAddedWhileAway, useAddedWhileAway } from '@/state/away';
+import { outstandingOf } from '@/data/owing';
+import { toDecimalString } from '@/lib/money';
 import { fonts, radius, useTheme } from '@/theme';
 
 interface Names {
@@ -56,6 +58,10 @@ export default function ReviewScreen() {
   const { colors } = useTheme();
   const today = todayDate();
   const data = useLive((d) => needsReview(d, todayDate()));
+  const expected = useLive(
+    (d) => new Map(data.waitingBack.map((t) => { const o = outstandingOf(d, t); return [t.id, { value: toDecimalString(o.outstanding), currency: o.currency }]; })),
+    [data.waitingBack.map((t) => t.id).join()],
+  );
   const names = useNames();
   const action = useAction();
   const [options, setOptions] = useState<TransactionRow | null>(null);
@@ -87,7 +93,12 @@ export default function ReviewScreen() {
           {titleOf(t, names)}
         </Text>
         <Text style={[styles.detail, { color: colors.inkMuted }]} numberOfLines={2}>
-          <Money value={t.kind === 'transfer' && t.toAmount ? t.toAmount : t.amount} currency={t.kind === 'transfer' && t.toAmount && t.toAccountId ? currencyOf(t.toAccountId) : t.currency} style={styles.detailMoney} />
+          {button === 'gotIt' ? (
+            // Waiting for money back: what's still expected, charges included (owner, Nov 15).
+            <Money value={expected.get(t.id)?.value ?? t.amount} currency={expected.get(t.id)?.currency ?? t.currency} style={styles.detailMoney} />
+          ) : (
+            <Money value={t.kind === 'transfer' && t.toAmount ? t.toAmount : t.amount} currency={t.kind === 'transfer' && t.toAmount && t.toAccountId ? currencyOf(t.toAccountId) : t.currency} style={styles.detailMoney} />
+          )}
           {detail ? ` · ${detail}` : ''}
         </Text>
       </View>
