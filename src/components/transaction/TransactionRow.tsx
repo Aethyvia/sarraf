@@ -137,6 +137,13 @@ export function TransactionRow({
             {detail}
           </Text>
         ) : null}
+        {/* What came back on this expense (owner, Nov 14). */}
+        {row.back && !child && !echo ? (
+          <Text style={[styles.detail, { color: colors.income }, small && { fontSize: 11.5 }]} numberOfLines={1}>
+            <Money value={row.back.value} currency={row.back.currency} style={[styles.detail, { color: colors.income }]} />
+            {strings.home.backSuffix}
+          </Text>
+        ) : null}
         {tags.length ? (
           <View style={styles.tags}>
             {tags.map((t) => (

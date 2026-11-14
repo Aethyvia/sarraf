@@ -641,6 +641,8 @@ export const strings = {
     guestSignIn: 'Sign in to back up',
     guestNotNow: 'Not now',
     awayDetail: (n: number) => `${n} added while you were away`,
+    spentBack: (spent: ReactNode, back: ReactNode): ReactNode[] => ['spent ', spent, ' · back ', back],
+    backSuffix: ' back',
     waitingOnly: (n: number) => `${n} waiting for money back`,
     recent: 'Recent',
     seeAllShort: 'See all',

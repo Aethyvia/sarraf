@@ -219,7 +219,15 @@ export default function HomeScreen() {
           {recent.length ? <LinkButton label={s.seeAllShort} onPress={() => router.push('/transactions')} /> : null}
         </View>
         {recent.length ? (
-          recent.map((r) => <TransactionRow key={r.id} row={r} variant="recent" onPress={() => router.push(`/transaction/${r.id}`)} />)
+          recent.map((r) => (
+            <View key={r.id}>
+              <TransactionRow row={r} variant="recent" onPress={() => router.push(`/transaction/${r.id}`)} />
+              {/* Money back shows under its expense (owner, Nov 14). */}
+              {r.children.map((c, i) => (
+                <TransactionRow key={c.id} row={c} child onPress={() => router.push(`/transaction/${r.id}`)} last={i < r.children.length - 1} />
+              ))}
+            </View>
+          ))
         ) : (
           <Card style={styles.empty}>
             <Icon name="nav-transactions" size={26} color={colors.border} strokeWidth={1.6} />

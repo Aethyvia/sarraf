@@ -44,6 +44,8 @@ export interface ListRow {
   cancelled: boolean;
   /** Linked refunds / reimbursements shown under this row. */
   children: ListRow[];
+  /** What came back on this expense, in its currency ("₨1,450 back", owner Nov 14). */
+  back: { value: DecimalString; currency: string } | null;
   /** Set on a linked row repeated greyed on its own date: the original it belongs to. */
   echoOf: { id: string; title: string | null; date: string } | null;
   linkType: 'refund' | 'reimbursement' | null;
@@ -188,6 +190,7 @@ export function toListRow(t: TransactionRow, l: Lookups): ListRow {
     paidByName: t.paidByPersonId ? (l.people.get(t.paidByPersonId) ?? null) : null,
     cancelled: t.status === 'cancelled',
     children: [],
+    back: null,
     echoOf: null,
     linkType: t.linkType,
   };
@@ -265,6 +268,11 @@ export function listTransactions(db: AppDb, filters: TransactionFilters = {}, to
     if (!matches(t)) continue;
     const row = toListRow(t, l);
     row.children = (childrenOf.get(t.id) ?? []).map((c) => toListRow(c, l));
+    const backRows = (childrenOf.get(t.id) ?? []).filter((c) => c.linkType && !c.deletedAt && c.status !== 'cancelled');
+    if (backRows.length) {
+      const total = backRows.reduce((sum, c) => sum.plus(dec(c.countsAsAmount ?? c.accountAmount ?? '0')), dec('0'));
+      row.back = { value: toDecimalString(total), currency: row.amount.currency };
+    }
     push(t.date, row);
     for (const c of childrenOf.get(t.id) ?? []) {
       if (c.date === t.date) continue;

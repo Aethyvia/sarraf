@@ -103,3 +103,17 @@ describe('income with a bank charge taken separately (owner, Nov 13, statement s
     expect(row.amount).toMatchObject({ value: '138850', currency: 'PKR', tone: 'income' });
   });
 });
+
+describe('money back on Home (owner, Nov 14)', () => {
+  it('the tile says what was spent and what came back; Out is the difference', async () => {
+    const { monthFlows } = jest.requireActual('../home') as typeof import('../home');
+    const { account, tx, db } = await setup();
+    const pkr = account('Cash PKR', 'PKR');
+    const bill = tx({ kind: 'expense', accountId: pkr, amount: '1500', accountAmount: '1500', currency: 'PKR', date: TODAY });
+    tx({ kind: 'expense', accountId: pkr, amount: '1200', accountAmount: '1200', countsAsAmount: '1200', currency: 'PKR', parentId: bill, linkType: 'reimbursement', date: TODAY });
+    tx({ kind: 'expense', accountId: pkr, amount: '250', accountAmount: '250', countsAsAmount: '250', currency: 'PKR', parentId: bill, linkType: 'refund', date: TODAY });
+    const f = monthFlows(db, TODAY.slice(0, 8) + '01', TODAY);
+    expect(f.out.get('PKR')!.toString()).toBe('50');
+    expect(f.back.get('PKR')!.toString()).toBe('1450');
+  });
+});
