@@ -395,7 +395,8 @@ export default function StartScreen() {
             <View style={styles.welcomeMain}>
               <View style={{ alignItems: 'center', gap: 14 }}>
                 <View style={[styles.logo, { backgroundColor: colors.accent }]}>
-                  <Icon name="dollar" size={27} color={colors.onAccent} strokeWidth={1.8} />
+                  {/* The app icon's mark, the Exchange S (owner, Nov 15). */}
+                  <Icon name="sarraf" size={38} color={colors.onAccent} strokeWidth={2.4} />
                 </View>
                 <Text style={[styles.brand, { color: colors.ink }]}>Sarraf</Text>
                 <Text style={[styles.welcomeTitle, { color: colors.ink }]}>{s.welcomeTitle}</Text>
