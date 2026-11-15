@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sarraf — Privacy Policy</title>
+<link rel="icon" href="favicon.png">
+<style>
+:root { --bg: #FAF7F2; --ink: #1E2421; --muted: #5F655F; --brand: #1F5A52; --line: #E6E0D5; }
+@media (prefers-color-scheme: dark) { :root { --bg: #151917; --ink: #ECEAE4; --muted: #A2A69F; --brand: #8FC9BC; --line: #2E3532; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 680px; margin: 0 auto; padding: 40px 20px 64px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+header img { width: 44px; height: 44px; border-radius: 10px; }
+header a { color: var(--ink); text-decoration: none; font-weight: 700; font-size: 20px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+h2 { font-size: 19px; margin: 30px 0 6px; }
+.updated { color: var(--muted); margin: 0 0 22px; }
+a { color: var(--brand); }
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding-top: 16px; color: var(--muted); font-size: 14px; display: flex; gap: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+<header><img src="icon.png" alt=""><a href="./">Sarraf</a></header>
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated: November 15, 2026</p>
+<p>Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by Aethyvia. Questions: <a href="mailto:help@aethyvia.com">help@aethyvia.com</a>.</p>
+<h2>The short version</h2>
+<p>Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone. They are never sent to our servers.</p>
+<p>If you turn on backup, a copy is encrypted on your phone before it is uploaded to your own Google Drive. We cannot open it.</p>
+<p>Our server keeps only what is needed for sign-in, your Sarraf Plus plan and a small record about your backup. No money data.</p>
+<p>Sarraf has no ads, no analytics and no tracking.</p>
+<h2>What stays on your phone</h2>
+<p>Everything you enter in Sarraf: accounts, transactions, amounts, rates, categories, people, ledgers, goals, budgets, recurring items, notes and attached photos or files.</p>
+<p>Your app-lock PIN is stored only as a protected hash. Your backup keys are kept in your phone's secure keystore.</p>
+<p>Reminders and notifications are created on your phone; nothing is sent to a server to make them.</p>
+<h2>Your Sarraf account (sign-in)</h2>
+<p>You sign in with Google, GitHub or an email code. Sign-in is handled by Supabase, our account provider. We receive your email address and an account ID from the sign-in method you choose.</p>
+<p>Email codes are sent through our email provider, Resend. The email contains only the code.</p>
+<p>Signing in is needed for backup and Sarraf Plus. Your money data stays on your phone either way.</p>
+<h2>Your backup record</h2>
+<p>When you back up, our server keeps a small record so a new phone can find your backup: the Google account that holds it, when it was last made, the name and ID of the phone that made it, its size, and how many accounts, ledgers and entries it holds. It never contains amounts, names of accounts or any other money data.</p>
+<h2>Backups in Google Drive</h2>
+<p>Backups go to a hidden app folder in your own Google Drive that only Sarraf can see. Sarraf asks Google only for access to that folder, not to the rest of your Drive.</p>
+<p>Each backup is encrypted on your phone with a random key. That key is locked with your backup password and, separately, with your recovery key. We never see your backup password, your recovery key or your data. If you lose both, nobody — including us — can open the backup.</p>
+<h2>Sarraf Plus</h2>
+<p>If you subscribe, our server records your plan and when it renews. Payments are handled by Google Play; we do not receive your card or payment details.</p>
+<p>If you get Sarraf Plus as a supporter, our server keeps the sign-in email or the one-time code used to give it to you.</p>
+<h2>Exchange rates</h2>
+<p>To show estimated totals, Sarraf downloads public market exchange rates from our server. Our server fetches them once a day from ExchangeRate-API. Your phone's request contains no information about you or your money; like any website, our server can see your phone's internet address.</p>
+<h2>Permissions</h2>
+<p>Notifications: for reminders you set, such as bills and budgets. Camera and photos: only when you choose to attach a receipt. Fingerprint or face: only if you turn it on for the app lock, and handled by your phone.</p>
+<h2>Deleting your data</h2>
+<p>In Settings → Delete account or data, you can delete any of these on its own: your Sarraf account (sign-in, backup record and plan record), everything Sarraf keeps on this phone, and your backup in Google Drive.</p>
+<p>Deleting your Sarraf account does not cancel a Google Play subscription; cancel it in the Play Store.</p>
+<h2>Sharing</h2>
+<p>We do not sell or share your information. The services named above (Supabase, Resend and Google) process only what is described here, to run Sarraf. ExchangeRate-API receives nothing from your phone.</p>
+<h2>Children</h2>
+<p>Sarraf is not meant for children under 13, and we do not knowingly collect their information.</p>
+<h2>Changes</h2>
+<p>If this policy changes, we will update the date above and, for important changes, tell you in the app.</p>
+<footer><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Use</a><span>Made by Aethyvia</span></footer>
+</main>
+</body>
+</html>

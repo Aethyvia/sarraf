@@ -1,6 +1,6 @@
 # Sarraf — Privacy Policy
 
-_Last updated: November 14, 2026_
+_Last updated: November 15, 2026_
 
 Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by Aethyvia. Questions: help@aethyvia.com.
 
@@ -44,9 +44,11 @@ Each backup is encrypted on your phone with a random key. That key is locked wit
 
 If you subscribe, our server records your plan and when it renews. Payments are handled by Google Play; we do not receive your card or payment details.
 
+If you get Sarraf Plus as a supporter, our server keeps the sign-in email or the one-time code used to give it to you.
+
 ## Exchange rates
 
-To show estimated totals, Sarraf downloads public market exchange rates from ExchangeRate-API (open.er-api.com). The request contains no information about you or your money; like any website, the provider can see your phone's internet address.
+To show estimated totals, Sarraf downloads public market exchange rates from our server. Our server fetches them once a day from ExchangeRate-API. Your phone's request contains no information about you or your money; like any website, our server can see your phone's internet address.
 
 ## Permissions
 
@@ -60,7 +62,7 @@ Deleting your Sarraf account does not cancel a Google Play subscription; cancel 
 
 ## Sharing
 
-We do not sell or share your information. The services named above (Supabase, Resend, Google and ExchangeRate-API) process only what is described here, to run Sarraf.
+We do not sell or share your information. The services named above (Supabase, Resend and Google) process only what is described here, to run Sarraf. ExchangeRate-API receives nothing from your phone.
 
 ## Children
 

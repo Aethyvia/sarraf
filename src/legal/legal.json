@@ -1,86 +1,147 @@
 {
-  "updated": "November 14, 2026",
+  "updated": "November 15, 2026",
   "privacy": {
     "title": "Privacy Policy",
     "intro": "Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by Aethyvia. Questions: help@aethyvia.com.",
     "sections": [
-      { "heading": "The short version", "paragraphs": [
-        "Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone. They are never sent to our servers.",
-        "If you turn on backup, a copy is encrypted on your phone before it is uploaded to your own Google Drive. We cannot open it.",
-        "Our server keeps only what is needed for sign-in, your Sarraf Plus plan and a small record about your backup. No money data.",
-        "Sarraf has no ads, no analytics and no tracking."
-      ]},
-      { "heading": "What stays on your phone", "paragraphs": [
-        "Everything you enter in Sarraf: accounts, transactions, amounts, rates, categories, people, ledgers, goals, budgets, recurring items, notes and attached photos or files.",
-        "Your app-lock PIN is stored only as a protected hash. Your backup keys are kept in your phone's secure keystore.",
-        "Reminders and notifications are created on your phone; nothing is sent to a server to make them."
-      ]},
-      { "heading": "Your Sarraf account (sign-in)", "paragraphs": [
-        "You sign in with Google, GitHub or an email code. Sign-in is handled by Supabase, our account provider. We receive your email address and an account ID from the sign-in method you choose.",
-        "Email codes are sent through our email provider, Resend. The email contains only the code.",
-        "Signing in is needed for backup and Sarraf Plus. Your money data stays on your phone either way."
-      ]},
-      { "heading": "Your backup record", "paragraphs": [
-        "When you back up, our server keeps a small record so a new phone can find your backup: the Google account that holds it, when it was last made, the name and ID of the phone that made it, its size, and how many accounts, ledgers and entries it holds. It never contains amounts, names of accounts or any other money data."
-      ]},
-      { "heading": "Backups in Google Drive", "paragraphs": [
-        "Backups go to a hidden app folder in your own Google Drive that only Sarraf can see. Sarraf asks Google only for access to that folder, not to the rest of your Drive.",
-        "Each backup is encrypted on your phone with a random key. That key is locked with your backup password and, separately, with your recovery key. We never see your backup password, your recovery key or your data. If you lose both, nobody — including us — can open the backup."
-      ]},
-      { "heading": "Sarraf Plus", "paragraphs": [
-        "If you subscribe, our server records your plan and when it renews. Payments are handled by Google Play; we do not receive your card or payment details."
-      ]},
-      { "heading": "Exchange rates", "paragraphs": [
-        "To show estimated totals, Sarraf downloads public market exchange rates from ExchangeRate-API (open.er-api.com). The request contains no information about you or your money; like any website, the provider can see your phone's internet address."
-      ]},
-      { "heading": "Permissions", "paragraphs": [
-        "Notifications: for reminders you set, such as bills and budgets. Camera and photos: only when you choose to attach a receipt. Fingerprint or face: only if you turn it on for the app lock, and handled by your phone."
-      ]},
-      { "heading": "Deleting your data", "paragraphs": [
-        "In Settings → Delete account or data, you can delete any of these on its own: your Sarraf account (sign-in, backup record and plan record), everything Sarraf keeps on this phone, and your backup in Google Drive.",
-        "Deleting your Sarraf account does not cancel a Google Play subscription; cancel it in the Play Store."
-      ]},
-      { "heading": "Sharing", "paragraphs": [
-        "We do not sell or share your information. The services named above (Supabase, Resend, Google and ExchangeRate-API) process only what is described here, to run Sarraf."
-      ]},
-      { "heading": "Children", "paragraphs": [
-        "Sarraf is not meant for children under 13, and we do not knowingly collect their information."
-      ]},
-      { "heading": "Changes", "paragraphs": [
-        "If this policy changes, we will update the date above and, for important changes, tell you in the app."
-      ]}
+      {
+        "heading": "The short version",
+        "paragraphs": [
+          "Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone. They are never sent to our servers.",
+          "If you turn on backup, a copy is encrypted on your phone before it is uploaded to your own Google Drive. We cannot open it.",
+          "Our server keeps only what is needed for sign-in, your Sarraf Plus plan and a small record about your backup. No money data.",
+          "Sarraf has no ads, no analytics and no tracking."
+        ]
+      },
+      {
+        "heading": "What stays on your phone",
+        "paragraphs": [
+          "Everything you enter in Sarraf: accounts, transactions, amounts, rates, categories, people, ledgers, goals, budgets, recurring items, notes and attached photos or files.",
+          "Your app-lock PIN is stored only as a protected hash. Your backup keys are kept in your phone's secure keystore.",
+          "Reminders and notifications are created on your phone; nothing is sent to a server to make them."
+        ]
+      },
+      {
+        "heading": "Your Sarraf account (sign-in)",
+        "paragraphs": [
+          "You sign in with Google, GitHub or an email code. Sign-in is handled by Supabase, our account provider. We receive your email address and an account ID from the sign-in method you choose.",
+          "Email codes are sent through our email provider, Resend. The email contains only the code.",
+          "Signing in is needed for backup and Sarraf Plus. Your money data stays on your phone either way."
+        ]
+      },
+      {
+        "heading": "Your backup record",
+        "paragraphs": [
+          "When you back up, our server keeps a small record so a new phone can find your backup: the Google account that holds it, when it was last made, the name and ID of the phone that made it, its size, and how many accounts, ledgers and entries it holds. It never contains amounts, names of accounts or any other money data."
+        ]
+      },
+      {
+        "heading": "Backups in Google Drive",
+        "paragraphs": [
+          "Backups go to a hidden app folder in your own Google Drive that only Sarraf can see. Sarraf asks Google only for access to that folder, not to the rest of your Drive.",
+          "Each backup is encrypted on your phone with a random key. That key is locked with your backup password and, separately, with your recovery key. We never see your backup password, your recovery key or your data. If you lose both, nobody — including us — can open the backup."
+        ]
+      },
+      {
+        "heading": "Sarraf Plus",
+        "paragraphs": [
+          "If you subscribe, our server records your plan and when it renews. Payments are handled by Google Play; we do not receive your card or payment details.",
+          "If you get Sarraf Plus as a supporter, our server keeps the sign-in email or the one-time code used to give it to you."
+        ]
+      },
+      {
+        "heading": "Exchange rates",
+        "paragraphs": [
+          "To show estimated totals, Sarraf downloads public market exchange rates from our server. Our server fetches them once a day from ExchangeRate-API. Your phone's request contains no information about you or your money; like any website, our server can see your phone's internet address."
+        ]
+      },
+      {
+        "heading": "Permissions",
+        "paragraphs": [
+          "Notifications: for reminders you set, such as bills and budgets. Camera and photos: only when you choose to attach a receipt. Fingerprint or face: only if you turn it on for the app lock, and handled by your phone."
+        ]
+      },
+      {
+        "heading": "Deleting your data",
+        "paragraphs": [
+          "In Settings → Delete account or data, you can delete any of these on its own: your Sarraf account (sign-in, backup record and plan record), everything Sarraf keeps on this phone, and your backup in Google Drive.",
+          "Deleting your Sarraf account does not cancel a Google Play subscription; cancel it in the Play Store."
+        ]
+      },
+      {
+        "heading": "Sharing",
+        "paragraphs": [
+          "We do not sell or share your information. The services named above (Supabase, Resend and Google) process only what is described here, to run Sarraf. ExchangeRate-API receives nothing from your phone."
+        ]
+      },
+      {
+        "heading": "Children",
+        "paragraphs": [
+          "Sarraf is not meant for children under 13, and we do not knowingly collect their information."
+        ]
+      },
+      {
+        "heading": "Changes",
+        "paragraphs": [
+          "If this policy changes, we will update the date above and, for important changes, tell you in the app."
+        ]
+      }
     ]
   },
   "terms": {
     "title": "Terms of Use",
     "intro": "These terms apply when you use Sarraf, made by Aethyvia. By creating a Sarraf account you agree to them. Questions: help@aethyvia.com.",
     "sections": [
-      { "heading": "What Sarraf is", "paragraphs": [
-        "Sarraf is a personal record-keeping app for money in several currencies. It is not a bank, payment service, exchange or financial adviser. It does not move money; it records what you enter."
-      ]},
-      { "heading": "Your data and your responsibility", "paragraphs": [
-        "Your data lives on your phone and, if you turn on backup, in your own Google Drive. You are responsible for keeping your backup password and recovery key safe. We cannot recover them or your backup if both are lost.",
-        "Estimated totals use public market rates and are for information only. Check important figures against your bank or provider."
-      ]},
-      { "heading": "Your Sarraf account", "paragraphs": [
-        "Keep your sign-in secure. Do not use Sarraf for anything unlawful or try to disrupt or misuse our services."
-      ]},
-      { "heading": "Sarraf Plus", "paragraphs": [
-        "Sarraf Plus is a subscription sold through Google Play in US dollars, monthly or yearly. It renews until you cancel in the Play Store. Refunds follow Google Play's policies.",
-        "The free plan includes 5 accounts, 2 ledgers and 3 savings goals. If Plus ends and you are over these limits, after a 7-day grace period you choose what stays active; the rest is archived, never deleted."
-      ]},
-      { "heading": "Changes and availability", "paragraphs": [
-        "We may update Sarraf and these terms. We will update the date above and tell you in the app about important changes. We aim to keep Sarraf working but cannot promise it will always be available or error-free."
-      ]},
-      { "heading": "Liability", "paragraphs": [
-        "Sarraf is provided as is. To the extent the law allows, we are not liable for losses arising from decisions made using the app, from lost passwords or recovery keys, or from data you did not back up."
-      ]},
-      { "heading": "Ending", "paragraphs": [
-        "You can stop using Sarraf and delete your account at any time in Settings. We may suspend accounts that misuse the service."
-      ]},
-      { "heading": "Law", "paragraphs": [
-        "These terms are governed by the laws of Pakistan."
-      ]}
+      {
+        "heading": "What Sarraf is",
+        "paragraphs": [
+          "Sarraf is a personal record-keeping app for money in several currencies. It is not a bank, payment service, exchange or financial adviser. It does not move money; it records what you enter."
+        ]
+      },
+      {
+        "heading": "Your data and your responsibility",
+        "paragraphs": [
+          "Your data lives on your phone and, if you turn on backup, in your own Google Drive. You are responsible for keeping your backup password and recovery key safe. We cannot recover them or your backup if both are lost.",
+          "Estimated totals use public market rates and are for information only. Check important figures against your bank or provider."
+        ]
+      },
+      {
+        "heading": "Your Sarraf account",
+        "paragraphs": [
+          "Keep your sign-in secure. Do not use Sarraf for anything unlawful or try to disrupt or misuse our services."
+        ]
+      },
+      {
+        "heading": "Sarraf Plus",
+        "paragraphs": [
+          "Sarraf Plus is a subscription sold through Google Play in US dollars, monthly or yearly. It renews until you cancel in the Play Store. Refunds follow Google Play's policies.",
+          "The free plan includes 5 accounts, 2 ledgers and 3 savings goals. If Plus ends and you are over these limits, after a 7-day grace period you choose what stays active; the rest is archived, never deleted."
+        ]
+      },
+      {
+        "heading": "Changes and availability",
+        "paragraphs": [
+          "We may update Sarraf and these terms. We will update the date above and tell you in the app about important changes. We aim to keep Sarraf working but cannot promise it will always be available or error-free."
+        ]
+      },
+      {
+        "heading": "Liability",
+        "paragraphs": [
+          "Sarraf is provided as is. To the extent the law allows, we are not liable for losses arising from decisions made using the app, from lost passwords or recovery keys, or from data you did not back up."
+        ]
+      },
+      {
+        "heading": "Ending",
+        "paragraphs": [
+          "You can stop using Sarraf and delete your account at any time in Settings. We may suspend accounts that misuse the service."
+        ]
+      },
+      {
+        "heading": "Law",
+        "paragraphs": [
+          "These terms are governed by the laws of Pakistan."
+        ]
+      }
     ]
   }
 }
