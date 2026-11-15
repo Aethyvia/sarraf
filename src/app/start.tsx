@@ -17,7 +17,6 @@ import { WrongSecretError, isRecoveryKeyShape, normalizeRecoveryKey } from '@/li
 import { type BackupProgress, applyRestore, backupNow, currentUser, detachPreviousBackup, getDeviceState, lookInDrive, makeThisTheBackupPhone, rememberSignIn, startBackupSetup } from '@/data/backup-flow';
 import { backupCounts, openBackup, type BackupCounts, type BackupHeader } from '@/data/backup-file';
 import { decideAfterSignIn, isAccountSwitch } from '@/data/sign-in';
-import { FREE_LIMITS, usage } from '@/data/limits';
 import { finishSetup, suggestedAccounts, type SuggestedAccount } from '@/data/setup';
 import { db } from '@/db/client';
 import { strings } from '@/i18n/strings';
@@ -25,7 +24,6 @@ import { formatShortDate } from '@/lib/format-date';
 import { isCurrencyCode } from '@/lib/money';
 import { backupDeps, cloud, keyStore, usingRealCloud } from '@/services/cloud';
 import { BadCodeError, CancelledError, DriveRefusedError, OfflineError, type CloudUser } from '@/services/cloud/types';
-import { store } from '@/services/store';
 import { askForNotificationsAfterSignIn } from '@/services/notifications';
 import { refreshPlan } from '@/data/plan';
 import { clearSignedOut, isSignedOut, wipeLocalData } from '@/data/sarraf-account';
@@ -63,7 +61,6 @@ type Step =
   | { k: 'cant' }
   | { k: 'restoring' }
   | { k: 'interrupted'; pct: number | null; problem?: string }
-  | { k: 'over'; header: BackupHeader }
   | { k: 'restored'; header: BackupHeader }
   | { k: 'currency' }
   | { k: 'accounts' }
@@ -140,7 +137,7 @@ export default function StartScreen() {
   // Android back walks back through the steps; nothing to go back to past Welcome.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (['restoring', 'done', 'restored', 'over'].includes(step.k)) return true;
+      if (['restoring', 'done', 'restored'].includes(step.k)) return true;
       if (history.length > 1) {
         back();
         return true;
@@ -308,8 +305,9 @@ export default function StartScreen() {
         const header = await applyRestore(backupDeps(), opened, file.current.length, (st, done, total) =>
           setProgress({ step: st, pct: total ? Math.round((done / total) * 100) : 0, done, total }),
         );
-        const over = plan === 'free' && usage(db, 'accounts') > FREE_LIMITS.accounts;
-        setHistory([{ k: 'welcome' }, over ? { k: 'over', header } : { k: 'restored', header }]);
+        // Over the free limits after a restore: the Nov 12 choice (renew, or choose what stays
+        // active) opens on Home, like when Plus ends (owner, Nov 15). No separate screen here.
+        setHistory([{ k: 'welcome' }, { k: 'restored', header }]);
         void askForNotificationsAfterSignIn();
       } catch (e) {
         if (e instanceof WrongSecretError) {
@@ -850,45 +848,6 @@ export default function StartScreen() {
             </>
           }
         />
-      );
-
-    case 'over':
-      return (
-        <StartPage
-          icon="star"
-          iconTone="warning"
-          title={s.overTitle(usage(db, 'accounts'))}
-          body={s.overBody(FREE_LIMITS.accounts)}
-          footer={
-            <>
-              <Button label={s.upgrade} onPress={() => (replace({ k: 'restored', header: step.header }), router.push('/plans'))} />
-              <Button
-                label={s.restorePurchase}
-                kind="secondary"
-                onPress={async () => {
-                  const plus = await store.restore();
-                  toast({ message: plus ? strings.plans.restored : strings.plans.nothingToRestore });
-                  if (plus) replace({ k: 'restored', header: step.header });
-                }}
-              />
-              <LinkButton label={s.continueFree} onPress={() => replace({ k: 'restored', header: step.header })} />
-            </>
-          }
-        >
-          <Card style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
-            {(
-              [
-                [s.accountsOf, usage(db, 'accounts'), FREE_LIMITS.accounts],
-                [s.ledgersOf, usage(db, 'ledgers'), FREE_LIMITS.ledgers],
-              ] as const
-            ).map(([label, n, limit], i) => (
-              <View key={label} style={[styles.infoRow, i === 0 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
-                <Text style={[styles.body, { color: colors.inkSecondary, flex: 1 }]}>{label}</Text>
-                <Text style={[styles.mono, { color: n > limit ? colors.warning : colors.ink }]}>{s.ofLimit(n, limit)}</Text>
-              </View>
-            ))}
-          </Card>
-        </StartPage>
       );
 
     case 'restored': {

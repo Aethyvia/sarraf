@@ -27,6 +27,8 @@ import { formatShortDate } from '@/lib/format-date';
 import { GUEST, savedElsewhere, type ProfileEntry } from '@/db/profiles';
 import { afterEmptied, recordOpenProfile, removeSaved } from '@/services/profiles';
 import { fonts, useTheme } from '@/theme';
+import * as WebBrowser from 'expo-web-browser';
+import { RATES_ATTRIBUTION, RATES_ATTRIBUTION_URL } from '@/services/rates';
 
 type SettingsChanges = Partial<typeof settings.$inferInsert>;
 
@@ -270,6 +272,14 @@ export default function SettingsScreen() {
         <Row icon="document" title={s.terms} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })} />
         <Row icon="shield" title={s.privacy} onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })} last />
       </View>
+      {/* The rates provider's credit (its free terms ask for one where rates are shown). */}
+      <Text
+        onPress={() => void WebBrowser.openBrowserAsync(RATES_ATTRIBUTION_URL)}
+        style={[styles.sheetNote, { color: colors.inkMuted, textAlign: 'center' }]}
+        suppressHighlighting
+      >
+        {RATES_ATTRIBUTION}
+      </Text>
 
       {user ? (
         <View style={{ gap: 8, marginTop: 10 }}>
