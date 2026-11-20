@@ -1,7 +1,11 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
-import { deleteDatabaseSync, openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
+import { File } from 'expo-file-system';
+import { defaultDatabaseDirectory, deleteDatabaseSync, openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
+
+import { exportToEncryptedSql, keyPragma } from '@/lib/local-crypto';
+import { localKeys } from '@/services/local-keys';
 
 import migrations from '../../drizzle/migrations';
 import { ensureBaseData } from './base-data';
@@ -23,9 +27,98 @@ export function saveProfiles(p: Profiles): void {
   SecureStore.setItem(PROFILES_KEY, JSON.stringify(p));
 }
 
+/**
+ * Every database file is encrypted with SQLCipher using this phone's key (owner,
+ * Nov 20). Builds without SQLCipher (e.g. an old dev build) keep files as they
+ * are, so nothing breaks before the new build is installed.
+ */
+let cipher: boolean | null = null;
+export function encryptionAvailable(): boolean {
+  if (cipher === null) {
+    const probe = openDatabaseSync(':memory:');
+    try {
+      cipher = !!probe.getFirstSync<{ cipher_version?: string }>('PRAGMA cipher_version')?.cipher_version;
+    } catch {
+      cipher = false;
+    } finally {
+      probe.closeSync();
+    }
+  }
+  return cipher;
+}
+
+const SAFE_NAME = /^sarraf-[A-Za-z0-9-]+\.db$/;
+const dbDirPath = () => defaultDatabaseDirectory.replace(/^file:\/\//, '');
+const dbFile = (name: string) => new File(`file://${dbDirPath()}/${name}`);
+
+/** True when the file opens without a key: saved before encryption. */
+function isPlain(file: string): boolean {
+  const probe = openDatabaseSync(file);
+  try {
+    probe.getFirstSync('SELECT count(*) AS n FROM sqlite_master');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    probe.closeSync();
+  }
+}
+
+/**
+ * Encrypts a file saved before encryption, in place: copies it into a new
+ * encrypted file, then swaps the two. A crash part-way leaves the old file intact.
+ */
+function encryptInPlace(file: string, key: string): void {
+  if (!SAFE_NAME.test(file) || !dbFile(file).exists || !isPlain(file)) return;
+  const tmp = file.replace(/\.db$/, '.encrypting');
+  try {
+    deleteDatabaseSync(tmp);
+  } catch {
+    // No leftover from an earlier try.
+  }
+  const plain = openDatabaseSync(file);
+  try {
+    plain.execSync('PRAGMA wal_checkpoint(TRUNCATE);');
+    plain.execSync(exportToEncryptedSql(`${dbDirPath()}/${tmp}`, key));
+  } finally {
+    plain.closeSync();
+  }
+  deleteDatabaseSync(file);
+  dbFile(tmp).rename(file);
+}
+
+/**
+ * If this phone's key can't open a file (the keystore was reset, e.g. after
+ * some factory resets), the file is set aside — kept, never deleted — and an
+ * empty one opens in its place, so the person can restore their Drive backup.
+ */
+function setAside(file: string): void {
+  for (const suffix of ['', '-wal', '-shm']) {
+    const f = dbFile(file + suffix);
+    if (f.exists) f.rename(`${file}${suffix}.unreadable-${Date.now()}`);
+  }
+}
+
+function openHandle(file: string, options?: { enableChangeListener: boolean }): SQLiteDatabase {
+  if (!encryptionAvailable()) return openDatabaseSync(file, options);
+  const key = localKeys().db;
+  encryptInPlace(file, key);
+  let handle = openDatabaseSync(file, options);
+  handle.execSync(keyPragma(key));
+  try {
+    handle.getFirstSync('SELECT count(*) AS n FROM sqlite_master');
+  } catch {
+    handle.closeSync();
+    setAside(file);
+    handle = openDatabaseSync(file, options);
+    handle.execSync(keyPragma(key));
+  }
+  return handle;
+}
+
 function open(file: string) {
   /** enableChangeListener lets live queries re-run when rows change. */
-  const handle = openDatabaseSync(file, { enableChangeListener: true });
+  const handle = openHandle(file, { enableChangeListener: true });
   handle.execSync('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   return { handle, db: drizzle(handle, { schema }) };
 }
@@ -85,7 +178,7 @@ export function deleteFile(file: string): void {
 
 /** Opens a file that isn't the open one just to read from it (e.g. its attachment paths before removing it). */
 export function peekFile<T>(file: string, read: (handle: SQLiteDatabase) => T): T {
-  const handle = openDatabaseSync(file);
+  const handle = openHandle(file);
   try {
     return read(handle);
   } finally {

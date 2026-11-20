@@ -1,12 +1,12 @@
 # Sarraf — Privacy Policy
 
-_Last updated: November 15, 2026_
+_Last updated: November 20, 2026_
 
 Sarraf is a money ledger that keeps your money data on your phone. This policy explains what Sarraf stores, where, and why. Sarraf is made by Aethyvia. Questions: help@aethyvia.com.
 
 ## The short version
 
-Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone. They are never sent to our servers.
+Your accounts, transactions, balances, people, goals, budgets and attachments stay on your phone, encrypted with a key that is kept in your phone's secure keystore. They are never sent to our servers.
 
 If you turn on backup, a copy is encrypted on your phone before it is uploaded to your own Google Drive. We cannot open it.
 

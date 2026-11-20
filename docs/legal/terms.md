@@ -1,6 +1,6 @@
 # Sarraf — Terms of Use
 
-_Last updated: November 15, 2026_
+_Last updated: November 20, 2026_
 
 These terms apply when you use Sarraf, made by Aethyvia. By creating a Sarraf account you agree to them. Questions: help@aethyvia.com.
 

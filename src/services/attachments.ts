@@ -3,11 +3,14 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
 
 import { strings } from '@/i18n/strings';
 import { db } from '@/db/client';
 import { attachments } from '@/db/schema';
 import { newId } from '@/lib/id';
+import { isSealed, openFile, sealFile } from '@/lib/local-crypto';
+import { fileKey } from '@/services/local-keys';
 
 /**
  * Attachments (Decided Nov 7): photo, gallery or any file, no size limit.
@@ -103,8 +106,19 @@ export async function storeFiles(files: PickedFile[]): Promise<string[]> {
     for (const f of files) {
       const ext = /\.[A-Za-z0-9]{1,8}$/.exec(f.name)?.[0] ?? '';
       const name = `${newId()}${ext.toLowerCase()}`;
-      await new File(f.uri).copy(new File(dir, name));
-      stored.push(`${FOLDER}/${name}`);
+      const path = `${FOLDER}/${name}`;
+      // Encrypted on the way in (owner, Nov 20); the readable copy picked or shrunk is removed below.
+      writeStoredFile(path, new File(f.uri).bytesSync());
+      stored.push(path);
+    }
+    // The readable copies picked or shrunk into the cache aren't needed now.
+    for (const f of files) {
+      try {
+        const src = new File(f.uri);
+        if (f.uri.startsWith(Paths.cache.uri) && src.exists) src.delete();
+      } catch {
+        // clearTempFiles removes it later.
+      }
     }
     return stored;
   } catch (e) {
@@ -113,9 +127,48 @@ export async function storeFiles(files: PickedFile[]): Promise<string[]> {
   }
 }
 
-/** The file URI for a stored relative path. */
-export function storedFileUri(relativePath: string): string {
-  return new File(Paths.document, relativePath).uri;
+/** A stored attachment's contents, decrypted. Null when the file is missing. */
+export function readStoredFile(relativePath: string): Uint8Array | null {
+  const f = new File(Paths.document, relativePath);
+  return f.exists ? openFile(fileKey(), f.bytesSync(), relativePath) : null;
+}
+
+/** Saves an attachment's contents, encrypted with this phone's key, at a relative path. */
+export function writeStoredFile(relativePath: string, plain: Uint8Array): void {
+  const f = new File(Paths.document, relativePath);
+  f.parentDirectory.create({ intermediates: true, idempotent: true });
+  if (!f.exists) f.create();
+  f.write(sealFile(fileKey(), plain, relativePath));
+}
+
+/**
+ * Attachments saved before encryption are encrypted in place on app open
+ * (idempotent: already-encrypted files are skipped).
+ */
+export function sealOldFiles(relativePaths: string[]): { sealed: number; failed: number } {
+  let n = 0;
+  let failed = 0;
+  for (const p of relativePaths) {
+    try {
+      const f = new File(Paths.document, p);
+      if (!f.exists) continue;
+      const bytes = f.bytesSync();
+      if (isSealed(bytes)) continue;
+      f.write(sealFile(fileKey(), bytes, p));
+      n += 1;
+    } catch {
+      // Left as it is; tried again on the next open.
+      failed += 1;
+    }
+  }
+  return { sealed: n, failed };
+}
+
+/** Runs sealOldFiles once per data file on this phone (remembered in the keystore). */
+export function sealOldFilesOnce(dataFile: string, relativePaths: () => string[]): void {
+  const flag = `sarraf.filesSealed.${dataFile.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+  if (SecureStore.getItem(flag) === '1') return;
+  if (sealOldFiles(relativePaths()).failed === 0) SecureStore.setItem(flag, '1');
 }
 
 /** Removes stored files (after their rows are deleted). Missing files are ignored. */

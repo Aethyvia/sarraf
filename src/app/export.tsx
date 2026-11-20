@@ -1,4 +1,3 @@
-import { File, Paths } from 'expo-file-system';
 import { strToU8, zipSync } from 'fflate';
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
@@ -10,6 +9,7 @@ import { Button, Header, Screen, Segmented, SelectorRow, ToggleRow } from '@/com
 import { sarrafJson, transactionsCsv } from '@/data/export';
 import { db } from '@/db/client';
 import { attachments } from '@/db/schema';
+import { readStoredFile } from '@/services/attachments';
 import { strings } from '@/i18n/strings';
 import { today } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
@@ -46,8 +46,8 @@ export default function ExportScreen() {
       }
       const files: Record<string, Uint8Array> = { [name]: strToU8(content) };
       for (const a of db.select().from(attachments).all()) {
-        const f = new File(Paths.document, a.filePath);
-        if (f.exists) files[a.filePath] = f.bytesSync();
+        const bytes = readStoredFile(a.filePath);
+        if (bytes) files[a.filePath] = bytes;
       }
       await shareFile(`${base}.zip`, zipSync(files), 'application/zip');
     } catch (e) {

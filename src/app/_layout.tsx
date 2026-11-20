@@ -17,7 +17,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import migrations from '../../drizzle/migrations';
 import { ensureBaseData } from '@/db/base-data';
-import { db } from '@/db/client';
+import { activeFile, db } from '@/db/client';
 import { seedSampleData } from '@/db/seed';
 import { purgeSoftDeleted } from '@/data/transaction-ops';
 import { needsPlanChoice } from '@/data/plan-ended';
@@ -29,7 +29,8 @@ import type { TransactionRow } from '@/data/transactions';
 import { LockGate } from '@/components/lock/LockGate';
 import { loadSampleClock } from '@/dev/sample-clock';
 import { nowIso } from '@/lib/dates';
-import { deleteStoredFiles } from '@/services/attachments';
+import { deleteStoredFiles, sealOldFilesOnce } from '@/services/attachments';
+import { attachments } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { SettingsProvider } from '@/state/settings';
 import { ToastProvider } from '@/state/toast';
@@ -68,6 +69,8 @@ export default function RootLayout() {
       }
       // Deleted rows kept for Undo are removed for good on the next app open.
       deleteStoredFiles(purgeSoftDeleted(db, nowIso()).attachmentPaths);
+      // Attachments saved before encryption (owner, Nov 20) are encrypted in place; already-encrypted ones are skipped.
+      sealOldFilesOnce(activeFile(), () => db.select({ p: attachments.filePath }).from(attachments).all().map((r) => r.p));
       // Recurring auto-adds missed while the app was closed: one per due date, never twice.
       // Owner, Nov 14: no pop-up; Needs review and Home's review card show them.
       const added = backfillRecurring(db);

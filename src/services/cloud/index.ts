@@ -7,7 +7,7 @@ import { activeFile, db } from '@/db/client';
 import { fakeCloud, type FakeStore } from './fake';
 import { realCloud } from './real';
 import { keysName } from '@/db/profiles';
-import { deleteStoredFiles } from '@/services/attachments';
+import { deleteStoredFiles, readStoredFile, writeStoredFile } from '@/services/attachments';
 import type { Cloud } from './types';
 
 /** The dev stand-in keeps its "cloud" in a folder that survives wiping the app's data from /dev. */
@@ -83,16 +83,9 @@ export const deviceName = Device.modelName ?? 'This phone';
 
 /** Attachment files live under the app's document folder, at the relative path on each row. */
 const files: LocalFiles = {
-  read: (path) => {
-    const f = new File(Paths.document, path);
-    return f.exists ? f.bytesSync() : null;
-  },
-  write: (path, data) => {
-    const f = new File(Paths.document, path);
-    f.parentDirectory.create({ intermediates: true, idempotent: true });
-    if (!f.exists) f.create();
-    f.write(data);
-  },
+  // Stored encrypted with this phone's key; backups get the readable contents (then sealed with the backup key).
+  read: (path) => readStoredFile(path),
+  write: (path, data) => writeStoredFile(path, data),
   remove: (paths) => deleteStoredFiles(paths),
 };
 
