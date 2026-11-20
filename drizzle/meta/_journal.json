@@ -99,6 +99,13 @@
       "when": 1795188942816,
       "tag": "0013_drop_fiscal_toggle",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795189482760,
+      "tag": "0014_person_photo",
+      "breakpoints": true
     }
   ]
 }

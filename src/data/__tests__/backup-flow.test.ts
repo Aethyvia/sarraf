@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { ensureBaseData } from '@/db/base-data';
 import { buildSampleData } from '@/db/sample';
-import { attachments, deviceState, settings } from '@/db/schema';
+import { attachments, deviceState, people, settings } from '@/db/schema';
 import { WrongSecretError } from '@/lib/backup-crypto';
 import { fakeCloud, memoryStore } from '@/services/cloud/fake';
 import { createTestDb } from '@/test/db';
@@ -282,6 +282,26 @@ describe('attachments in backups', () => {
     await lookInDrive(guestDeps);
     await restoreFromDrive(guestDeps, 'pw-12345678');
     expect([...guestFiles.keys()]).toEqual([]);
+  });
+});
+
+describe('profile pictures in backups (owner, Nov 20)', () => {
+  it('upload with the attachments and come back on restore', async () => {
+    const cloud = fakeCloud(memoryStore());
+    const old = await phone('Pixel 7', cloud, true);
+    const files = new Map<string, Uint8Array>([['attachments/pic-1.jpg', new TextEncoder().encode('FACE')]]);
+    old.db.insert(people).values({ id: 'p-john', name: 'John', photoPath: 'attachments/pic-1.jpg' }).run();
+    const deps = { ...old, files: { read: (p: string) => files.get(p) ?? null, write: (p: string, d: Uint8Array) => void files.set(p, d) } };
+    await turnOnBackup(deps, 'pw-12345678');
+    await backupNow(deps);
+    expect(await cloud.listAttachments()).toContain('pic-1.bin');
+
+    const fresh = await phone('Pixel 9', cloud);
+    const got = new Map<string, Uint8Array>();
+    const freshDeps = { ...fresh, files: { read: (p: string) => got.get(p) ?? null, write: (p: string, d: Uint8Array) => void got.set(p, d) } };
+    await lookInDrive(freshDeps);
+    await restoreFromDrive(freshDeps, 'pw-12345678');
+    expect(new TextDecoder().decode(got.get('attachments/pic-1.jpg')!)).toBe('FACE');
   });
 });
 

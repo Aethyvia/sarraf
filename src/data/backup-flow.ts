@@ -1,11 +1,12 @@
 import { and, eq, gt, isNull } from 'drizzle-orm';
 
-import { attachments, deviceState, settings, transactions } from '@/db/schema';
+import { deviceState, settings, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
 import { nowIso } from '@/lib/dates';
 import { b64, DEFAULT_KDF, newDataKey, newRecoveryKey, normalizeRecoveryKey, open, RECOVERY_KDF, seal, unb64, wrapKey } from '@/lib/backup-crypto';
 import type { BackupRecord, Cloud, CloudUser } from '@/services/cloud/types';
 import { compactDatabase } from '@/db/compact';
+import { storedFileRefs } from './attachments';
 import { BACKUP_FORMAT, BackupOwnerError, backupCounts, buildBackup, openBackup, readBackupHeader, restoreSnapshot, type BackupCounts, type BackupHeader } from './backup-file';
 
 /** The data key and its two wrapped copies, kept on this phone (Android keystore). */
@@ -47,7 +48,8 @@ const attachmentName = (id: string) => `${id}.bin`;
 async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array, onProgress?: (done: number, total: number) => void): Promise<number> {
   if (!deps.files) return 0;
   const there = new Set(await deps.cloud.listAttachments());
-  const rows = deps.db.select({ id: attachments.id, path: attachments.filePath }).from(attachments).all();
+  // Attachments and people's profile pictures (owner, Nov 20).
+  const rows = storedFileRefs(deps.db);
   // Attachments deleted on the phone leave Drive too.
   const wanted = new Set(rows.map((a) => attachmentName(a.id)));
   for (const name of there) if (!wanted.has(name)) await deps.cloud.deleteAttachment(name);
@@ -72,7 +74,7 @@ async function uploadNewAttachments(deps: BackupDeps, dataKey: Uint8Array, onPro
 /** After a restore: brings each attachment back to its path. Missing ones are skipped (the row stays). */
 async function downloadAttachments(deps: BackupDeps, dataKey: Uint8Array, onProgress?: (done: number, total: number) => void): Promise<void> {
   if (!deps.files) return;
-  const rows = deps.db.select({ id: attachments.id, path: attachments.filePath }).from(attachments).all();
+  const rows = storedFileRefs(deps.db);
   let done = 0;
   for (const a of rows) {
     onProgress?.(done, rows.length);
@@ -304,9 +306,9 @@ export async function applyRestore(
   const owner = currentUser(db);
   if (opened.header.ownerId && owner && opened.header.ownerId !== owner.id) throw new BackupOwnerError();
   // What was here before (a guest's data, say) is replaced: its attachment files go too (owner, Nov 14).
-  const before = db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path);
+  const before = storedFileRefs(db).map((r) => r.path);
   restoreSnapshot(db, opened.data, { deviceId: me });
-  const kept = new Set(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  const kept = new Set(storedFileRefs(db).map((r) => r.path));
   deps.files?.remove?.(before.filter((p) => !kept.has(p)));
   compactDatabase(db);
   // A restored phone is set up, whatever the backup's settings row says.

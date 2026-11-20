@@ -65,6 +65,7 @@ export function SplitEditor({
   const { colors } = useTheme();
   const { numberFormat } = useSettings();
   const names = useLive((d) => new Map(d.select().from(people).where(isNull(people.archivedAt)).all().map((p) => [p.id, p.name])));
+  const photos = useLive((d) => new Map(d.select({ id: people.id, photo: people.photoPath }).from(people).all().map((p) => [p.id, p.photo])));
   const [shownFor, setShownFor] = useState(false);
   const [payerId, setPayerId] = useState<string | null>(initialPayerId);
   const [whoPaid, setWhoPaid] = useState<'me' | 'other'>(initialPayerId ? 'other' : 'me');
@@ -193,7 +194,7 @@ export function SplitEditor({
           {other ? (
             <>
               <Pressable onPress={() => setSheet('payer')} style={[styles.selRow, { backgroundColor: colors.filled }]} accessibilityRole="button">
-                {payerName ? <Initials name={payerName} size={26} /> : null}
+                {payerName ? <Initials name={payerName} size={26} photo={payerId ? photos.get(payerId) : null} /> : null}
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.selLabel, { color: colors.inkMuted }]}>{s.paidBy}</Text>
                   <Text style={[styles.selValue, { color: payerName ? colors.ink : colors.inkMuted }]}>{payerName ?? s.pickPayer}</Text>
@@ -236,7 +237,7 @@ export function SplitEditor({
                         <Text style={[styles.youText, { color: colors.accent }]}>{s.you}</Text>
                       </View>
                     ) : (
-                      <Initials name={name} size={32} />
+                      <Initials name={name} size={32} photo={photos.get(r.personId)} />
                     )}
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[styles.pname, { color: colors.ink }]} numberOfLines={1}>

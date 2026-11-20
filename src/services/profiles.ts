@@ -1,10 +1,10 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import { storedFileRefs } from '@/data/attachments';
 import { defaultDatabaseDirectory } from 'expo-sqlite';
 
 import { getDeviceState } from '@/data/backup-flow';
 import { activeFile, db, deleteFile, loadProfiles, peekFile, saveProfiles, switchToFile } from '@/db/client';
 import { GUEST, MAIN_FILE, fileForGuest, fileForSignIn, recordActive, withoutFile } from '@/db/profiles';
-import { attachments } from '@/db/schema';
 import { newId } from '@/lib/id';
 import { clearTempFiles, deleteStoredFiles } from './attachments';
 import { clearKeysOf } from './cloud';
@@ -76,7 +76,14 @@ function attachmentPathsOf(file: string): string[] {
   if (!dbExists(file)) return [];
   return peekFile(file, (h) => {
     try {
-      return h.getAllSync<{ file_path: string }>('SELECT file_path FROM attachments').map((r) => r.file_path);
+      const paths = h.getAllSync<{ file_path: string }>('SELECT file_path FROM attachments').map((r) => r.file_path);
+      try {
+        // People's profile pictures (owner, Nov 20); files saved before then have no such column.
+        for (const r of h.getAllSync<{ photo_path: string | null }>('SELECT photo_path FROM people')) if (r.photo_path) paths.push(r.photo_path);
+      } catch {
+        // Older file.
+      }
+      return paths;
     } catch {
       return [];
     }
@@ -122,7 +129,7 @@ export async function sweepResidue(): Promise<void> {
   } catch {
     // No database folder yet.
   }
-  const wanted = new Set(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  const wanted = new Set(storedFileRefs(db).map((r) => r.path));
   for (const e of p.list) if (e.file !== p.active) for (const path of attachmentPathsOf(e.file)) wanted.add(path);
   try {
     const dir = new Directory(Paths.document, 'attachments');

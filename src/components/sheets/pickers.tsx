@@ -1,6 +1,6 @@
 import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { Money } from '@/components/Money';
 import { Badge, IconChip, Segmented } from '@/components/ui';
@@ -9,6 +9,7 @@ import { goalTotal } from '@/data/goals';
 import { accountFree } from '@/data/usable';
 import { accounts, categories, ledgers, people, savingsGoals, transactions } from '@/db/schema';
 import { strings } from '@/i18n/strings';
+import { personPhotoUri } from '@/services/person-photo';
 import { useLive } from '@/state/live';
 import { fonts, radius, useTheme } from '@/theme';
 import { PickerSheet, type PickerItem, type PickerSection } from './PickerSheet';
@@ -67,7 +68,7 @@ export function usePeopleItems(): PickerItem[] {
       .where(isNull(people.archivedAt))
       .orderBy(people.name)
       .all()
-      .map((p) => ({ id: p.id, title: p.name, detail: p.note ?? undefined, leading: <Initials name={p.name} /> })),
+      .map((p) => ({ id: p.id, title: p.name, detail: p.note ?? undefined, leading: <Initials name={p.name} photo={p.photoPath} /> })),
   );
 }
 
@@ -193,8 +194,11 @@ export function AccountOrPersonSheet({
   );
 }
 
-export function Initials({ name, size = 30 }: { name: string; size?: number }) {
+/** A person's circle: their profile picture when they have one (owner, Nov 20), otherwise their initials. */
+export function Initials({ name, size = 30, photo, look }: { name: string; size?: number; photo?: string | null; look?: { bg: string; fg: string } }) {
   const { colors } = useTheme();
+  const uri = personPhotoUri(photo);
+  if (uri) return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} accessibilityIgnoresInvertColors />;
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -202,8 +206,8 @@ export function Initials({ name, size = 30 }: { name: string; size?: number }) {
     .map((w) => w[0]!.toUpperCase())
     .join('');
   return (
-    <View style={{ width: size, height: size, borderRadius: radius.pill, backgroundColor: colors.filled, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontFamily: fonts.sansBold, fontSize: size * 0.4, color: colors.inkSecondary }}>{initials}</Text>
+    <View style={{ width: size, height: size, borderRadius: radius.pill, backgroundColor: look?.bg ?? colors.filled, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontFamily: fonts.sansBold, fontSize: size * 0.4, color: look?.fg ?? colors.inkSecondary }}>{initials}</Text>
     </View>
   );
 }

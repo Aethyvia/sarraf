@@ -41,6 +41,18 @@ export function updatePerson(db: AppDb, id: string, changes: { name?: string; no
   });
 }
 
+/**
+ * Sets or clears a person's profile picture (owner, Nov 20). Returns the old
+ * photo's path, if any, so the caller deletes that file after the save.
+ */
+export function setPersonPhoto(db: AppDb, id: string, photoPath: string | null): { removedPath: string | null } {
+  return db.transaction((tx) => {
+    const before = getPerson(tx, id).photoPath;
+    tx.update(people).set({ photoPath, updatedAt: nowIso() }).where(eq(people.id, id)).run();
+    return { removedPath: before && before !== photoPath ? before : null };
+  });
+}
+
 export function archivePerson(db: AppDb, id: string): void {
   db.update(people).set({ archivedAt: nowIso(), updatedAt: nowIso() }).where(eq(people.id, id)).run();
 }
@@ -93,8 +105,10 @@ export function personDeletionImpact(db: AppDb, id: string): PersonDeletionImpac
  */
 export function deletePerson(db: AppDb, id: string): { attachmentPaths: string[] } {
   return db.transaction((tx) => {
-    getPerson(tx, id);
+    const photo = getPerson(tx, id).photoPath;
     const { attachmentPaths } = hardDeleteTransactions(tx, owingTransactionIds(tx, id));
+    // Their profile picture goes with them.
+    if (photo) attachmentPaths.push(photo);
 
     for (const share of tx.select().from(splitShares).where(eq(splitShares.personId, id)).all()) {
       const expense = tx.select().from(transactions).where(eq(transactions.id, share.transactionId)).get();

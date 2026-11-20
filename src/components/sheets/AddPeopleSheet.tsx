@@ -83,7 +83,7 @@ export function AddPeopleSheet({
               accessibilityRole={single ? 'button' : 'checkbox'}
               accessibilityState={{ checked: on, disabled: inSplit }}
             >
-              <Initials name={p.name} size={32} />
+              <Initials name={p.name} size={32} photo={p.photoPath} />
               <Text style={[styles.name, { color: colors.ink }]}>{p.name}</Text>
               {inSplit ? <Text style={[styles.inSplit, { color: colors.inkMuted }]}>{s.inSplit}</Text> : null}
               {!single ? (

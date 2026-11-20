@@ -181,6 +181,11 @@ export const people = sqliteTable('people', {
   id: id(),
   name: text('name').notNull(),
   note: text('note'),
+  /**
+   * Profile picture (owner, Nov 20): relative path of an encrypted, square,
+   * shrunk photo in the attachments folder ("attachments/<uuid>.jpg"); null shows initials. Backed up with attachments.
+   */
+  photoPath: text('photo_path'),
   archivedAt: text('archived_at'),
   ...timestamps,
 });

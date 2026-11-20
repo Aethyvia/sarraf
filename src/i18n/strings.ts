@@ -950,6 +950,13 @@ export const strings = {
     footer: 'Each goal holds money in one currency. No money moves; it only lowers Usable. If spending eats into it, the lowest-priority goal shrinks first.',
   },
   people: {
+    photo: 'Photo',
+    addPhoto: 'Add a photo',
+    changePhoto: 'Change photo',
+    takePhoto: 'Take photo',
+    choosePhoto: 'Choose from gallery',
+    removePhoto: 'Remove photo',
+    photoNote: 'Shown instead of their initials. Kept on this phone, encrypted, and in your backup.',
     title: 'People',
     add: 'Add person',
     edit: 'Edit person',

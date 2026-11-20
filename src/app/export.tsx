@@ -6,9 +6,9 @@ import { DateRangeSheet, type DateRange } from '@/components/sheets/FilterSheets
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useLedgerItems } from '@/components/sheets/pickers';
 import { Button, Header, Screen, Segmented, SelectorRow, ToggleRow } from '@/components/ui';
+import { storedFileRefs } from '@/data/attachments';
 import { sarrafJson, transactionsCsv } from '@/data/export';
 import { db } from '@/db/client';
-import { attachments } from '@/db/schema';
 import { readStoredFile } from '@/services/attachments';
 import { strings } from '@/i18n/strings';
 import { today } from '@/lib/dates';
@@ -45,9 +45,10 @@ export default function ExportScreen() {
         return;
       }
       const files: Record<string, Uint8Array> = { [name]: strToU8(content) };
-      for (const a of db.select().from(attachments).all()) {
-        const bytes = readStoredFile(a.filePath);
-        if (bytes) files[a.filePath] = bytes;
+      // Attachments and people's profile pictures.
+      for (const a of storedFileRefs(db)) {
+        const bytes = readStoredFile(a.path);
+        if (bytes) files[a.path] = bytes;
       }
       await shareFile(`${base}.zip`, zipSync(files), 'application/zip');
     } catch (e) {

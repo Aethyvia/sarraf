@@ -1,4 +1,5 @@
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
+import { storedFileRefs } from '@/data/attachments';
 import { Fraunces_700Bold } from '@expo-google-fonts/fraunces/700Bold';
 import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono/500Medium';
 import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono/600SemiBold';
@@ -30,7 +31,6 @@ import { LockGate } from '@/components/lock/LockGate';
 import { loadSampleClock } from '@/dev/sample-clock';
 import { nowIso } from '@/lib/dates';
 import { deleteStoredFiles, sealOldFilesOnce } from '@/services/attachments';
-import { attachments } from '@/db/schema';
 import { strings } from '@/i18n/strings';
 import { SettingsProvider } from '@/state/settings';
 import { ToastProvider } from '@/state/toast';
@@ -70,7 +70,7 @@ export default function RootLayout() {
       // Deleted rows kept for Undo are removed for good on the next app open.
       deleteStoredFiles(purgeSoftDeleted(db, nowIso()).attachmentPaths);
       // Attachments saved before encryption (owner, Nov 20) are encrypted in place; already-encrypted ones are skipped.
-      sealOldFilesOnce(activeFile(), () => db.select({ p: attachments.filePath }).from(attachments).all().map((r) => r.p));
+      sealOldFilesOnce(activeFile(), () => storedFileRefs(db).map((r) => r.path));
       // Recurring auto-adds missed while the app was closed: one per due date, never twice.
       // Owner, Nov 14: no pop-up; Needs review and Home's review card show them.
       const added = backfillRecurring(db);

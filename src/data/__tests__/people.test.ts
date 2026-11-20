@@ -90,3 +90,35 @@ describe('deleting a person', () => {
     expect(() => updatePerson(db, john, { name: '' })).toThrow();
   });
 });
+
+describe('profile pictures (owner, Nov 20)', () => {
+  it('set, replace and remove; the old file is handed back to delete', async () => {
+    const { setPersonPhoto } = jest.requireActual('../people') as typeof import('../people');
+    const s = await setup();
+    const john = s.person('John');
+    const photo = () => s.db.select().from(people).where(eq(people.id, john)).get()!.photoPath;
+    expect(setPersonPhoto(s.db, john, 'attachments/a1.jpg')).toEqual({ removedPath: null });
+    expect(photo()).toBe('attachments/a1.jpg');
+    expect(setPersonPhoto(s.db, john, 'attachments/b2.jpg')).toEqual({ removedPath: 'attachments/a1.jpg' });
+    expect(setPersonPhoto(s.db, john, null)).toEqual({ removedPath: 'attachments/b2.jpg' });
+    expect(photo()).toBeNull();
+  });
+
+  it('goes with the person when they’re deleted', async () => {
+    const { setPersonPhoto } = jest.requireActual('../people') as typeof import('../people');
+    const s = await setup();
+    const sana = s.person('Sana');
+    setPersonPhoto(s.db, sana, 'attachments/sana.jpg');
+    expect(deletePerson(s.db, sana).attachmentPaths).toContain('attachments/sana.jpg');
+  });
+
+  it('is one of the stored files (backup, export, the clean-up sweep)', async () => {
+    const { setPersonPhoto } = jest.requireActual('../people') as typeof import('../people');
+    const { storedFileRefs } = jest.requireActual('../attachments') as typeof import('../attachments');
+    const s = await setup();
+    const john = s.person('John');
+    s.person('Sana');
+    setPersonPhoto(s.db, john, 'attachments/0f1e2d3c-4b5a-4968-8776-655443322110.jpg');
+    expect(storedFileRefs(s.db)).toEqual([{ id: '0f1e2d3c-4b5a-4968-8776-655443322110', path: 'attachments/0f1e2d3c-4b5a-4968-8776-655443322110.jpg' }]);
+  });
+});

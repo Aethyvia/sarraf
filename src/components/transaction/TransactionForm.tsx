@@ -478,7 +478,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       <Icon name={a.icon} size={12} color={swatch(a.color).fg} />
     </View>
   );
-  const personChip = (name: string) => <Initials name={name} size={24} />;
+  const personChip = (name: string, photo?: string | null) => <Initials name={name} size={24} photo={photo} />;
   /** A grey row icon for rows with nothing picked yet (Tag, Status, Expected back). */
   const plainChip = (icon: string, color: string) => (
     <View style={[styles.rowIcon, { backgroundColor: colors.filled }]}>
@@ -618,7 +618,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       <FormRow
         dashed={!form.referencePersonId}
         label={s.tag}
-        icon={form.referencePersonId ? personChip(ref.people.get(form.referencePersonId)?.name ?? '?') : plainChip('user', colors.inkMuted)}
+        icon={form.referencePersonId ? personChip(ref.people.get(form.referencePersonId)?.name ?? '?', ref.people.get(form.referencePersonId)?.photoPath) : plainChip('user', colors.inkMuted)}
         value={form.referencePersonId ? ref.people.get(form.referencePersonId)?.name : undefined}
         placeholder={s.tagPlaceholder[form.kind as 'expense' | 'income' | 'transfer']}
         onPress={() => setSheet('tag')}
@@ -677,7 +677,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
         <>
           <FormRow
             label={form.from?.type === 'person' ? s.fromPerson : s.from}
-            icon={fromAccount ? accountChip(fromAccount) : fromPerson ? personChip(fromPerson.name) : undefined}
+            icon={fromAccount ? accountChip(fromAccount) : fromPerson ? personChip(fromPerson.name, fromPerson.photoPath) : undefined}
             value={sideValue(form.from)}
             placeholder={s.pick}
             trailing={hasRow}
@@ -688,7 +688,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
           {warningNote}
           <FormRow
             label={form.to?.type === 'person' ? s.toPerson : s.to}
-            icon={toAccount ? accountChip(toAccount) : toPerson ? personChip(toPerson.name) : undefined}
+            icon={toAccount ? accountChip(toAccount) : toPerson ? personChip(toPerson.name, toPerson.photoPath) : undefined}
             value={sideValue(form.to)}
             placeholder={s.pick}
             onPress={() => setSheet('to')}
@@ -713,7 +713,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
       <>
         <FormRow
           label={form.kind === 'expense' ? (form.from?.type === 'person' ? s.paidFrom : s.account) : s.account}
-          icon={fromAccount ? accountChip(fromAccount) : fromPerson ? personChip(fromPerson.name) : undefined}
+          icon={fromAccount ? accountChip(fromAccount) : fromPerson ? personChip(fromPerson.name, fromPerson.photoPath) : undefined}
           value={sideValue(form.from)}
           placeholder={s.pick}
           trailing={form.kind === 'expense' ? hasRow : undefined}

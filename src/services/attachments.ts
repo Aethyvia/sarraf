@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { strings } from '@/i18n/strings';
 import { db } from '@/db/client';
-import { attachments } from '@/db/schema';
+import { storedFileRefs } from '@/data/attachments';
 import { newId } from '@/lib/id';
 import { isSealed, openFile, sealFile } from '@/lib/local-crypto';
 import { fileKey } from '@/services/local-keys';
@@ -195,7 +195,7 @@ export function formatBytes(bytes: number): string {
  * other accounts saved on this phone keep theirs (owner, Nov 14).
  */
 export function deleteAllStoredFiles(): void {
-  deleteStoredFiles(db.select({ path: attachments.filePath }).from(attachments).all().map((r) => r.path));
+  deleteStoredFiles(storedFileRefs(db).map((r) => r.path));
   clearTempFiles();
 }
 
