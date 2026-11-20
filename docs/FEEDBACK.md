@@ -8,3 +8,7 @@
 - [x] Review page: action buttons should all be the same size.
 - [x] Analytics: the "This year" range label doesn't say what it covers.
 - [x] Review page: remove the ⋯ button; tapping the row opens the details.
+
+# Owner feedback — recorded 2026-11-20, to do on the next app session
+
+- [ ] Home: the default currency's tile comes first and is big, filling the whole first row; the other currencies follow in the usual two-column tiles (Reorder currencies still orders the rest).
