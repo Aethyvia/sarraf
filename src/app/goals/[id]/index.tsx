@@ -10,8 +10,8 @@ import { Money } from '@/components/Money';
 import { Plant } from '@/components/Plant';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
-import { BottomSheet, Button, Card, Field, Header, Screen, SectionLabel, SelectorRow } from '@/components/ui';
-import { completeGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, harvestedAmount, stillToGo, takeOutOfGoal } from '@/data/goals';
+import { BottomSheet, Button, Card, Field, Header, LinkButton, Screen, SectionLabel, SelectorRow } from '@/components/ui';
+import { archiveGoal, completeGoal, deleteGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, harvestedAmount, stillToGo, takeOutOfGoal } from '@/data/goals';
 import { plantFor, stageRank } from '@/data/plant';
 import { db } from '@/db/client';
 import { accounts, savingsGoals } from '@/db/schema';
@@ -38,7 +38,7 @@ export default function GoalScreen() {
   const plan = usePlan();
   const toast = useToast();
   const action = useAction();
-  const [sheet, setSheet] = useState<'takeOut' | 'complete' | null>(null);
+  const [sheet, setSheet] = useState<'takeOut' | 'complete' | 'delete' | null>(null);
   const data = useLive(
     (d) => {
       const goal = d.select().from(savingsGoals).where(eq(savingsGoals.id, id)).get();
@@ -132,6 +132,20 @@ export default function GoalScreen() {
           </View>
         </>
       ) : null}
+      {/* A completed or archived goal can be archived or deleted (owner, Nov 20); an open one does that from Edit. */}
+      {!open ? (
+        <View style={styles.closedActions}>
+          {goal.completedAt && !goal.archivedAt ? (
+            <LinkButton
+              label={s.archive}
+              onPress={() => {
+                if (action.run(() => (archiveGoal(db, id), true))) toast({ message: s.archivedToast });
+              }}
+            />
+          ) : null}
+          <LinkButton danger label={s.delete} onPress={() => setSheet('delete')} />
+        </View>
+      ) : null}
 
       {byAccount.length ? (
         <View>
@@ -169,6 +183,19 @@ export default function GoalScreen() {
       <Text style={[styles.note, { color: colors.inkMuted }]}>{s.footer2}</Text>
 
       <TakeOutSheet visible={sheet === 'takeOut'} goalId={id} name={goal.name} currency={goal.currency} held={held} byAccount={byAccount} names={names} onClose={() => setSheet(null)} />
+      <BottomSheet visible={sheet === 'delete'} onClose={() => setSheet(null)} title={s.deleteTitle(goal.name)}>
+        <View style={{ gap: 12 }}>
+          <Text style={[styles.body, { color: colors.inkSecondary }]}>{dec(held).isZero() ? s.deleteBodyEmpty : s.deleteBody}</Text>
+          <Button
+            label={s.delete}
+            style={{ backgroundColor: colors.expense }}
+            onPress={() => {
+              if (action.run(() => (deleteGoal(db, id), true))) router.dismissTo('/savings');
+            }}
+          />
+          <Button kind="secondary" label={strings.common.cancel} onPress={() => setSheet(null)} />
+        </View>
+      </BottomSheet>
       <BottomSheet visible={sheet === 'complete'} onClose={() => setSheet(null)} title={s.completeTitle(goal.name)}>
         <View style={{ gap: 12 }}>
           <Text style={[styles.body, { color: colors.inkSecondary }]}>{parts(s.completeBody(money(held, styles.mono), goal.currency))}</Text>
@@ -279,6 +306,7 @@ function TakeOutSheet({
 }
 
 const styles = StyleSheet.create({
+  closedActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   stageBadge: { position: 'absolute', top: 14, left: 14, fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 1.2, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, overflow: 'hidden' },
   summaryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
   held: { fontFamily: fonts.monoSemiBold, fontSize: 28 },

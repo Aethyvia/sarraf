@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -7,7 +8,7 @@ import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { parts } from '@/components/parts';
 import { Plant } from '@/components/Plant';
-import { Button, Card } from '@/components/ui';
+import { Button, Card, LinkButton } from '@/components/ui';
 import { goalTotal } from '@/data/goals';
 import { plantFor } from '@/data/plant';
 import { savingsGoals } from '@/db/schema';
@@ -21,6 +22,8 @@ export default function SavingsScreen() {
   const g = strings.goals;
   const p = strings.plant;
   const { colors } = useTheme();
+  // Archived goals stay out of the way until asked for, like archived accounts (owner, Nov 20).
+  const [showArchived, setShowArchived] = useState(false);
   const goals = useLive((db) =>
     db
       .select()
@@ -48,7 +51,7 @@ export default function SavingsScreen() {
             <Text style={[styles.emptyBody, { color: colors.inkMuted }]}>{g.emptyBody}</Text>
           </Card>
         ) : null}
-        {[...open, ...done, ...archived].map((x) => {
+        {[...open, ...done, ...(showArchived ? archived : [])].map((x) => {
           // Savings F (owner, Nov 20): each goal is a plant that grows with what it holds of its target.
           const view = plantFor(x.held, x.targetAmount, x.currency, !!x.completedAt);
           const stageName = p.stages[view.stage];
@@ -90,6 +93,9 @@ export default function SavingsScreen() {
             </Pressable>
           );
         })}
+        {archived.length ? (
+          <LinkButton label={showArchived ? g.hideArchived : g.showArchived(archived.length)} onPress={() => setShowArchived((v) => !v)} />
+        ) : null}
         <Button kind="dashed" label={g.addDashed} onPress={() => router.push('/goals/new')} />
         {goals.length ? <Text style={[styles.note, { color: colors.inkMuted }]}>{s.footer}</Text> : null}
       </ScrollView>

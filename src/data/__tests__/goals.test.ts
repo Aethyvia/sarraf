@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import { savingsGoals } from '@/db/schema';
-import { addToGoal, completeGoal, createGoal, goalByAccount, goalHistory, goalTotal, shrinkGoalsToFit, takeOutOfGoal } from '../goals';
+import { addToGoal, archiveGoal, completeGoal, createGoal, deleteGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, shrinkGoalsToFit, takeOutOfGoal } from '../goals';
 import { LimitReachedError } from '../limits';
 import { saveTransaction, type TransactionDraft } from '../transactions';
 import { currencyPositions } from '../usable';
@@ -75,5 +75,21 @@ describe('savings goals', () => {
     completeGoal(w.db, ids[0], TODAY);
     expect(() => createGoal(w.db, { name: 'D', currency: 'USD', target: '10' }, 'free')).not.toThrow();
     expect(w.db.select().from(savingsGoals).where(eq(savingsGoals.name, 'D')).get()?.priority).toBe(4);
+  });
+
+  it('a completed goal can be archived, brought back, or deleted (owner, Nov 20)', async () => {
+    const w = await world();
+    const ids = ['A', 'B', 'C'].map((name) => createGoal(w.db, { name, currency: 'USD', target: '10' }, 'free'));
+    addToGoal(w.db, { goalId: ids[0], accountId: w.usd, amount: '10' });
+    completeGoal(w.db, ids[0], TODAY);
+    createGoal(w.db, { name: 'D', currency: 'USD', target: '10' }, 'free');
+    archiveGoal(w.db, ids[0], TODAY);
+    expect(goalTotal(w.db, ids[0])).toBe('0');
+    expect(w.usable()).toBe('1200');
+    // Completed goals don't take a slot, so it comes back even with 3 open.
+    unarchiveGoal(w.db, ids[0], 'free');
+    expect(w.db.select().from(savingsGoals).where(eq(savingsGoals.id, ids[0])).get()?.archivedAt).toBeNull();
+    deleteGoal(w.db, ids[0]);
+    expect(w.db.select().from(savingsGoals).where(eq(savingsGoals.id, ids[0])).get()).toBeUndefined();
   });
 });
