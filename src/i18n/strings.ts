@@ -35,7 +35,9 @@ export const strings = {
   money: {
     exact: 'EXACT',
     hidden: '••••',
-    hiddenLabel: 'Amount hidden. Double tap to show.',
+    hiddenLabel: 'Amount hidden',
+    hideAmounts: 'Hide amounts',
+    showAmounts: 'Show amounts',
     shortLabel: (exact: string) => `${exact}. Double tap for the exact amount.`,
   },
   startup: {
@@ -185,7 +187,7 @@ export const strings = {
     theme: 'Theme',
     themes: { system: 'System', light: 'Light', dark: 'Dark' },
     hideAmounts: 'Hide amounts',
-    hideAmountsDetail: 'Every amount shows as •••• until you tap it.',
+    hideAmountsDetail: 'Every amount shows as ••••. The eye at the top of Home, Transactions, Analytics and Savings does the same.',
   },
   accounts: {
     afterSetup: 'Tap + to add the rest of your accounts: Payoneer, Wise, another bank. Each can have an institution and an opening balance.',

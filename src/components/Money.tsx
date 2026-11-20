@@ -45,7 +45,6 @@ export function Money({
 }: MoneyProps) {
   const settings = useSettings();
   const { colors } = useTheme();
-  const [revealed, setRevealed] = useState(false);
   const [bubble, setBubble] = useState<Anchor | null>(null);
   const textRef = useRef<Text>(null);
 
@@ -56,14 +55,10 @@ export function Money({
   });
   const textStyle = [styles.amount, { color: colors.ink }, style];
 
-  if (settings.hideAmounts && !revealed) {
+  // Hidden amounts stay hidden; the eye on each main tab (or Settings) shows them (owner, Nov 20: no tap-to-peek).
+  if (settings.hideAmounts) {
     return (
-      <Text
-        style={textStyle}
-        onPress={() => setRevealed(true)}
-        accessibilityRole="button"
-        accessibilityLabel={strings.money.hiddenLabel}
-      >
+      <Text style={textStyle} accessibilityLabel={strings.money.hiddenLabel}>
         {strings.money.hidden}
       </Text>
     );

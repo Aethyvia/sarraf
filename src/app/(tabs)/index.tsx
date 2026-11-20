@@ -2,13 +2,14 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencyTileCard as Tile } from '@/components/CurrencyTile';
 import { Money } from '@/components/Money';
 import { AutoTag, RecurringRow } from '@/components/RecurringRow';
 import { BudgetCard } from '@/components/BudgetCard';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
-import { Card, IconButton, IconChip, LinkButton, SectionLabel } from '@/components/ui';
+import { Card, IconChip, LinkButton, SectionLabel } from '@/components/ui';
 import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
 import { budgetStatuses } from '@/data/budgets';
 import { recurringOnHome } from '@/data/recurring';
@@ -98,7 +99,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.ink }]}>{s.title}</Text>
-          <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />
+          <TabHeaderActions />
         </View>
 
         {tiles.length > 0 ? (

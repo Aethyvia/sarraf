@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
 import { DateRangeSheet, MultiPickerSheet, type DateRange } from '@/components/sheets/FilterSheets';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { useCategorySections, useLedgerItems, usePeopleItems } from '@/components/sheets/pickers';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
-import { Button, Header, IconButton, IconChip, LinkButton } from '@/components/ui';
+import { Button, Header, IconChip, LinkButton } from '@/components/ui';
 import { bulkUpdate, restoreTransactions, softDeleteTransactions, undoBulk, type BulkChange } from '@/data/transaction-ops';
 import { listTransactions, type ListKind, type ListRow, type TransactionFilters } from '@/data/transaction-list';
 import { db } from '@/db/client';
@@ -127,7 +128,7 @@ export function TransactionsView({ initial, onBack, total }: { initial?: Transac
             title={s.title}
             subtitle={total ? strings.analytics.fromAnalytics : undefined}
             onBack={onBack}
-            actions={onBack ? undefined : <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />}
+            actions={onBack ? undefined : <TabHeaderActions />}
           />
         )}
         {!selecting ? (

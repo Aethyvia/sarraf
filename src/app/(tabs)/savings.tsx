@@ -2,9 +2,10 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
-import { Button, Card, IconButton } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { goalTotal } from '@/data/goals';
 import { savingsGoals } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -35,7 +36,7 @@ export default function SavingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.ink }]}>{s.title}</Text>
-          <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />
+          <TabHeaderActions />
         </View>
         {open.length + done.length === 0 && archived.length === 0 ? (
           <Card style={styles.empty}>

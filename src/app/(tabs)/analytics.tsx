@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Donut } from '@/components/charts/Donut';
 import { TrendLines } from '@/components/charts/TrendLines';
 import { Icon } from '@/components/icons/Icon';
@@ -121,7 +122,7 @@ export default function AnalyticsScreen() {
             <Text style={[styles.title, { color: colors.ink }]}>{s.title}</Text>
             <Text style={[styles.sub, { color: colors.inkMuted }]}>{s.subtitle}</Text>
           </View>
-          <IconButton icon="settings" label={strings.settings.title} onPress={() => router.push('/settings')} />
+          <TabHeaderActions />
         </View>
         <View style={styles.chips}>
           {chip('ledger', s.ledger, ledgerName)}

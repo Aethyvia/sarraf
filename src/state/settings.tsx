@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { createContext, useContext, type ReactNode } from 'react';
 
+import { db } from '@/db/client';
 import { settings } from '@/db/schema';
 import { useLive } from './live';
 
@@ -20,4 +21,9 @@ export function useSettings(): Settings {
   const value = useContext(SettingsContext);
   if (!value) throw new Error('useSettings must be used inside SettingsProvider');
   return value;
+}
+
+/** Hide amounts on or off everywhere (the header eye and the Settings switch do the same). */
+export function setHideAmounts(on: boolean): void {
+  db.update(settings).set({ hideAmounts: on, updatedAt: new Date().toISOString() }).where(eq(settings.id, 1)).run();
 }
