@@ -73,16 +73,19 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
       <View style={[styles.bar, { paddingTop: WITH_ADD_BAR.has(active) ? 6 : 10, paddingBottom: 8 + insets.bottom }]}>
         {TABS.map((t) => {
           const on = t.name === active;
+          // Tab bar E (owner, Nov 20): only the current tab shows its name, in a soft pill; the others are icons.
           return (
             <Pressable
               key={t.name}
               onPress={() => onTab(t.name)}
               accessibilityRole="tab"
+              accessibilityLabel={t.label}
               accessibilityState={{ selected: on }}
-              style={styles.item}
+              hitSlop={6}
+              style={[styles.item, on ? { backgroundColor: colors.accentSoft, paddingHorizontal: 14 } : null]}
             >
-              <Icon name={t.icon} size={22} color={on ? colors.accent : colors.inkMuted} strokeWidth={on ? 2.2 : 1.8} />
-              <Text style={[styles.label, { color: on ? colors.accent : colors.inkMuted, fontFamily: on ? fonts.sansBold : fonts.sansSemiBold }]}>{t.label}</Text>
+              <Icon name={t.icon} size={on ? 20 : 22} color={on ? colors.tabOn : colors.inkMuted} strokeWidth={on ? 2.2 : 1.8} />
+              {on ? <Text style={[styles.label, { color: colors.tabOn }]} numberOfLines={1}>{t.label}</Text> : null}
             </Pressable>
           );
         })}
@@ -94,6 +97,6 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
 const styles = StyleSheet.create({
   addBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
   bar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 16 },
-  item: { alignItems: 'center', gap: 3, minWidth: 64 },
-  label: { fontSize: 11 },
+  item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 44, minWidth: 48, borderRadius: 22 },
+  label: { fontFamily: fonts.sansExtraBold, fontSize: 13 },
 });
