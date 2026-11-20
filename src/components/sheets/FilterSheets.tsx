@@ -6,6 +6,8 @@ import { BottomSheet, Button, LinkButton, SelectorRow, SheetOption } from '@/com
 import { strings } from '@/i18n/strings';
 import { monthOf, monthRange, today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
+import { hasFiscalYear, thisFiscalYearRange, thisYearRange } from '@/lib/ranges';
+import { useSettings } from '@/state/settings';
 import { fonts, useTheme } from '@/theme';
 import type { PickerItem } from './PickerSheet';
 
@@ -94,6 +96,7 @@ export function DateRangeSheet({
   onClose: () => void;
 }) {
   const s = strings.dateRange;
+  const fiscalStart = useSettings().fiscalYearStartMonth;
   const today = todayDate();
   const month = monthRange(monthOf(today));
   const [y, m] = today.split('-').map(Number);
@@ -101,7 +104,9 @@ export function DateRangeSheet({
   const presets: { key: string; label: string; range: DateRange }[] = [
     { key: 'month', label: s.thisMonth, range: { from: month.from, to: month.to } },
     { key: '3m', label: s.last3, range: { from: threeMonthsAgo, to: today } },
-    { key: 'year', label: s.thisYear, range: { from: `${y}-01-01`, to: today } },
+    { key: 'year', label: s.thisYear, range: thisYearRange(today) },
+    // Only when the fiscal year doesn't start in January (owner, Nov 20).
+    ...(hasFiscalYear(fiscalStart) ? [{ key: 'fiscal', label: s.thisFiscalYear, range: thisFiscalYearRange(today, fiscalStart) }] : []),
     { key: 'all', label: s.allTime, range: { from: null, to: null } },
   ];
   const [custom, setCustom] = useState<DateRange>(value);

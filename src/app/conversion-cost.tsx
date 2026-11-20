@@ -9,14 +9,12 @@ import { conversionCost } from '@/data/conversion-cost';
 import { strings } from '@/i18n/strings';
 import { today as todayDate } from '@/lib/dates';
 import { formatShortDate } from '@/lib/format-date';
+import { hasFiscalYear, rangeFor, rangeKeys, type RangeKey } from '@/lib/ranges';
 import { dec } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { goBack } from '@/state/nav';
 import { useSettings } from '@/state/settings';
 import { fonts, useTheme } from '@/theme';
-import { rangeFor } from './(tabs)/analytics';
-
-type RangeKey = 'month' | 'last' | 'three' | 'year';
 
 /** What converting cost you (Ideas added Nov 7): fees plus rate gap, per route, in the everyday currency. */
 export default function ConversionCostScreen() {
@@ -27,18 +25,19 @@ export default function ConversionCostScreen() {
   const [picking, setPicking] = useState(false);
   const data = useLive(
     (d) => {
-      const { from, to } = rangeFor(range, todayDate(), settings.fiscalYearForAnalytics ? settings.fiscalYearStartMonth : null);
+      const { from, to } = rangeFor(range, todayDate(), settings.fiscalYearStartMonth);
       return { from, to, cost: conversionCost(d, { from, to, currency: settings.defaultCurrency }) };
     },
-    [range, settings.defaultCurrency],
+    [range, settings.defaultCurrency, settings.fiscalYearStartMonth],
   );
+  const shownRange: RangeKey = range === 'fiscal' && !hasFiscalYear(settings.fiscalYearStartMonth) ? 'year' : range;
   const c = data.cost;
   const money = (v: string, style?: object) => <Money value={v} currency={c.currency} allowCompact={false} style={[styles.mono, style]} />;
   const pct = dec(c.moved).gt(0) ? dec(c.total).dividedBy(dec(c.moved)).times(100).toDecimalPlaces(1).toFixed(1) : '0.0';
   return (
     <Screen>
       <Header size={20} title={s.title} subtitle={s.subtitle(`${formatShortDate(data.from)} – ${formatShortDate(data.to)}`, c.currency)} onBack={goBack} />
-      <SelectorRow label={strings.analytics.range} value={strings.analytics.ranges[range]} onPress={() => setPicking(true)} />
+      <SelectorRow label={strings.analytics.range} value={strings.analytics.ranges[shownRange]} onPress={() => setPicking(true)} />
       {c.routes.length === 0 ? (
         <Text style={[styles.note, { color: colors.inkSecondary }]}>{s.nothing}</Text>
       ) : (
@@ -88,8 +87,8 @@ export default function ConversionCostScreen() {
       <PickerSheet
         visible={picking}
         title={strings.dateRange.title}
-        sections={[{ items: (['month', 'last', 'three', 'year'] as const).map((k) => ({ id: k, title: strings.analytics.ranges[k] })) }]}
-        selectedId={range}
+        sections={[{ items: rangeKeys(settings.fiscalYearStartMonth).map((k) => ({ id: k, title: strings.analytics.ranges[k] })) }]}
+        selectedId={shownRange}
         onSelect={(id) => setRange(id as RangeKey)}
         onClose={() => setPicking(false)}
       />

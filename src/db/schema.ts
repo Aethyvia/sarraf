@@ -79,7 +79,6 @@ export const settings = sqliteTable(
       .default('1,000.00'),
     compactNumbers: bool('compact_numbers').notNull().default(true),
     fiscalYearStartMonth: integer('fiscal_year_start_month').notNull().default(1),
-    fiscalYearForAnalytics: bool('fiscal_year_for_analytics').notNull().default(false),
     theme: text('theme', { enum: ['system', 'light', 'dark'] }).notNull().default('system'),
     hideAmounts: bool('hide_amounts').notNull().default(false),
     showIncomeByPerson: bool('show_income_by_person').notNull().default(true),

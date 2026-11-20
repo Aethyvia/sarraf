@@ -1,0 +1,1 @@
+ALTER TABLE `settings` DROP COLUMN `fiscal_year_for_analytics`;

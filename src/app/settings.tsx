@@ -189,20 +189,6 @@ export default function SettingsScreen() {
 
       <SectionLabel style={styles.section}>{s.analytics}</SectionLabel>
       <ToggleRow title={s.incomeByPerson} detail={s.incomeByPersonDetail} value={current.showIncomeByPerson} onChange={(v) => save({ showIncomeByPerson: v })} />
-      <ToggleRow
-        title={s.fiscalForAnalytics}
-        detail={
-          current.fiscalYearStartMonth === 1
-            ? s.fiscalForAnalyticsSame
-            : s.fiscalForAnalyticsDetail(
-                current.fiscalYearForAnalytics,
-                MONTHS[current.fiscalYearStartMonth - 1].slice(0, 3),
-                `${MONTHS[current.fiscalYearStartMonth - 1].slice(0, 3)} – ${MONTHS[(current.fiscalYearStartMonth + 10) % 12].slice(0, 3)}`,
-              )
-        }
-        value={current.fiscalYearForAnalytics}
-        onChange={(v) => save({ fiscalYearForAnalytics: v })}
-      />
 
       <SectionLabel style={styles.section}>{s.reports}</SectionLabel>
       <View>

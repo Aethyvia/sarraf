@@ -14,37 +14,13 @@ import { Card, IconButton, SectionLabel } from '@/components/ui';
 import { flows, monthlyTrend, UNCATEGORIZED } from '@/data/spending';
 import { accounts, categories, ledgers, people } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { addDays, monthOf, monthRange, today as todayDate } from '@/lib/dates';
+import { today as todayDate } from '@/lib/dates';
+import { hasFiscalYear, rangeFor, rangeKeys, type RangeKey } from '@/lib/ranges';
 import { dec } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { useSettings } from '@/state/settings';
 import { fonts, radius, useTheme } from '@/theme';
 import { SWATCH_KEYS, type SwatchKey } from '@/theme/tokens';
-
-type RangeKey = 'month' | 'last' | 'three' | 'year';
-
-/** The date range for a preset. "This year" follows the fiscal year when that's turned on for Analytics. */
-export function rangeFor(key: RangeKey, today: string, fiscalStart: number | null): { from: string; to: string } {
-  const month = monthOf(today);
-  const [y, m] = today.split('-').map(Number);
-  switch (key) {
-    case 'month':
-      return { from: monthRange(month).from, to: today };
-    case 'last': {
-      const prev = monthOf(addDays(monthRange(month).from, -1));
-      return monthRange(prev);
-    }
-    case 'three': {
-      const total = y * 12 + (m - 1) - 2;
-      return { from: `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`, to: today };
-    }
-    case 'year': {
-      if (!fiscalStart || fiscalStart === 1) return { from: `${y}-01-01`, to: today };
-      const startYear = m >= fiscalStart ? y : y - 1;
-      return { from: `${startYear}-${String(fiscalStart).padStart(2, '0')}-01`, to: today };
-    }
-  }
-}
 
 /** Months the trend shows for a range: all of them, and at least 6 for context. */
 export function trendMonths(from: string, to: string): number {
@@ -75,7 +51,7 @@ export default function AnalyticsScreen() {
       const currencies = [...new Set(d.select({ c: accounts.currency }).from(accounts).where(isNull(accounts.archivedAt)).all().map((a) => a.c))];
       const ledger = ledgerId === undefined ? (ledgerRows.find((l) => l.isDefault)?.id ?? null) : ledgerId;
       const cur = currency ?? (currencies.includes(settings.defaultCurrency) ? settings.defaultCurrency : (currencies[0] ?? settings.defaultCurrency));
-      const { from, to } = rangeFor(range, today, settings.fiscalYearForAnalytics ? settings.fiscalYearStartMonth : null);
+      const { from, to } = rangeFor(range, today, settings.fiscalYearStartMonth);
       return {
         today,
         ledgerRows,
@@ -91,7 +67,7 @@ export default function AnalyticsScreen() {
         names: new Map(d.select({ id: people.id, name: people.name }).from(people).all().map((p) => [p.id, p.name])),
       };
     },
-    [ledgerId, range, currency, settings.defaultCurrency, settings.fiscalYearForAnalytics, settings.fiscalYearStartMonth],
+    [ledgerId, range, currency, settings.defaultCurrency, settings.fiscalYearStartMonth],
   );
 
   const f = data.flows;
@@ -112,10 +88,12 @@ export default function AnalyticsScreen() {
   const maxPerson = Math.max(0, ...f.incomeByPerson.map((x) => Number(x.amount)));
 
   // Each range says exactly which days it covers ("This year" alone didn't).
-  const fiscal = settings.fiscalYearForAnalytics && settings.fiscalYearStartMonth !== 1 ? settings.fiscalYearStartMonth : null;
-  const rangeLabel = (k: RangeKey) => (k === 'year' && fiscal ? s.fiscalYear : s.ranges[k]);
+  // "This fiscal year" only when the fiscal year doesn't start in January (owner, Nov 20).
+  const fiscalStart = settings.fiscalYearStartMonth;
+  const shownRange: RangeKey = range === 'fiscal' && !hasFiscalYear(fiscalStart) ? 'year' : range;
+  const rangeLabel = (k: RangeKey) => s.ranges[k];
   const period = (k: RangeKey) => {
-    const r = rangeFor(k, data.today, fiscal);
+    const r = rangeFor(k, data.today, fiscalStart);
     const year = r.to.slice(0, 4);
     const day = (d: string) => `${strings.dates.months[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8))}`;
     return r.from.slice(0, 4) === year ? `${day(r.from)} – ${day(r.to)}, ${year}` : `${day(r.from)}, ${r.from.slice(0, 4)} – ${day(r.to)}, ${year}`;
@@ -147,7 +125,7 @@ export default function AnalyticsScreen() {
         </View>
         <View style={styles.chips}>
           {chip('ledger', s.ledger, ledgerName)}
-          {chip('range', s.range, rangeLabel(range))}
+          {chip('range', s.range, rangeLabel(shownRange))}
           {chip('currency', null, f.currency)}
         </View>
         <Text style={[styles.period, { color: colors.inkMuted }]}>{period(range)}</Text>
@@ -290,8 +268,8 @@ export default function AnalyticsScreen() {
       <PickerSheet
         visible={sheet === 'range'}
         title={strings.dateRange.title}
-        sections={[{ items: (['month', 'last', 'three', 'year'] as const).map((k) => ({ id: k, title: rangeLabel(k), detail: period(k) })) }]}
-        selectedId={range}
+        sections={[{ items: rangeKeys(fiscalStart).map((k) => ({ id: k, title: rangeLabel(k), detail: period(k) })) }]}
+        selectedId={shownRange}
         onSelect={(id) => {
           setRange(id as RangeKey);
           setSelected(null);
