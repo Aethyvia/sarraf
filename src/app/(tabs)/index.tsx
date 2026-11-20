@@ -5,12 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Icon } from '@/components/icons/Icon';
 import { CurrencyTileCard as Tile } from '@/components/CurrencyTile';
+import { DefaultCurrencyCard } from '@/components/DefaultCurrencyCard';
 import { Money } from '@/components/Money';
 import { AutoTag, RecurringRow } from '@/components/RecurringRow';
 import { BudgetCard } from '@/components/BudgetCard';
 import { TransactionRow } from '@/components/transaction/TransactionRow';
 import { Card, IconChip, LinkButton, SectionLabel } from '@/components/ui';
-import { currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS } from '@/data/home';
+import { currencyBalanceTrend, currencyTiles, estimatedTotal, RATES_WARN_AFTER_DAYS, splitDefaultTile } from '@/data/home';
 import { budgetStatuses } from '@/data/budgets';
 import { recurringOnHome } from '@/data/recurring';
 import { categories, ledgers, settings, transactions } from '@/db/schema';
@@ -63,6 +64,7 @@ export default function HomeScreen() {
     return {
       today,
       tiles: currencyTiles(d, today),
+      trend: currencyBalanceTrend(d, defaultCurrency, today).map((x) => x.balance),
       estimate: estimatedTotal(d, defaultCurrency, today),
       review: needsReview(d, today),
       recent: recentTransactions(d, 6, today),
@@ -82,7 +84,9 @@ export default function HomeScreen() {
     };
   }, [defaultCurrency]);
 
-  const { tiles, estimate, review, recent, recurring, budgets, categoryLooks, guestReminder } = data;
+  const { tiles, trend, estimate, review, recent, recurring, budgets, categoryLooks, guestReminder } = data;
+  // The default currency comes first, full width; the others follow in two columns (owner, Nov 20).
+  const { big, rest } = splitDefaultTile(tiles, defaultCurrency);
   // Added while Sarraf was closed and still waiting on Needs review (owner, Nov 14: no pop-up).
   const awayIds = useAddedWhileAway();
   const away = review.recurring.filter((t) => awayIds.includes(t.id));
@@ -124,11 +128,12 @@ export default function HomeScreen() {
         )}
 
         <TourTarget id="home.tiles" style={styles.grid}>
-          {tiles.slice(0, HOME_TILES).map((t) => (
+          {big ? <DefaultCurrencyCard tile={big} trend={trend} /> : null}
+          {rest.slice(0, HOME_TILES).map((t) => (
             <Tile key={t.currency} tile={t} estimate={estimate.perCurrency.get(t.currency) ?? null} defaultCurrency={defaultCurrency} />
           ))}
         </TourTarget>
-        {tiles.length > HOME_TILES ? (
+        {rest.length > HOME_TILES ? (
           <View style={{ marginTop: -12, marginBottom: -8 }}>
             <LinkButton label={s.seeAll(tiles.length)} onPress={() => router.push('/currencies')} />
           </View>

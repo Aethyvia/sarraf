@@ -22,6 +22,8 @@ export interface Palette {
   onAccent: string;
   accentSoft: string;
   income: string;
+  /** The balance trend line on Home's default-currency card (owner, Nov 20: green in light, mint in dark). */
+  trend: string;
   expense: string;
   /** Soft background behind a destructive icon (bulk Delete). */
   expenseSoft: string;
@@ -55,6 +57,7 @@ export const light: Palette = {
   onAccent: '#FFFFFF',
   accentSoft: '#DCEAE6',
   income: '#1E7A4C',
+  trend: '#1F5A52',
   expense: '#B3261E',
   expenseSoft: '#FDF1F0',
   warning: '#8A5A00',
@@ -82,6 +85,7 @@ export const dark: Palette = {
   onAccent: '#0E1512',
   accentSoft: '#1D3B35',
   income: '#4CAF7A',
+  trend: '#5CC7AE',
   expense: '#E0655C',
   expenseSoft: '#3A201D',
   warning: '#D9A73D',

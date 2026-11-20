@@ -637,6 +637,9 @@ export const strings = {
   },
   tabs: { home: 'Home', transactions: 'Transactions', analytics: 'Analytics', savings: 'Savings' },
   home: {
+    defaultTile: (currency: string) => `${currency} · DEFAULT`,
+    trendDays: '30 days',
+    trendLabel: 'Balance over the last 30 days',
     title: 'Sarraf',
     estimated: (currency: string) => `ESTIMATED TOTAL · ${currency} · MARKET RATE`,
     ratesFrom: (date: string) => `rates from ${date}`,

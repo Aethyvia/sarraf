@@ -2,8 +2,9 @@ import { and, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 
 import { accounts, currencyOrder, transactionCharges, transactions } from '@/db/schema';
 import type { AppDb } from '@/db/types';
-import { monthOf, monthRange, today as todayDate } from '@/lib/dates';
+import { addDays, monthOf, monthRange, today as todayDate } from '@/lib/dates';
 import { Decimal, convert, dec, toDecimalString, type DecimalString, type DecimalValue } from '@/lib/money';
+import { forEachMovement } from './balances';
 import { marketRate } from './rates';
 import { currencyPositions, type CurrencyPosition } from './usable';
 
@@ -140,3 +141,43 @@ export function estimatedTotal(db: AppDb, defaultCurrency: string, asOf: string 
 
 /** After this long without fresh rates, Home warns (Decided Nov 7). */
 export const RATES_WARN_AFTER_DAYS = 7;
+
+/** Days the default currency's trend line covers on Home (owner, Nov 20). */
+export const TREND_DAYS = 30;
+
+/**
+ * End-of-day balance of one currency (its active accounts added up, archived
+ * ones left out, as on the tile) for each of the last `days` days up to asOf —
+ * the trend line on Home's big default-currency card.
+ */
+export function currencyBalanceTrend(db: AppDb, currency: string, asOf: string = todayDate(), days: number = TREND_DAYS): { date: string; balance: DecimalString }[] {
+  const from = addDays(asOf, -(days - 1));
+  const ids = new Set(
+    db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.currency, currency), isNull(accounts.archivedAt)))
+      .all()
+      .map((a) => a.id),
+  );
+  let before = new Decimal(0);
+  const byDay = new Map<string, DecimalValue>();
+  forEachMovement(db, asOf, (id, date, delta) => {
+    if (!ids.has(id)) return;
+    if (date < from) before = before.plus(delta);
+    else byDay.set(date, (byDay.get(date) ?? new Decimal(0)).plus(delta));
+  });
+  const out: { date: string; balance: DecimalString }[] = [];
+  let running = before;
+  for (let d = from; d <= asOf; d = addDays(d, 1)) {
+    running = running.plus(byDay.get(d) ?? 0);
+    out.push({ date: d, balance: toDecimalString(running) });
+  }
+  return out;
+}
+
+/** Home's first tile is the default currency's, shown big; the rest keep their order (owner, Nov 20). */
+export function splitDefaultTile<T extends { currency: string }>(tiles: T[], defaultCurrency: string): { big: T | null; rest: T[] } {
+  const big = tiles.find((t) => t.currency === defaultCurrency) ?? null;
+  return { big, rest: big ? tiles.filter((t) => t !== big) : tiles };
+}

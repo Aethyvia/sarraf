@@ -116,3 +116,43 @@ describe('money back on Home', () => {
     expect(f.out.get('PKR')!.toString()).toBe('50');
   });
 });
+
+describe('Home: the default currency card (owner, Nov 20)', () => {
+  it('trend: end-of-day balance of the currency for the last 30 days, ending at today’s balance', async () => {
+    const { currencyBalanceTrend } = jest.requireActual('../home') as typeof import('../home');
+    const { account, tx, db } = await setup();
+    const bank = account('Alfalah PKR', 'PKR');
+    const cash = account('Cash PKR', 'PKR');
+    const usd = account('Payoneer USD', 'USD');
+    tx({ kind: 'opening_balance', accountId: bank, amount: '100000', accountAmount: '100000', currency: 'PKR', date: '2026-08-01' });
+    tx({ kind: 'opening_balance', accountId: cash, amount: '2500', accountAmount: '2500', currency: 'PKR', date: '2026-08-01' });
+    tx({ kind: 'expense', accountId: bank, amount: '4871.17', accountAmount: '4871.17', currency: 'PKR', date: '2026-09-10' });
+    tx({ kind: 'income', accountId: usd, amount: '500', accountAmount: '500', date: '2026-09-12' });
+    tx({ kind: 'expense', accountId: cash, amount: '100', accountAmount: '100', currency: 'PKR', status: 'pending', date: '2026-09-20' });
+    const t = currencyBalanceTrend(db, 'PKR', TODAY);
+    expect(t).toHaveLength(30);
+    expect(t[0]).toEqual({ date: '2026-09-01', balance: '102500' });
+    expect(t.find((d) => d.date === '2026-09-09')!.balance).toBe('102500');
+    expect(t.find((d) => d.date === '2026-09-10')!.balance).toBe('97628.83');
+    expect(t[29]).toEqual({ date: TODAY, balance: '97628.83' });
+  });
+
+  it('leaves archived accounts out, like the tile', async () => {
+    const { currencyBalanceTrend } = jest.requireActual('../home') as typeof import('../home');
+    const { accounts } = jest.requireActual('@/db/schema') as typeof import('@/db/schema');
+    const { account, tx, db } = await setup();
+    const a = account('Old PKR', 'PKR');
+    tx({ kind: 'opening_balance', accountId: a, amount: '500', accountAmount: '500', currency: 'PKR', date: '2026-08-01' });
+    db.update(accounts).set({ archivedAt: '2026-09-15T00:00:00Z' }).where(eq(accounts.id, a)).run();
+    expect(currencyBalanceTrend(db, 'PKR', TODAY).every((d) => d.balance === '0')).toBe(true);
+  });
+
+  it('puts the default currency first and big; the others keep their order', () => {
+    const { splitDefaultTile } = jest.requireActual('../home') as typeof import('../home');
+    const tiles = [{ currency: 'USD' }, { currency: 'EUR' }, { currency: 'PKR' }, { currency: 'AED' }];
+    const { big, rest } = splitDefaultTile(tiles, 'PKR');
+    expect(big?.currency).toBe('PKR');
+    expect(rest.map((t) => t.currency)).toEqual(['USD', 'EUR', 'AED']);
+    expect(splitDefaultTile(tiles, 'SAR')).toEqual({ big: null, rest: tiles });
+  });
+});
