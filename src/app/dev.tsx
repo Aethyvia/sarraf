@@ -1,4 +1,6 @@
 import { eq } from 'drizzle-orm';
+
+import { LIFETIME } from '@/data/plan';
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { DevSettings, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -91,6 +93,7 @@ function DevPreview() {
             label="Plus: active for a year"
             onPress={() => db.update(deviceState).set({ plan: 'plus', planRenewsAt: new Date(Date.now() + 365 * 86400000).toISOString() }).where(eq(deviceState.id, 1)).run()}
           />
+          <Toggle label="Plus: lifetime" onPress={() => db.update(deviceState).set({ plan: 'plus', planRenewsAt: LIFETIME }).where(eq(deviceState.id, 1)).run()} />
           <Toggle label="Home →" onPress={() => router.dismissTo('/')} />
           <Toggle
             label={`Cloud: ${usingRealCloud ? 'real (Supabase + Drive)' : 'stand-in'}`}

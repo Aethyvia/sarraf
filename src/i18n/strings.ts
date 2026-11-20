@@ -1622,6 +1622,8 @@ export const strings = {
     renews: (date: string) => `Renews ${date}`,
     // Supporter codes (owner, Nov 14): lifetime Plus.
     lifetime: 'Lifetime',
+    lifetimeActive: 'Active for life',
+    lifetimeBody: 'This Sarraf account has Sarraf Plus for life: unlimited accounts, ledgers and goals. Thank you for your support!',
     haveCode: 'Have a code?',
     codeTitle: 'Enter your code',
     codeBody: 'A supporter code gives you Sarraf Plus for life, on this Sarraf account. Each code works once.',

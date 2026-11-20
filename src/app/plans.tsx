@@ -68,6 +68,23 @@ export default function PlansScreen() {
     </View>
   );
 
+  // Lifetime Plus (supporters): just the plan they have, no prices, buttons or codes (owner, Nov 20).
+  if (plan === 'plus' && isLifetime(renews)) {
+    return (
+      <Screen>
+        <Header title={s.title} onBack={goBack} />
+        <Card style={[styles.lifetime, { borderWidth: 2, borderColor: colors.accent }]}>
+          <View style={[styles.tick, { backgroundColor: colors.accent }]}>
+            <Icon name="tick" size={30} color={colors.onAccent} strokeWidth={2.8} />
+          </View>
+          <Text style={[styles.lifetimeName, { color: colors.ink }]}>{s.plus}</Text>
+          <Text style={[styles.lifetimeLine, { color: colors.ink }]}>{s.lifetimeActive}</Text>
+          <Text style={[styles.lifetimeBody, { color: colors.inkSecondary }]}>{s.lifetimeBody}</Text>
+        </Card>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <Header title={s.title} onBack={goBack} />
@@ -128,4 +145,9 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   itemText: { flex: 1, fontFamily: fonts.sans, fontSize: 13, lineHeight: 18 },
   codeBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19 },
+  lifetime: { padding: 24, gap: 8, alignItems: 'center' },
+  tick: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  lifetimeName: { fontFamily: fonts.serif, fontSize: 24 },
+  lifetimeLine: { fontFamily: fonts.sansSemiBold, fontSize: 15 },
+  lifetimeBody: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: 'center' },
 });
