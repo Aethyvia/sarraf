@@ -33,17 +33,6 @@ export function CurrencyTileCard({ tile, estimate, defaultCurrency }: { tile: Cu
           <Text style={[styles.tileRowLabel, { color: colors.inkMuted }]}>{s.out}</Text>
           <Money value={tile.out} currency={tile.currency} sign="minus" style={[styles.tileRowValue, { color: colors.expense }]} />
         </View>
-        {/* Money back this month, already taken off Out (owner, Nov 14). */}
-        {dec(tile.back).gt(0) ? (
-          <Text style={[styles.backLine, { color: colors.inkMuted }]}>
-            {parts(
-              s.spentBack(
-                <Money value={toDecimalString(dec(tile.out).plus(dec(tile.back)))} currency={tile.currency} style={styles.backMoney} />,
-                <Money value={tile.back} currency={tile.currency} style={styles.backMoney} />,
-              ),
-            )}
-          </Text>
-        ) : null}
       </View>
       <View style={[styles.usable, { borderTopColor: colors.filled }]}>
         <Text style={[styles.tileRowLabel, { color: colors.inkMuted }]}>
@@ -66,8 +55,6 @@ export function CurrencyTileCard({ tile, estimate, defaultCurrency }: { tile: Cu
 }
 
 const styles = StyleSheet.create({
-  backLine: { fontFamily: fonts.sans, fontSize: 10.5, marginTop: -2 },
-  backMoney: { fontFamily: fonts.mono, fontSize: 10.5 },
   tile: { width: '48.5%', flexGrow: 1, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 15, elevation: 1 },
   tileCode: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 0.66 },
   tileBalance: { fontFamily: fonts.mono, fontSize: 21, marginTop: 4 },

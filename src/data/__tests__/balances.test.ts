@@ -104,8 +104,8 @@ describe('income with a bank charge taken separately (owner, Nov 13, statement s
   });
 });
 
-describe('money back on Home (owner, Nov 14)', () => {
-  it('the tile says what was spent and what came back; Out is the difference', async () => {
+describe('money back on Home', () => {
+  it('Out is spending after money back (no separate "spent · back" line — owner, Nov 20)', async () => {
     const { monthFlows } = jest.requireActual('../home') as typeof import('../home');
     const { account, tx, db } = await setup();
     const pkr = account('Cash PKR', 'PKR');
@@ -114,6 +114,5 @@ describe('money back on Home (owner, Nov 14)', () => {
     tx({ kind: 'expense', accountId: pkr, amount: '250', accountAmount: '250', countsAsAmount: '250', currency: 'PKR', parentId: bill, linkType: 'refund', date: TODAY });
     const f = monthFlows(db, TODAY.slice(0, 8) + '01', TODAY);
     expect(f.out.get('PKR')!.toString()).toBe('50');
-    expect(f.back.get('PKR')!.toString()).toBe('1450');
   });
 });

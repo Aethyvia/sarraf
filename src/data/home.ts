@@ -12,8 +12,6 @@ export interface CurrencyTile extends CurrencyPosition {
   in: DecimalString;
   /** This month's spending in this currency, across all ledgers (refunds lower it). */
   out: DecimalString;
-  /** Money back this month (refunds and reimbursements), already taken off `out`; shown as "spent · back" (owner, Nov 14). */
-  back: DecimalString;
   accountCount: number;
 }
 
@@ -44,16 +42,14 @@ export function currencyTiles(db: AppDb, asOf: string = todayDate()): CurrencyTi
       ...p,
       in: toDecimalString(flows.in.get(p.currency) ?? new Decimal(0)),
       out: toDecimalString(flows.out.get(p.currency) ?? new Decimal(0)),
-      back: toDecimalString(flows.back.get(p.currency) ?? new Decimal(0)),
       accountCount: counts.get(p.currency) ?? 0,
     }));
 }
 
 /** Income and spending per currency for Cleared rows dated from..to. */
-export function monthFlows(db: AppDb, from: string, to: string): { in: Map<string, DecimalValue>; out: Map<string, DecimalValue>; back: Map<string, DecimalValue> } {
+export function monthFlows(db: AppDb, from: string, to: string): { in: Map<string, DecimalValue>; out: Map<string, DecimalValue> } {
   const inSum = new Map<string, DecimalValue>();
   const outSum = new Map<string, DecimalValue>();
-  const backSum = new Map<string, DecimalValue>();
   const add = (m: Map<string, DecimalValue>, c: string, v: DecimalValue) => m.set(c, (m.get(c) ?? new Decimal(0)).plus(v));
   const currencyOf = new Map(db.select({ id: accounts.id, c: accounts.currency }).from(accounts).all().map((a) => [a.id, a.c]));
 
@@ -85,7 +81,6 @@ export function monthFlows(db: AppDb, from: string, to: string): { in: Map<strin
       const amount = t.countsAsAmount ?? t.accountAmount;
       if (amount) {
         add(outSum, currency, dec(amount).negated());
-        add(backSum, currency, dec(amount));
       }
       continue;
     }
@@ -101,7 +96,7 @@ export function monthFlows(db: AppDb, from: string, to: string): { in: Map<strin
     .all()) {
     if (c.accountId) add(outSum, currencyOf.get(c.accountId)!, dec(c.amount));
   }
-  return { in: inSum, out: outSum, back: backSum };
+  return { in: inSum, out: outSum };
 }
 
 export interface EstimatedTotal {
