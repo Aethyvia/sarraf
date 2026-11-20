@@ -31,9 +31,10 @@ describe('Usable per currency', () => {
     expect(currencyPositions(w.db, TODAY).get('PKR')!.usable).toBe('104231.75');
   });
 
-  it('may go negative', async () => {
+  it('may go negative (spending below what is set aside)', async () => {
     const w = await world();
-    addToGoal(w.db, { goalId: 'laptop', accountId: w.usd, amount: '1500' });
+    addToGoal(w.db, { goalId: 'laptop', accountId: w.usd, amount: '1250' });
+    w.db.insert(goalAllocations).values({ id: 'x', goalId: 'emergency', accountId: w.wise, kind: 'add', amount: '250', date: '2026-09-01' }).run();
     expect(currencyPositions(w.db, TODAY).get('USD')!.usable).toBe('-150');
   });
 
@@ -61,6 +62,16 @@ describe('Add — Savings', () => {
     expect(() => addToGoal(w.db, { goalId: 'emergency', accountId: w.pkr, amount: '1' })).toThrow(/currency/);
     expect(() => addToGoal(w.db, { goalId: 'emergency', accountId: w.usd, amount: '0' })).toThrow(/above zero/);
     expect(w.db.select().from(goalAllocations).all()).toHaveLength(0);
+  });
+
+  it('never sets aside more than is free in that account (owner, Nov 20)', async () => {
+    const w = await world();
+    addToGoal(w.db, { goalId: 'emergency', accountId: w.usd, amount: '1000' });
+    expect(() => addToGoal(w.db, { goalId: 'laptop', accountId: w.usd, amount: '250.01' })).toThrow(/free/);
+    addToGoal(w.db, { goalId: 'laptop', accountId: w.usd, amount: '250' });
+    expect(accountFree(w.db, w.usd, TODAY).free).toBe('0');
+    // Another USD account with room doesn't lift the cap on this one.
+    expect(() => addToGoal(w.db, { goalId: 'laptop', accountId: w.usd, amount: '1' })).toThrow(/free/);
   });
 });
 

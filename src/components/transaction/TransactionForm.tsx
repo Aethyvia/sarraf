@@ -32,7 +32,7 @@ import { personBalances } from '@/data/owing';
 import { marketRate } from '@/data/rates';
 import { CHARGE_TYPES, NOTES_MAX, prepareTransaction, saveTransaction, type ChargeDraft, type ChargeType } from '@/data/transactions';
 import { budgetWarning } from '@/data/budgets';
-import { accountFree, currencyPositions, spendWarning, upcomingOnAccount } from '@/data/usable';
+import { accountFree, spendWarning, upcomingOnAccount } from '@/data/usable';
 import { db } from '@/db/client';
 import { exportedPeriodFor } from '@/data/tax-export';
 import { accounts, categories, ledgers, people, transactionCharges } from '@/db/schema';
@@ -299,9 +299,8 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   );
   const upcoming = useLive((d) => (fromAccount && !isSavings ? upcomingOnAccount(d, fromAccount.id) : null), [fromAccount?.id, isSavings]);
   const goalFree = useLive((d) => (goalAccount ? accountFree(d, goalAccount.id).free : null), [goalAccount?.id]);
-  // Raising a goal past what the currency has (Decided Nov 7): allowed, with a red warning; Usable goes negative.
-  const currencyUsable = useLive((d) => (isSavings && goal ? (currencyPositions(d).get(goal.currency)?.usable ?? '0') : null), [isSavings, goal?.currency]);
-  const savingsOver = currencyUsable !== null && amount && dec(amount).gt(dec(currencyUsable)) ? toDecimalString(dec(amount).minus(dec(currencyUsable))) : null;
+  // Never more than is free in the account (owner, Nov 20 — replaces Nov 7's "allowed, Usable goes negative").
+  const savingsOver = isSavings && goalFree !== null && amount && dec(amount).gt(dec(goalFree)) ? goalFree : null;
 
   // ── Actions ──
   const onKey = (key: Parameters<typeof applyKey>[1]) =>
@@ -336,7 +335,7 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
   // 0 saves only as a charge on its own: separate charges and nothing else (owner, Nov 14).
   const chargeOnly = !!amount && dec(amount).isZero() && form.charges.some((c) => c.deduction === 'charged_separately');
   const canSave = isSavings
-    ? !!(goal && goalAccount && amount && dec(amount).gt(0))
+    ? !!(goal && goalAccount && amount && dec(amount).gt(0) && !savingsOver)
     : !!amount && (dec(amount).gt(0) || chargeOnly) && preview.error !== 'charges_exceed';
   // Charges wait for an amount, 0 included (council, owner Nov 13–14); across currencies, also the rate.
   const amountReady = !!amount && !dec(amount).isNegative();
@@ -597,16 +596,9 @@ export function TransactionForm({ initial, editId }: { initial: FormState; editI
               </RowNote>
             )
           ) : null}
-          {goal && savingsOver ? (
+          {goal && goalAccount && savingsOver ? (
             <RowNote tone="danger" icon="bolt">
-              {parts(
-                s.goalOverBalance(
-                  <MoneyInline size={11} value={amount ?? '0'} currency={goal.currency} />,
-                  goal.title,
-                  goal.currency,
-                  <MoneyInline size={11} value={savingsOver} currency={goal.currency} tone="expense" />,
-                ),
-              )}
+              {parts(s.goalMoreThanFree(goalAccount.name, <MoneyInline size={11} value={savingsOver} currency={goal.currency} tone={dec(savingsOver).lt(0) ? 'expense' : undefined} />))}
             </RowNote>
           ) : null}
         </>

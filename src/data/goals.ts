@@ -26,6 +26,9 @@ export function stillToGo(target: DecimalString, held: DecimalString, adding: De
  * Add — Savings (Decided Nov 6–7): sets money aside in a goal from one account
  * of the goal's currency. Not a transaction: no money moves, it only lowers that
  * currency's Usable. You type the amount to add, not a new total.
+ * Owner, Nov 20: never more than what's free in that account today (its balance
+ * minus what goals already hold from it), so adding money can't make Usable go
+ * below zero; only spending can.
  */
 export function addToGoal(
   db: AppDb,
@@ -41,6 +44,7 @@ export function addToGoal(
     if (!account) throw new DataError('not_found', 'No account');
     if (account.archivedAt) throw new DataError('archived', 'That account is archived');
     if (account.currency !== goal.currency) throw new DataError('invalid_currency', 'Pick an account in the goal’s currency');
+    if (dec(input.amount).gt(dec(accountFree(tx, account.id).free))) throw new DataError('more_than_free', 'More than is free in that account');
     tx.insert(goalAllocations)
       .values({
         id,
