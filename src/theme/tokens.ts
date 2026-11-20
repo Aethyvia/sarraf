@@ -24,7 +24,7 @@ export interface Palette {
   income: string;
   /** The balance trend line on Home's default-currency card (owner, Nov 20: green in light, mint in dark). */
   trend: string;
-  /** The current tab's icon and name in the tab bar, on accentSoft (owner, Nov 20: tab bar E). */
+  /** The current tab's icon and name in the tab bar, on accentSoft (owner, Nov 20: tab bar A). */
   tabOn: string;
   /** Savings F: the soft panel behind a growing plant, and the warm one behind a seed or harvest. */
   plantPanel: string;

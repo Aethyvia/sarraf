@@ -73,7 +73,7 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
       <View style={[styles.bar, { paddingTop: WITH_ADD_BAR.has(active) ? 6 : 10, paddingBottom: 8 + insets.bottom }]}>
         {TABS.map((t) => {
           const on = t.name === active;
-          // Tab bar E (owner, Nov 20): only the current tab shows its name, in a soft pill; the others are icons.
+          // Tab bar A (owner, Nov 20): every tab keeps its place and name; the current one gets a soft pill behind its icon.
           return (
             <Pressable
               key={t.name}
@@ -81,11 +81,14 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
               accessibilityRole="tab"
               accessibilityLabel={t.label}
               accessibilityState={{ selected: on }}
-              hitSlop={6}
-              style={[styles.item, on ? { backgroundColor: colors.accentSoft, paddingHorizontal: 14 } : null]}
+              style={styles.item}
             >
-              <Icon name={t.icon} size={on ? 20 : 22} color={on ? colors.tabOn : colors.inkMuted} strokeWidth={on ? 2.2 : 1.8} />
-              {on ? <Text style={[styles.label, { color: colors.tabOn }]} numberOfLines={1}>{t.label}</Text> : null}
+              <View style={[styles.pill, on ? { backgroundColor: colors.accentSoft } : null]}>
+                <Icon name={t.icon} size={22} color={on ? colors.tabOn : colors.inkMuted} strokeWidth={on ? 2.2 : 1.8} />
+              </View>
+              <Text style={[styles.label, { color: on ? colors.ink : colors.inkMuted, fontFamily: on ? fonts.sansExtraBold : fonts.sansSemiBold }]} numberOfLines={1}>
+                {t.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -96,7 +99,8 @@ function TabBar({ active, onTab }: { active: string; onTab: (name: string) => vo
 
 const styles = StyleSheet.create({
   addBar: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
-  bar: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 16 },
-  item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 44, minWidth: 48, borderRadius: 22 },
-  label: { fontFamily: fonts.sansExtraBold, fontSize: 13 },
+  bar: { flexDirection: 'row', paddingHorizontal: 8 },
+  item: { flex: 1, alignItems: 'center', gap: 4 },
+  pill: { width: 60, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 11 },
 });
