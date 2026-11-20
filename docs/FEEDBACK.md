@@ -11,5 +11,5 @@
 
 # Owner feedback — recorded 2026-11-20, to do on the next app session
 
-- [ ] Home: the default currency's tile comes first and is big, filling the whole first row; the other currencies follow in the usual two-column tiles (Reorder currencies still orders the rest).
+- [ ] Home: the default currency's tile comes first and is big, filling the whole first row; the other currencies follow in the usual two-column tiles (Reorder currencies still orders the rest). The big tile shows the balance, Usable, In / Out for the month, and a small 30-day balance trend line beside the amount (owner picked only the trend line from: money in goals, budget, upcoming, trend).
 - [ ] Home currency cards: remove the "spent · back" line (owner, Nov 20; replaces the Nov 14 decision). Out stays as spending after money back; refunds/reimbursements still show under their expense in Transactions.
