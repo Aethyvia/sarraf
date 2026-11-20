@@ -19,7 +19,7 @@ export const store = {
     return (await refreshPlan(db, cloud, user, new Date())) === 'plus';
   },
   /** "Have a code?": a supporter code (owner, Nov 14). Needs a Sarraf account. */
-  async redeem(code: string): Promise<'ok' | 'used' | 'unknown' | 'signIn'> {
+  async redeem(code: string): Promise<'ok' | 'used' | 'expired' | 'unknown' | 'signIn'> {
     const user = currentUser(db);
     if (!user) return 'signIn';
     const r = await cloud.redeemCode(user, code);

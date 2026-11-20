@@ -344,7 +344,7 @@ export function realCloud(config: RealCloudConfig): Cloud {
     async redeemCode(_user, code) {
       const { data, error } = await online(async () => supabase.rpc('redeem_supporter_code', { code }));
       if (error) throw error;
-      return data === 'ok' || data === 'used' ? data : 'unknown';
+      return data === 'ok' || data === 'used' || data === 'expired' ? data : 'unknown';
     },
 
     async deleteBackup() {

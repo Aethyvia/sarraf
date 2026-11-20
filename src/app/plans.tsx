@@ -36,7 +36,7 @@ export default function PlansScreen() {
         setCodeOpen(false);
         setCode('');
         toast({ message: s.codeOk });
-      } else setCodeError(r === 'used' ? s.codeUsed : r === 'signIn' ? s.codeSignIn : s.codeUnknown);
+      } else setCodeError(r === 'used' ? s.codeUsed : r === 'expired' ? s.codeExpired : r === 'signIn' ? s.codeSignIn : s.codeUnknown);
     } catch (e) {
       setCodeError((e as Error).message || strings.start.failed);
     } finally {

@@ -1629,6 +1629,7 @@ export const strings = {
     codeUse: 'Use code',
     codeOk: 'You’re on Sarraf Plus for life. Thank you for your support!',
     codeUsed: 'That code has already been used.',
+    codeExpired: 'That code has expired.',
     codeUnknown: 'That code isn’t right. Check it and try again.',
     codeSignIn: 'Sign in first: the code goes on your Sarraf account.',
   },
