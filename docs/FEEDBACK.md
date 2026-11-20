@@ -12,3 +12,4 @@
 # Owner feedback — recorded 2026-11-20, to do on the next app session
 
 - [ ] Home: the default currency's tile comes first and is big, filling the whole first row; the other currencies follow in the usual two-column tiles (Reorder currencies still orders the rest).
+- [ ] Home currency cards: remove the "spent · back" line (owner, Nov 20; replaces the Nov 14 decision). Out stays as spending after money back; refunds/reimbursements still show under their expense in Transactions.
