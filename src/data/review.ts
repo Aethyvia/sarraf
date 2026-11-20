@@ -119,9 +119,21 @@ export function markInTransit(db: AppDb, id: string): void {
  * Cancelled: it didn't happen. Kept in history (struck through) and left out of
  * balances, budgets and reports. Linked refunds and reimbursements are cancelled with it.
  */
+/**
+ * Only something that hasn't gone through can be cancelled: Pending, In transit,
+ * or Upcoming. Auto-added recurring items stay Pending / In transit until
+ * confirmed, so they're covered too. A processed (Cleared) row can't be — it's
+ * edited, deleted or refunded instead (Owner, Nov 20).
+ */
+export function canCancel(t: Pick<TransactionRow, 'status' | 'scheduled'>): boolean {
+  return t.status === 'pending' || t.status === 'in_transit' || t.scheduled;
+}
+
 export function cancelTransaction(db: AppDb, id: string): void {
   db.transaction((tx) => {
-    getRow(tx, id);
+    const t = getRow(tx, id);
+    if (t.status === 'cancelled') return;
+    if (!canCancel(t)) throw new DataError('invalid_target', 'It has already gone through, so it can’t be cancelled');
     const ids = withLinkedChildren(tx, [id]);
     tx.update(transactions).set({ status: 'cancelled', scheduled: false, updatedAt: nowIso() }).where(inArray(transactions.id, ids)).run();
   });

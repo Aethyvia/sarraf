@@ -10,12 +10,12 @@ import { buildReceipt as buildReceiptRows } from '@/data/receipt';
 import { GotItSheet } from '@/components/transaction/GotItSheet';
 import { SharesKeptNote } from '@/components/transaction/SharesKeptNote';
 import { amountSign, rowTitle } from '@/components/transaction/TransactionRow';
-import { BottomSheet, Button, Card, Header, IconChip, LinkButton, Screen } from '@/components/ui';
+import { BottomSheet, Button, Card, Header, IconChip, Screen } from '@/components/ui';
 import { vsMarketPercent } from '@/data/amounts';
 import { attachmentsOf } from '@/data/attachments';
 import { chargedCurrencyOf , chargesOf } from '@/data/owing';
 import { splitOf } from '@/data/splits';
-import { cancelTransaction } from '@/data/review';
+import { canCancel, cancelTransaction } from '@/data/review';
 import { deleteTransaction, deletionSet, restoreCancelled } from '@/data/transaction-ops';
 import { toListRowFromDb } from '@/data/transaction-list';
 import { db } from '@/db/client';
@@ -295,9 +295,9 @@ export default function TransactionDetailScreen() {
       {editable ? (
         row.cancelled ? (
           <Button kind="secondary" label={s.restore} onPress={() => action.run(() => restoreCancelled(db, id))} />
-        ) : (
-          <LinkButton label={s.cancel} onPress={() => action.run(() => cancelTransaction(db, id))} />
-        )
+        ) : canCancel(t) ? (
+          <Button kind="secondary" label={s.cancel} onPress={() => action.run(() => cancelTransaction(db, id))} />
+        ) : null
       ) : null}
       <Button kind="danger" label={s.delete} onPress={() => setDeleting(true)} />
 

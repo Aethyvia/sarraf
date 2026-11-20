@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { personEntries, transactionCharges, transactions } from '@/db/schema';
 import { accountBalances } from '../balances';
-import { cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsReview } from '../review';
+import { canCancel, cancelTransaction, confirmLabel, confirmTransaction, markInTransit, needsReview } from '../review';
 import { attachmentsOf } from '../attachments';
 import { draftFromTransaction, saveTransaction, type TransactionDraft } from '../transactions';
 import { setup } from '@/test/factories';
@@ -173,6 +173,22 @@ describe('Upcoming and Needs review', () => {
     expect(w.row(id).status).toBe('cancelled');
     expect(w.bal(w.usd)).toBe('1250');
     expect(needsReview(w.db, TODAY).inTransit).toHaveLength(0);
+  });
+
+  it('Mark as cancelled only works before it has gone through', async () => {
+    const w = await world();
+    const cleared = w.save({ accountId: w.usd, amount: '20' });
+    const pending = w.save({ accountId: w.usd, amount: '20', status: 'pending' });
+    const upcoming = w.save({ accountId: w.usd, amount: '20', date: '2026-10-20' });
+    expect(canCancel(w.row(cleared))).toBe(false);
+    expect(() => cancelTransaction(w.db, cleared)).toThrow(/gone through/);
+    expect(w.row(cleared).status).toBe('cleared');
+    expect([canCancel(w.row(pending)), canCancel(w.row(upcoming))]).toEqual([true, true]);
+    cancelTransaction(w.db, pending);
+    cancelTransaction(w.db, upcoming);
+    expect([w.row(pending).status, w.row(upcoming).status]).toEqual(['cancelled', 'cancelled']);
+    // Asking again is harmless.
+    expect(() => cancelTransaction(w.db, pending)).not.toThrow();
   });
 
   it('lists reimbursables waiting for money back, outside the badge', async () => {

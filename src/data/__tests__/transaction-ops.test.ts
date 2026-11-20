@@ -57,7 +57,7 @@ describe('deleting a transaction', () => {
 describe('Cancelled and restored', () => {
   it('restoring brings it back as Cleared (or Upcoming when it’s in the future)', async () => {
     const w = await world();
-    const a = w.tx({ accountId: w.usd, accountAmount: '100', date: '2026-09-15' });
+    const a = w.tx({ accountId: w.usd, accountAmount: '100', date: '2026-09-15', status: 'pending' });
     const b = w.tx({ accountId: w.usd, accountAmount: '100', date: '2026-10-15', scheduled: true });
     cancelTransaction(w.db, a);
     cancelTransaction(w.db, b);
