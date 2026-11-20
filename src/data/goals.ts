@@ -213,3 +213,12 @@ export function shrinkGoalsToFit(db: AppDb, accountId: string, date: string = to
 export function goalHistory(db: AppDb, goalId: string) {
   return db.select().from(goalAllocations).where(eq(goalAllocations.goalId, goalId)).all().sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
 }
+
+/** What a completed goal gave back to Usable when it was marked complete (its release rows) — the harvest. */
+export function harvestedAmount(db: AppDb, goalId: string): DecimalString {
+  let sum = new Decimal(0);
+  for (const r of db.select({ amount: goalAllocations.amount, kind: goalAllocations.kind }).from(goalAllocations).where(eq(goalAllocations.goalId, goalId)).all()) {
+    if (r.kind === 'release') sum = sum.minus(dec(r.amount));
+  }
+  return toDecimalString(sum);
+}

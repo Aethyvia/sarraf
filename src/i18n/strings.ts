@@ -941,6 +941,17 @@ export const strings = {
     skipped: (n: number) => `${n} couldn’t be shown in this currency yet (no market rate).`,
     nothing: 'Nothing moved between currencies in this range.',
   },
+  plant: {
+    stages: { seed: 'Seed', sprout: 'Sprout', plant: 'Plant', bush: 'Bush', tree: 'Tree', fruit: 'Fruit', harvest: 'Harvested' },
+    badge: (stage: string, pct: number) => `${stage.toUpperCase()} · ${pct}%`,
+    next: (stage: string, pct: number, toGo: ReactNode): ReactNode[] => [`Grows into a ${stage} at ${pct}% · `, toGo, ' to go'],
+    fruitNext: (toGo: ReactNode): ReactNode[] => ['Fruit at 100% · ', toGo, ' to go'],
+    seedHint: 'Grows from the first money you add',
+    reached: 'Target reached · it’s fruiting',
+    harvested: 'HARVESTED',
+    backInUsable: (currency: string) => `back in Usable ${currency}`,
+    marks: ['Seed', 'Sprout', '25%', '50%', '75%', 'Fruit'],
+  },
   savingsTab: {
     title: 'Savings',
     priority: (n: number) => `priority ${n}`,

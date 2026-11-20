@@ -24,6 +24,9 @@ export interface Palette {
   income: string;
   /** The balance trend line on Home's default-currency card (owner, Nov 20: green in light, mint in dark). */
   trend: string;
+  /** Savings F: the soft panel behind a growing plant, and the warm one behind a seed or harvest. */
+  plantPanel: string;
+  plantPanelWarm: string;
   expense: string;
   /** Soft background behind a destructive icon (bulk Delete). */
   expenseSoft: string;
@@ -58,6 +61,8 @@ export const light: Palette = {
   accentSoft: '#DCEAE6',
   income: '#1E7A4C',
   trend: '#1F5A52',
+  plantPanel: '#EEF5F2',
+  plantPanelWarm: '#F6F1E8',
   expense: '#B3261E',
   expenseSoft: '#FDF1F0',
   warning: '#8A5A00',
@@ -86,6 +91,8 @@ export const dark: Palette = {
   accentSoft: '#1D3B35',
   income: '#4CAF7A',
   trend: '#5CC7AE',
+  plantPanel: '#1C2925',
+  plantPanelWarm: '#2A241C',
   expense: '#E0655C',
   expenseSoft: '#3A201D',
   warning: '#D9A73D',

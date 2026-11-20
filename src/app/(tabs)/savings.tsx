@@ -5,18 +5,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabHeaderActions } from '@/components/TabHeaderActions';
 import { Icon } from '@/components/icons/Icon';
 import { Money } from '@/components/Money';
+import { parts } from '@/components/parts';
+import { Plant } from '@/components/Plant';
 import { Button, Card } from '@/components/ui';
 import { goalTotal } from '@/data/goals';
+import { plantFor } from '@/data/plant';
 import { savingsGoals } from '@/db/schema';
 import { strings } from '@/i18n/strings';
-import { Decimal, dec } from '@/lib/money';
 import { useLive } from '@/state/live';
 import { fonts, useTheme } from '@/theme';
 
-/** Savings (tab): each goal with what's allocated of its target, by priority; completed goals below. */
+/** Savings (tab): each goal as a plant that grows with what it holds of its target (style F, owner Nov 20), by priority; completed goals below as a small harvest. */
 export default function SavingsScreen() {
   const s = strings.savingsTab;
   const g = strings.goals;
+  const p = strings.plant;
   const { colors } = useTheme();
   const goals = useLive((db) =>
     db
@@ -46,27 +49,43 @@ export default function SavingsScreen() {
           </Card>
         ) : null}
         {[...open, ...done, ...archived].map((x) => {
-          const pct = dec(x.targetAmount).gt(0) ? Decimal.min(dec(x.held).dividedBy(dec(x.targetAmount)), 1).times(100).toNumber() : 0;
+          // Savings F (owner, Nov 20): each goal is a plant that grows with what it holds of its target.
+          const view = plantFor(x.held, x.targetAmount, x.currency, !!x.completedAt);
+          const stageName = p.stages[view.stage];
+          const small = (v: string) => <Money value={v} currency={x.currency} style={[styles.hint, styles.mono, { color: colors.inkSecondary }]} />;
           return (
             <Pressable key={x.id} onPress={() => router.push(`/goals/${x.id}`)} accessibilityRole="button">
               <Card style={[styles.card, x.completedAt || x.archivedAt ? { opacity: 0.6 } : null]}>
-                <View style={styles.cardTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.name, { color: colors.ink }]}>{x.name}</Text>
-                    <Text style={[styles.meta, { color: colors.inkMuted }]}>{x.archivedAt ? `${x.currency} · ${g.archived}` : x.completedAt ? `${x.currency} · ${g.completed}` : `${x.currency} · ${s.priority(x.priority)}`}</Text>
-                  </View>
-                  <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
-                </View>
-                <View style={[styles.track, { backgroundColor: colors.filled }]}>
-                  <View style={[styles.fill, { width: `${Math.max(0, pct)}%`, backgroundColor: colors.accent }]} />
-                </View>
-                <View style={styles.row}>
-                  <Text style={[styles.meta, { color: colors.inkMuted }]}>{s.allocated}</Text>
-                  <Text style={[styles.meta, { color: colors.inkMuted }]}>
-                    <Money value={x.held} currency={x.currency} style={[styles.amount, { color: colors.ink }]} /> {s.of}{' '}
-                    <Money value={x.targetAmount} currency={x.currency} style={[styles.amount, { color: colors.inkMuted }]} />
+                <Plant stage={view.stage} width={x.completedAt ? 72 : 104} height={x.completedAt ? 84 : 128} />
+                <View style={styles.cardText}>
+                  <Text style={[styles.badge, { color: view.stage === 'seed' || view.stage === 'harvest' ? colors.inkMuted : colors.accent }]}>
+                    {view.stage === 'harvest' ? p.harvested : p.badge(stageName, view.pct)}
                   </Text>
+                  <Text style={[styles.name, { color: colors.ink }]} numberOfLines={2}>{x.name}</Text>
+                  <Text style={[styles.meta, { color: colors.inkMuted }]}>
+                    {x.completedAt ? (
+                      `${x.currency} · ${g.completed}`
+                    ) : (
+                      <>
+                        <Money value={x.held} currency={x.currency} style={[styles.amount, { color: colors.ink }]} /> {s.of}{' '}
+                        <Money value={x.targetAmount} currency={x.currency} style={[styles.amount, { color: colors.inkMuted }]} />
+                      </>
+                    )}
+                  </Text>
+                  {x.archivedAt ? (
+                    <Text style={[styles.hint, { color: colors.inkMuted }]}>{`${x.currency} · ${g.archived}`}</Text>
+                  ) : x.completedAt ? null : view.stage === 'seed' ? (
+                    <Text style={[styles.hint, { color: colors.inkSecondary }]}>{p.seedHint}</Text>
+                  ) : view.next ? (
+                    <Text style={[styles.hint, { color: colors.inkSecondary }]}>
+                      {parts(view.next.stage === 'fruit' ? p.fruitNext(small(view.next.toGo)) : p.next(p.stages[view.next.stage], view.next.pct, small(view.next.toGo)))}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.hint, { color: colors.accent }]}>{p.reached}</Text>
+                  )}
+                  {!x.completedAt && !x.archivedAt ? <Text style={[styles.hint, { color: colors.inkMuted }]}>{`${x.currency} · ${s.priority(x.priority)}`}</Text> : null}
                 </View>
+                <Icon name="forward" size={13} color={colors.inkMuted} strokeWidth={2.2} />
               </Card>
             </Pressable>
           );
@@ -82,13 +101,13 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontFamily: fonts.serif, fontSize: 22 },
-  card: { padding: 16 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  name: { fontFamily: fonts.sansSemiBold, fontSize: 15 },
+  card: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  cardText: { flex: 1, minWidth: 0, gap: 4 },
+  badge: { fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 1.1 },
+  name: { fontFamily: fonts.sansBold, fontSize: 17 },
+  hint: { fontFamily: fonts.sans, fontSize: 12, lineHeight: 16 },
+  mono: { fontFamily: fonts.mono },
   meta: { fontFamily: fonts.sans, fontSize: 12.5 },
-  track: { height: 8, borderRadius: 4, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 4 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   amount: { fontFamily: fonts.monoSemiBold, fontSize: 13 },
   note: { fontFamily: fonts.sans, fontSize: 11, lineHeight: 16, paddingHorizontal: 2 },
   empty: { alignItems: 'center', gap: 10, paddingVertical: 30, paddingHorizontal: 20 },

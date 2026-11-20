@@ -1,16 +1,18 @@
 import { eq } from 'drizzle-orm';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { AmountBox } from '@/components/AmountBox';
 import { Keypad } from '@/components/Keypad';
 import { useAmountField, useKeyboardVisible } from '@/components/KeypadScreen';
 import { Money } from '@/components/Money';
+import { Plant } from '@/components/Plant';
 import { parts } from '@/components/parts';
 import { PickerSheet } from '@/components/sheets/PickerSheet';
 import { BottomSheet, Button, Card, Field, Header, Screen, SectionLabel, SelectorRow } from '@/components/ui';
-import { completeGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, stillToGo, takeOutOfGoal } from '@/data/goals';
+import { completeGoal, unarchiveGoal, goalByAccount, goalHistory, goalTotal, harvestedAmount, stillToGo, takeOutOfGoal } from '@/data/goals';
+import { plantFor, stageRank } from '@/data/plant';
 import { db } from '@/db/client';
 import { accounts, savingsGoals } from '@/db/schema';
 import { strings } from '@/i18n/strings';
@@ -29,6 +31,8 @@ import { fonts, useTheme } from '@/theme';
  */
 export default function GoalScreen() {
   const s = strings.goals;
+  const p = strings.plant;
+  const panelWidth = useWindowDimensions().width - 40;
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const plan = usePlan();
@@ -40,34 +44,74 @@ export default function GoalScreen() {
       const goal = d.select().from(savingsGoals).where(eq(savingsGoals.id, id)).get();
       if (!goal) return null;
       const names = new Map(d.select({ id: accounts.id, name: accounts.name }).from(accounts).all().map((a) => [a.id, a.name]));
-      return { goal, held: goalTotal(d, id), byAccount: goalByAccount(d, id), history: goalHistory(d, id), names };
+      return { goal, held: goalTotal(d, id), harvested: harvestedAmount(d, id), byAccount: goalByAccount(d, id), history: goalHistory(d, id), names };
     },
     [id],
   );
   if (!data) return null;
-  const { goal, held, byAccount, history, names } = data;
+  const { goal, held, harvested, byAccount, history, names } = data;
   const money = (v: string, style?: object) => <Money value={v} currency={goal.currency} allowCompact={false} style={style} />;
   const pct = dec(goal.targetAmount).gt(0) ? Math.min(100, Math.floor(dec(held).dividedBy(dec(goal.targetAmount)).times(100).toNumber())) : 0;
   const rest = stillToGo(goal.targetAmount, held);
   const open = !goal.completedAt && !goal.archivedAt;
+  const view = plantFor(held, goal.targetAmount, goal.currency, !!goal.completedAt);
+  // Seed, Sprout, 25%, 50%, 75%, Fruit — which mark it's on.
+  const rank = Math.min(stageRank(view.stage), 5);
 
   return (
     <Screen>
       <Header size={20} title={goal.name} subtitle={s.subtitle(goal.currency)} onBack={goBack} />
       {action.ui}
-      <Card style={styles.summary}>
+      {/* Savings F (owner, Nov 20): the goal's plant grows with what it holds of its target. */}
+      <View>
+        <Plant stage={view.stage} width={panelWidth} height={190} style={{ width: '100%', borderRadius: 26 }} />
+        <Text style={[styles.stageBadge, { color: view.stage === 'seed' || view.stage === 'harvest' ? colors.inkSecondary : colors.accent, backgroundColor: colors.surface }]}>
+          {view.stage === 'harvest' ? p.harvested : p.stages[view.stage].toUpperCase()}
+        </Text>
+      </View>
+      {goal.completedAt ? (
         <View style={styles.summaryTop}>
-          {money(held, [styles.held, { color: colors.ink }])}
-          <Text style={[styles.small, { color: colors.inkMuted }]}>{parts(s.of(money(goal.targetAmount, [styles.small, { color: colors.inkMuted }])))}</Text>
+          {money(harvested, [styles.held, { color: colors.ink }])}
+          <Text style={[styles.small, { color: colors.inkMuted }]}>{p.backInUsable(goal.currency)}</Text>
         </View>
-        <View style={[styles.track, { backgroundColor: colors.filled }]}>
-          <View style={[styles.fill, { width: `${pct}%`, backgroundColor: colors.accent }]} />
-        </View>
-        <View style={styles.summaryBottom}>
-          <Text style={[styles.small, { color: colors.inkMuted }]}>{goal.completedAt ? s.completed : s.there(pct)}</Text>
-          <Text style={[styles.small, { color: colors.inkMuted }]}>{dec(rest).isZero() ? s.reached : parts(s.toGo(money(rest, [styles.small, { color: colors.inkMuted }])))}</Text>
-        </View>
-      </Card>
+      ) : (
+        <>
+          <View style={styles.summaryTop}>
+            {money(held, [styles.held, { color: colors.ink }])}
+            <Text style={[styles.small, { color: colors.inkMuted }]}>
+              {parts(s.of(money(goal.targetAmount, [styles.small, { color: colors.ink, fontFamily: fonts.monoSemiBold }])))} · {s.there(pct)}
+            </Text>
+          </View>
+          <View style={styles.marks}>
+            {p.marks.map((label, i) => {
+              const reached = i <= rank;
+              const current = i === rank;
+              return (
+                <View key={label} style={styles.mark}>
+                  <View
+                    style={[
+                      styles.dot,
+                      current && styles.dotNow,
+                      reached ? { backgroundColor: colors.accent } : { backgroundColor: colors.filled },
+                      current && { borderColor: colors.accentSoft },
+                    ]}
+                  />
+                  <Text style={[styles.markText, { color: current ? colors.accent : colors.inkMuted }, current && { fontFamily: fonts.sansExtraBold }]}>{label}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={[styles.nextLine, { color: view.next ? colors.accent : colors.accent }]}>
+            {view.stage === 'seed'
+              ? p.seedHint
+              : view.next
+                ? parts(view.next.stage === 'fruit' ? p.fruitNext(money(view.next.toGo, styles.nextMoney)) : p.next(p.stages[view.next.stage], view.next.pct, money(view.next.toGo, styles.nextMoney)))
+                : dec(rest).isZero()
+                  ? p.reached
+                  : null}
+          </Text>
+        </>
+      )}
 
       {goal.archivedAt ? (
         <>
@@ -235,12 +279,16 @@ function TakeOutSheet({
 }
 
 const styles = StyleSheet.create({
-  summary: { padding: 18 },
-  summaryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 },
-  held: { fontFamily: fonts.mono, fontSize: 28 },
-  track: { height: 10, borderRadius: 5, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 5 },
-  summaryBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  stageBadge: { position: 'absolute', top: 14, left: 14, fontFamily: fonts.sansExtraBold, fontSize: 11, letterSpacing: 1.2, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5, overflow: 'hidden' },
+  summaryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
+  held: { fontFamily: fonts.monoSemiBold, fontSize: 28 },
+  marks: { flexDirection: 'row', alignItems: 'flex-end' },
+  mark: { flex: 1, alignItems: 'center', gap: 4 },
+  dot: { width: 20, height: 20, borderRadius: 10 },
+  dotNow: { width: 28, height: 28, borderRadius: 14, borderWidth: 4 },
+  markText: { fontFamily: fonts.sans, fontSize: 10.5 },
+  nextLine: { fontFamily: fonts.sansBold, fontSize: 13, marginTop: -4 },
+  nextMoney: { fontFamily: fonts.monoSemiBold, fontSize: 13 },
   small: { fontFamily: fonts.sans, fontSize: 11.5 },
   buttons: { flexDirection: 'row', gap: 10 },
   label: { paddingHorizontal: 2, paddingBottom: 6 },
