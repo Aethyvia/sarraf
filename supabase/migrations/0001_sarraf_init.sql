@@ -1,4 +1,4 @@
--- Sarraf: the only data kept on the server (CLAUDE.md, Schema — Decided).
+-- Sarraf: the only data kept on the server (Spec and Schema — Decided).
 -- No money data: just where the backup is and a few counts, and the subscription.
 -- Paste into Supabase → SQL Editor → New query → Run. Safe to run twice.
 

@@ -1,6 +1,6 @@
 # Publishing Sarraf on Google Play
 
-The steps to a public release, in order. **Owner** = done by the owner in a console; **Claude** = done in this repo. Decisions behind each step are in `DECISIONS.md`.
+The steps to a public release, in order. **Owner** = done by the owner in a console; **Dev** = done in this repo. Decisions behind each step are in `DECISIONS.md`.
 
 Fixed facts: package `com.aethyvia.sarraf` (permanent) · personal developer account for now (may move to an organisation later) · public contact help@aethyvia.com · Sarraf Plus is USD-priced only.
 
@@ -21,7 +21,7 @@ Supporter codes: see `docs/patreon.md`.
 ## 2. Play Console: payments and the subscription (Owner)
 
 1. **Payments profile:** Settings → Payments profile → create (personal, Pakistan) → add the bank account Google pays out to.
-2. **First build:** Play only allows subscriptions once a build with billing is uploaded. Claude makes the signed app bundle (AAB) once Play Billing is in (step 5); upload it at Testing → Internal testing → Create release.
+2. **First build:** Play only allows subscriptions once a build with billing is uploaded. Dev makes the signed app bundle (AAB) once Play Billing is in (step 5); upload it at Testing → Internal testing → Create release.
 3. **Subscription:** Monetize → Products → Subscriptions → Create subscription.
    - Product ID `sarraf_plus` (permanent). Name "Sarraf Plus".
    - Base plan `monthly`: auto-renewing, every 1 month, **USD 2.99**. Let Play convert prices for other countries.
@@ -48,14 +48,14 @@ Built from `src/legal/legal.json` by `node scripts/export-site.mjs` (run it afte
 4. Google Search Console → verify the domain `aethyvia.com` (TXT record).
 5. Links for Play Console and the Google sign-in consent screen: `https://sarraf.aethyvia.com/privacy.html`, `https://sarraf.aethyvia.com/terms.html`.
 
-## 5. In the app (Claude, after steps 2–3)
+## 5. In the app (Dev, after steps 2–3)
 
 - [ ] Play Billing: buy monthly/yearly, then the server confirms the purchase with Google and records it in `subscriptions`.
 - [ ] Supabase edge function `verify-purchase` (uses `PLAY_SERVICE_ACCOUNT_JSON`), and handling of renewals, cancellations and refunds.
 - [ ] Remove "Restore purchase" from the Plans page (Play hands back purchases on its own; the app re-checks the plan on every open). Already hidden for lifetime Plus.
 - [ ] Tests for the billing flow against Play's test cards.
 
-## 6. Store listing (Claude drafts, Owner submits)
+## 6. Store listing (Dev drafts, Owner submits)
 
 - [ ] Phone screenshots from the emulator (sample data, neutral names), feature graphic 1024 × 500, app icon 512 × 512 (`assets/store-icon-512.png`).
 - [ ] Short description (80 characters) and full description.
@@ -64,7 +64,7 @@ Built from `src/legal/legal.json` by `node scripts/export-site.mjs` (run it afte
 - [ ] Content rating questionnaire (finance tool, no user-to-user content).
 - [ ] Target audience: 18+.
 
-## 7. Release (Claude builds, Owner rolls out)
+## 7. Release (Dev builds, Owner rolls out)
 
 1. `npx eas-cli@latest build --profile production --platform android` → signed AAB (version code increments itself).
 2. Internal testing → test purchases with the license tester, a restore on a second phone, and backup.

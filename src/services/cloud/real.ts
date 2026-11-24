@@ -8,7 +8,7 @@ import type { BackupRecord, Cloud, CloudUser, SignInMethod } from './types';
 import { BadCodeError, CancelledError, DriveError, DriveRefusedError, OfflineError } from './types';
 
 /**
- * The real services (Decided, CLAUDE.md): Supabase for sign-in, the backup
+ * The real services (Decided, see the Spec): Supabase for sign-in, the backup
  * record and the subscription; the user's own Google Drive app-data folder
  * for the encrypted backup and attachments. No money data goes to Supabase.
  */
